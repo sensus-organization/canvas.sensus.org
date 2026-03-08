@@ -1,3 +1,13 @@
+## SensUs Fork
+
+This is a fork of [Canvas LMS](https://github.com/instructure/canvas-lms) customized for [SensUs](https://sensus.org) and deployed at [canvas.sensus.org](https://canvas.sensus.org).
+
+### Modifications
+
+- Custom Docker production image with Apache + Passenger
+
+---
+
 Canvas LMS
 ======
 
