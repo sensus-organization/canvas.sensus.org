@@ -5,6 +5,9 @@ This is a fork of [Canvas LMS](https://github.com/instructure/canvas-lms) custom
 ### Modifications
 
 - Custom Docker production image with Apache + Passenger
+- Automated CI/CD build and push to GitHub Container Registry
+- Modified notification default policy to apply to all email channels, not just the default one
+- AGPL source code link in footer
 
 ---
 

@@ -247,10 +247,13 @@ class NotificationMessageCreator
   end
 
   def should_use_default_policy?(user, channel)
-    # only use new policies for default channel when there are no other policies for the notification and user.
-    # If another policy exists then it means the notification preferences page has been visited and null values
-    # show as never policies in the UI.
-    default_email?(user, channel) && user.notification_policies.find { |np| np.notification_id == @notification.id }.nil?
+    return false unless channel.path_type == CommunicationChannel::TYPE_EMAIL
+
+    if default_email?(user, channel)
+      user.notification_policies.find { |np| np.notification_id == @notification.id }.nil?
+    else
+      channel.notification_policies.find { |np| np.notification_id == @notification.id }.nil?
+    end
   end
 
   def default_email?(user, channel)
