@@ -103,4 +103,4 @@ RUN echo "export GEM_HOME=${GEM_HOME}" >> /etc/apache2/envvars && \
 
 EXPOSE 80
 
-CMD ["bash", "-c", "source /etc/apache2/envvars && exec apache2 -DFOREGROUND"]
+CMD ["bash", "-c", "source /etc/apache2/envvars && cd /usr/src/app && su docker -c 'bundle exec script/delayed_job run' & source /etc/apache2/envvars && exec apache2 -DFOREGROUND"]
