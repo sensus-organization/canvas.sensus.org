@@ -110,7 +110,7 @@ export const TraditionalViewCriterionRow: FC<TraditionalViewCriterionRowProps> =
     <>
       <tr
         style={{
-          borderWidth: isLastIndex ? '0' : `${borders.widthSmall} 0`,
+          borderWidth: (isLastIndex || !hideComments) ? '0' : `${borders.widthSmall} 0`,
           borderBottomColor: colors.primitives.grey14,
           borderBottomStyle: 'solid',
         }}

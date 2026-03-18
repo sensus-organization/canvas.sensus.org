@@ -35,6 +35,7 @@ type TraditionalViewCriterionRatingProps = {
   isPreviewMode: boolean
   isSelected: boolean
   isSelfAssessmentSelected: boolean
+  isUnclickable?: boolean
   min?: number
   rating: RubricRating
   ratingCellMinWidth: string
@@ -52,6 +53,7 @@ export const TraditionalViewCriterionRating: FC<TraditionalViewCriterionRatingPr
   isPreviewMode,
   isSelected,
   isSelfAssessmentSelected,
+  isUnclickable = false,
   min,
   rating,
   ratingCellMinWidth,
@@ -86,8 +88,8 @@ export const TraditionalViewCriterionRating: FC<TraditionalViewCriterionRatingPr
       >
         <View
           as="button"
-          disabled={isPreviewMode}
-          tabIndex={0}
+          disabled={isPreviewMode || isUnclickable}
+          tabIndex={isUnclickable ? -1 : 0}
           background="transparent"
           height="100%"
           width="100%"
@@ -95,12 +97,12 @@ export const TraditionalViewCriterionRating: FC<TraditionalViewCriterionRatingPr
           borderColor={borderColor}
           overflowX="visible"
           overflowY="visible"
-          cursor={isPreviewMode ? 'not-allowed' : 'pointer'}
+          cursor={isPreviewMode || isUnclickable ? 'default' : 'pointer'}
           padding="x-small small 0 small"
           position="relative"
-          onMouseOver={() => setHoveredRatingIndex(isPreviewMode ? -1 : index)}
+          onMouseOver={() => setHoveredRatingIndex(isPreviewMode || isUnclickable ? -1 : index)}
           onMouseOut={() => setHoveredRatingIndex(undefined)}
-          onClick={() => onClickRating(rating.id)}
+          onClick={() => !isUnclickable && onClickRating(rating.id)}
           themeOverride={{
             borderWidthSmall: '0.125rem',
             borderColorBrand: colors.contrasts.green4570,

@@ -24,6 +24,7 @@ import {Text} from '@instructure/ui-text'
 import type {RubricAssessmentData, RubricCriterion, UpdateAssessmentData} from '../types/rubric'
 import {rangingFrom, findCriterionMatchingRatingId} from './utils/rubricUtils'
 import {TraditionalViewCriterionRating} from './TraditionalViewCriterionRating'
+import {SliderDisplay} from './SliderDisplay'
 
 const I18n = createI18nScope('rubrics-assessment-tray')
 
@@ -56,9 +57,13 @@ export const TraditionalViewCriterionRatings: FC<TraditionalViewCriterionRatings
 
   const [hoveredRatingIndex, setHoveredRatingIndex] = useState<number>()
 
+  const effectiveRatingOrder = criterion.criterionUseRange ? 'ascending' : ratingOrder
+
   const criterionRatings = useMemo(() => {
-    return ratingOrder === 'ascending' ? [...criterion.ratings].reverse() : criterion.ratings
-  }, [criterion.ratings, ratingOrder])
+    return effectiveRatingOrder === 'ascending'
+      ? [...criterion.ratings].reverse()
+      : criterion.ratings
+  }, [criterion.ratings, effectiveRatingOrder])
 
   const selectedRatingId = findCriterionMatchingRatingId(
     criterion.ratings,
@@ -89,12 +94,11 @@ export const TraditionalViewCriterionRatings: FC<TraditionalViewCriterionRatings
         as="div"
         padding="0"
         margin="0"
-        height="100%"
         borderWidth={hasValidationError ? 'medium' : 'none'}
         borderColor={hasValidationError ? 'danger' : 'transparent'}
         borderRadius="medium"
       >
-        <Flex as="div" direction="row" alignItems="stretch" height="100%">
+        <Flex as="div" direction="row" alignItems="stretch">
           {criterionRatings.map((rating, index) => {
             const isHovered = hoveredRatingIndex === index
             const isSelected = !!rating.id && selectedRatingId === rating.id
@@ -103,6 +107,7 @@ export const TraditionalViewCriterionRatings: FC<TraditionalViewCriterionRatings
             const isLastRatingIndex = criterionRatings.length - 1 === index
 
             const onClickRating = (ratingId: string) => {
+              if (criterion.criterionUseRange) return
               if (selectedRatingId === ratingId) {
                 updateAssessmentData({
                   points: undefined,
@@ -117,14 +122,13 @@ export const TraditionalViewCriterionRatings: FC<TraditionalViewCriterionRatings
             }
 
             const min = criterion.criterionUseRange
-              ? rangingFrom(criterionRatings, index, ratingOrder, true)
+              ? rangingFrom(criterionRatings, index, effectiveRatingOrder, true)
               : undefined
 
             const ratingCellMinWidth = `${ratingsColumnMinWidth / criterionRatings.length}rem`
 
             return (
               <TraditionalViewCriterionRating
-                // we use the array index because rating may not have an id
                 key={`traditional-criterion-${criterion.id}-ratings-${index}`}
                 criterionId={criterion.id}
                 hidePoints={hidePoints}
@@ -134,6 +138,7 @@ export const TraditionalViewCriterionRatings: FC<TraditionalViewCriterionRatings
                 isPreviewMode={isPreviewMode}
                 isSelected={isSelected}
                 isSelfAssessmentSelected={isSelfAssessmentSelected}
+                isUnclickable={criterion.criterionUseRange}
                 min={min}
                 rating={rating}
                 ratingCellMinWidth={ratingCellMinWidth}
@@ -148,6 +153,19 @@ export const TraditionalViewCriterionRatings: FC<TraditionalViewCriterionRatings
             )
           })}
         </Flex>
+        {criterion.criterionUseRange && (
+          <View as="div" padding="0 small small small">
+            <SliderDisplay
+              ratings={criterion.ratings}
+              isPreviewMode={isPreviewMode}
+              points={criterionAssessment?.points}
+              onPointsChange={value =>
+                updateAssessmentData({points: value, ratingId: undefined})
+              }
+              maxPoints={criterion.points}
+            />
+          </View>
+        )}
       </View>
       {hasValidationError && (
         <View as="div" padding="small">

@@ -21,7 +21,7 @@ import {Flex} from '@instructure/ui-flex'
 import {Heading} from '@instructure/ui-heading'
 import {CloseButton} from '@instructure/ui-buttons'
 import {Checkbox} from '@instructure/ui-checkbox'
-import {ViewModeSelect, type ViewMode} from './ViewModeSelect'
+import {type ViewMode} from './ViewModeSelect'
 import {InstructorScore} from './InstructorScore'
 import {SelfAssessmentInstructions} from './SelfAssessmentInstructions'
 import {SelfAssessmentInstructorScore} from './SelfAssessmentInstructorScore'
@@ -94,15 +94,6 @@ export const AssessmentHeader = ({
 
       <View as="hr" margin="x-small 0 small" aria-hidden={true} />
       <Flex wrap="wrap" gap="medium 0">
-        {!isSelfAssessment && (
-          <Flex.Item shouldGrow={true} shouldShrink={true}>
-            <ViewModeSelect
-              isFreeFormCriterionComments={isFreeFormCriterionComments}
-              selectedViewMode={selectedViewMode}
-              onViewModeChange={onViewModeChange}
-            />
-          </Flex.Item>
-        )}
         {showTraditionalView() && (
           <>
             {!hidePoints && (

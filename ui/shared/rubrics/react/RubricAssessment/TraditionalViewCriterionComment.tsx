@@ -22,7 +22,6 @@ import {View} from '@instructure/ui-view'
 import {SelfAssessmentComment} from './SelfAssessmentComment'
 import {Flex} from '@instructure/ui-flex'
 import {TextArea} from '@instructure/ui-text-area'
-import {Button} from '@instructure/ui-buttons'
 import {CriteriaReadonlyComment} from './CriteriaReadonlyComment'
 import {
   RubricAssessmentData,
@@ -63,7 +62,7 @@ export const TraditionalViewCriterionComment: FC<TraditionalViewCriterionComment
         as="td"
         colSpan={colCount}
         padding="x-small small"
-        borderWidth={`small 0 ${isLastIndex ? 0 : 'small'} 0`}
+        borderWidth={`0 0 ${isLastIndex ? 0 : 'small'} 0`}
         borderColor={colors.primitives.grey14}
         aria-label={`${I18n.t('Criterion comments for')} ${criterion.description}`}
       >
@@ -91,20 +90,6 @@ export const TraditionalViewCriterionComment: FC<TraditionalViewCriterionComment
                     onChange={e => setCommentText(e.target.value)}
                     onBlur={e => updateAssessmentData({comments: e.target.value})}
                   />
-                </Flex.Item>
-                <Flex.Item>
-                  <View margin="0 0 0 small" themeOverride={{marginSmall: '1rem'}}>
-                    <Button
-                      color="secondary"
-                      onClick={() => {
-                        setCommentText('')
-                        updateAssessmentData({comments: ''})
-                      }}
-                      data-testid={`clear-comment-button-${criterion.id}`}
-                    >
-                      {I18n.t('Clear')}
-                    </Button>
-                  </View>
                 </Flex.Item>
               </>
             )}

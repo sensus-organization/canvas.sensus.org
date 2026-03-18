@@ -1174,6 +1174,14 @@ body.no-headers {
   min-height: calc(100vh - 50px) !important;
 }
 
+#enhanced-rubric-assessment-container footer {
+  position: sticky;
+  bottom: 0;
+  width: 100%;
+  left: 0;
+  background: white;
+}
+
 body.is-masquerading-or-student-view {
   #enhanced-rubric-assessment-tray div[class*="-tray__content"] {
     min-height: calc(100vh - 100px) !important;
@@ -1360,12 +1368,12 @@ $dotted-border: 1px dotted var(--ic-brand-global-nav-menu-item__text-color);
     top: 0;
     bottom: 0;
     #{direction(left)}: 0;
-    #{direction(right)}: 25%;
+    #{direction(right)}: 50%;
   }
 
   #right_side {
     position: absolute;
-    width: 25%;
+    width: 50%;
   }
 
   #section-menu-link {

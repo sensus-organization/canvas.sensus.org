@@ -16,7 +16,7 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import React from 'react'
+import React, {useMemo, useCallback} from 'react'
 import useStore from '../../stores'
 import type {RubricAssessmentData} from '@canvas/rubrics/react/types/rubric'
 import {
@@ -25,7 +25,6 @@ import {
   type RubricOutcomeUnderscore,
   type RubricUnderscoreType,
 } from '@canvas/rubrics/react/utils'
-import {Transition} from '@instructure/ui-motion'
 import {View} from '@instructure/ui-view'
 import {RubricAssessmentContainerWrapper} from '@canvas/rubrics/react/RubricAssessment'
 
@@ -72,59 +71,65 @@ export default ({
   const {
     currentStudentAvatarPath,
     currentStudentName,
-    rubricAssessmentTrayOpen,
     rubricHidePoints,
     rubricSavedComments = {},
     selfAssessment,
     studentAssessment,
   } = useStore()
 
-  const handleSubmit = (assessmentData: RubricAssessmentData[]) => {
-    const data = convertSubmittedAssessment(assessmentData)
-    onSave(data)
-  }
-
-  const mappedRubric = mapRubricUnderscoredKeysToCamelCase(rubric, rubricOutcomeData)
-  const mappedAssessmentData = mapRubricAssessmentDataUnderscoredKeysToCamelCase(
-    studentAssessment?.data ?? [],
+  const handleSubmit = useCallback(
+    (assessmentData: RubricAssessmentData[]) => {
+      const data = convertSubmittedAssessment(assessmentData)
+      onSave(data)
+    },
+    [onSave],
   )
 
-  const mappedSelfAssessment =
-    selfAssessment && selfAssessment.data
-      ? mapRubricAssessmentDataUnderscoredKeysToCamelCase(selfAssessment.data)
-      : undefined
+  const mappedRubric = useMemo(
+    () => mapRubricUnderscoredKeysToCamelCase(rubric, rubricOutcomeData),
+    [rubric, rubricOutcomeData],
+  )
 
-  const isPeerReview = studentAssessment?.assessment_type === 'peer_review'
-  const rubricAssessmentData = isPeerReview ? [] : mappedAssessmentData
+  const rubricAssessmentData = useMemo(() => {
+    if (studentAssessment?.assessment_type === 'peer_review') return []
+    return mapRubricAssessmentDataUnderscoredKeysToCamelCase(studentAssessment?.data ?? [])
+  }, [studentAssessment])
+
+  const mappedSelfAssessment = useMemo(
+    () =>
+      selfAssessment && selfAssessment.data
+        ? mapRubricAssessmentDataUnderscoredKeysToCamelCase(selfAssessment.data)
+        : undefined,
+    [selfAssessment],
+  )
+
+  const submissionUser = useMemo(
+    () => ({name: currentStudentName, avatarUrl: currentStudentAvatarPath}),
+    [currentStudentName, currentStudentAvatarPath],
+  )
 
   return (
-    <Transition
-      unmountOnExit={true}
-      transitionOnMount={false}
-      in={rubricAssessmentTrayOpen}
-      type="fade"
-    >
-      <View as="div">
-        <RubricAssessmentContainerWrapper
-          buttonDisplay={mappedRubric?.buttonDisplay ?? 'level'}
-          criteria={mappedRubric?.criteria ?? []}
-          currentUserId={currentUserId}
-          hidePoints={rubricHidePoints}
-          isPreviewMode={false}
-          isPeerReview={false}
-          isFreeFormCriterionComments={mappedRubric?.freeFormCriterionComments ?? false}
-          isStandaloneContainer={true}
-          ratingOrder={mappedRubric?.ratingOrder ?? 'descending'}
-          rubricTitle={rubric.title}
-          rubricAssessmentData={rubricAssessmentData}
-          rubricSavedComments={rubricSavedComments}
-          selfAssessment={mappedSelfAssessment}
-          selfAssessmentDate={selfAssessment?.updated_at}
-          submissionUser={{name: currentStudentName, avatarUrl: currentStudentAvatarPath}}
-          onDismiss={onDismiss}
-          onSubmit={handleSubmit}
-        />
-      </View>
-    </Transition>
+    <View as="div">
+      <RubricAssessmentContainerWrapper
+        buttonDisplay={mappedRubric?.buttonDisplay ?? 'level'}
+        criteria={mappedRubric?.criteria ?? []}
+        currentUserId={currentUserId}
+        hidePoints={true}
+        isPreviewMode={false}
+        isPeerReview={false}
+        isFreeFormCriterionComments={mappedRubric?.freeFormCriterionComments ?? false}
+        isStandaloneContainer={true}
+        ratingOrder={mappedRubric?.ratingOrder ?? 'descending'}
+        rubricTitle={rubric.title}
+        rubricAssessmentData={rubricAssessmentData}
+        rubricSavedComments={rubricSavedComments}
+        selfAssessment={mappedSelfAssessment}
+        selfAssessmentDate={selfAssessment?.updated_at}
+        submissionUser={submissionUser}
+        onDismiss={onDismiss}
+        onSubmit={handleSubmit}
+        viewModeOverride="traditional"
+      />
+    </View>
   )
 }

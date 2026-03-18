@@ -25,6 +25,7 @@ import {AssessmentStatusPill} from './AssessmentStatusPill'
 const I18n = createI18nScope('rubrics-assessment-tray')
 
 type AssessmentFooterProps = {
+  hasChanges?: boolean
   isPreviewMode: boolean
   isRubricComplete: boolean
   isStandAloneContainer: boolean
@@ -32,6 +33,7 @@ type AssessmentFooterProps = {
   onSubmit?: () => void
 }
 export const AssessmentFooter = ({
+  hasChanges = true,
   isPreviewMode,
   isRubricComplete,
   isStandAloneContainer,
@@ -46,25 +48,15 @@ export const AssessmentFooter = ({
             <AssessmentStatusPill isRubricComplete={isRubricComplete} />
           </Flex.Item>
         )}
-        {isStandAloneContainer && (
-          <Flex.Item>
-            <Button
-              color="secondary"
-              onClick={() => onDismiss()}
-              data-testid="cancel-rubric-assessment-button"
-            >
-              {I18n.t('Cancel')}
-            </Button>
-          </Flex.Item>
-        )}
         {onSubmit && !isPreviewMode && (
           <Flex.Item>
             <Button
               color="primary"
               onClick={() => onSubmit()}
+              disabled={!hasChanges}
               data-testid="save-rubric-assessment-button"
             >
-              {I18n.t('Submit Assessment')}
+              {I18n.t('Save Assessment')}
             </Button>
           </Flex.Item>
         )}

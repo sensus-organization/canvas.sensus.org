@@ -332,6 +332,10 @@ function teardownBeforeLeavingSpeedgrader() {
 }
 
 function toggleGradeVisibility(show: boolean): void {
+  if (enhanced_rubrics_enabled && ENV.rubric) {
+    $('#grading').hide()
+    return
+  }
   const gradeInput = $('#grading')
   if (show) {
     gradeInput.show().height('auto')
@@ -1367,6 +1371,10 @@ function initRubricStuff() {
     .find('.edit')
     .text(I18n.t('edit_view_rubric', 'View Rubric'))
 
+  if (enhanced_rubrics_enabled && ENV.rubric) {
+    $('#rubric_summary_holder').hide()
+  }
+
   $('.toggle_full_rubric, .hide_rubric_link').click(e => {
     e.preventDefault()
     EG.toggleFullRubric()
@@ -1948,15 +1956,9 @@ EG = {
     const isClosed = force === 'close'
 
     if (enhanced_rubrics_enabled) {
-      const isOpen = isClosed ? false : !useStore.getState().rubricAssessmentTrayOpen
-      useStore.setState({rubricAssessmentTrayOpen: isOpen})
-      toggleGradeVisibility(!isOpen)
+      useStore.setState({rubricAssessmentTrayOpen: true})
+      toggleGradeVisibility(false)
       this.refreshFullRubric()
-
-      if (!isOpen) {
-        $('.toggle_full_rubric').focus()
-      }
-
       return
     }
 
@@ -2368,9 +2370,8 @@ EG = {
         currentUserId={ENV.current_user_id ?? ''}
         rubric={ENV.rubric as RubricUnderscoreType}
         rubricOutcomeData={ENV.rubric_outcome_data as RubricOutcomeUnderscore[]}
-        onDismiss={() => EG.toggleFullRubric('close')}
+        onDismiss={() => {}}
         onSave={data => {
-          useStore.setState({rubricAssessmentTrayOpen: false})
           this.saveRubricAssessment(data)
         }}
       />,
@@ -2417,14 +2418,13 @@ EG = {
         }[]
       }) => {
         let found = false
+        let pendingSavedComments: Record<string, string[]> | undefined
         if (response && response.rubric_association) {
           if (!enhanced_rubrics_enabled) {
             rubricAssessment.updateRubricAssociation(rubricElement, response.rubric_association)
           } else {
             const rubricAssociation: RubricSavedComments = response?.rubric_association ?? {}
-            useStore.setState({
-              rubricSavedComments: rubricAssociation?.summary_data?.saved_comments,
-            })
+            pendingSavedComments = rubricAssociation?.summary_data?.saved_comments
           }
           delete response.rubric_association
         }
@@ -2460,8 +2460,38 @@ EG = {
 
         EG.showGrade()
         EG.showDiscussion()
-        EG.showRubric()
+        EG.showRubric({pendingSavedComments})
+        EG.updateSelectMenuStatus(EG.currentStudent)
         EG.updateStatsInHeader()
+
+        if (enhanced_rubrics_enabled && ENV.rubric) {
+          const rubricScore = (response as any).score as number | null | undefined
+          if (rubricScore != null) {
+            const gradeData: Record<string, unknown> = {
+              'submission[assignment_id]': window.jsonData.id,
+              [`submission[${anonymizableUserId}]`]: EG.currentStudent[anonymizableId],
+              'submission[graded_anonymously]': isAnonymous ? true : utils.shouldHideStudentNames(),
+              'submission[score]': rubricScore,
+              originator: 'speed_grader',
+            }
+            if (ENV.grading_role === 'moderator' || ENV.grading_role === 'provisional_grader') {
+              gradeData['submission[provisional]'] = true
+            }
+            $.ajaxJSON(
+              ENV.update_submission_grade_url,
+              'POST',
+              gradeData,
+              (submissions: {submission: Submission}[]) => {
+                $.each(submissions, function () {
+                  const student = EG.setOrUpdateSubmission(this.submission)
+                  EG.updateSelectMenuStatus(student)
+                })
+                EG.showGrade()
+                EG.updateStatsInHeader()
+              },
+            )
+          }
+        }
       },
     )
 
@@ -3548,7 +3578,7 @@ EG = {
     return contents
   },
 
-  showRubric({validateEnteredData = true} = {}) {
+  showRubric({validateEnteredData = true, pendingSavedComments = undefined as Record<string, string[]> | undefined} = {}) {
     const selectMenu = selectors.get('#rubric_assessments_select')
     // if this has some rubric_assessments
     if (window.jsonData.rubric_association) {
@@ -3601,13 +3631,7 @@ EG = {
         },
       )
 
-      useStore.setState({
-        selfAssessment,
-      })
-
       assessmentsByOthers.forEach(assessment => {
-        // Display anonymous graders as "Grader 1 Rubric" (but don't use the
-        // "Rubric" suffix for named graders)
         let displayName = assessment.assessor_name
         if (anonymousGraders) {
           displayName += ' Rubric'
@@ -3641,10 +3665,25 @@ EG = {
       $('#rubric_assessments_list').showIf(showSelectMenu)
 
       const {hide_points} = (window?.jsonData?.rubric_association ?? {}) as {hide_points: boolean}
-      useStore.setState({
-        rubricHidePoints: hide_points,
-      })
-      handleSelectedRubricAssessmentChanged({validateEnteredData})
+
+      if (enhanced_rubrics_enabled) {
+        const selectedAssessment = getSelectedAssessment(EG)
+        const storeUpdate: Record<string, unknown> = {
+          selfAssessment,
+          rubricHidePoints: hide_points,
+          studentAssessment: (selectedAssessment ?? {}) as RubricAssessmentUnderscore,
+        }
+        if (pendingSavedComments !== undefined) {
+          storeUpdate.rubricSavedComments = pendingSavedComments
+        }
+        useStore.setState(storeUpdate)
+      } else {
+        useStore.setState({
+          selfAssessment,
+          rubricHidePoints: hide_points,
+        })
+        handleSelectedRubricAssessmentChanged({validateEnteredData})
+      }
     }
   },
 
@@ -4934,8 +4973,13 @@ function setupSpeedGrader(
     const rubricAssociation: RubricSavedComments = window.jsonData?.rubric_association ?? {}
     useStore.setState({
       rubricSavedComments: rubricAssociation.summary_data?.saved_comments,
+      rubricAssessmentTrayOpen: true,
     })
     EG.setUpRubricAssessmentContainerWrapper()
+    toggleGradeVisibility(false)
+    $('#discussion').closest('.content_box').hide()
+    $('#left_side').css('right', '50%')
+    $('#right_side').css('width', '50%')
   }
 }
 

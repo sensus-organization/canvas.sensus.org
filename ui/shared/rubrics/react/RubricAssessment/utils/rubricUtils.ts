@@ -79,8 +79,7 @@ const getAdjustedDecimalRatingModifier = (points: number) => {
   if (points == null) {
     return 0
   }
-  const twoDecimalRegex = /^\d+\.\d{2}$/
-  return twoDecimalRegex.test(points.toString()) ? 0.01 : 0.1
+  return 0.01
 }
 
 const roundToTwoDecimalPlaces = (num: number) => {

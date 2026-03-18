@@ -25,6 +25,7 @@ import {Text} from '@instructure/ui-text'
 import {TextInput} from '@instructure/ui-text-input'
 import {HorizontalButtonDisplay} from './HorizontalButtonDisplay'
 import {VerticalButtonDisplay} from './VerticalButtonDisplay'
+import {SliderDisplay} from './SliderDisplay'
 import type {
   RubricAssessmentData,
   RubricCriterion,
@@ -386,6 +387,15 @@ export const CriterionRow = ({
           borderRadius="medium"
         >
           {!isFreeFormCriterionComments && renderButtonDisplay()}
+          {!isFreeFormCriterionComments && criterionUseRange && (
+            <SliderDisplay
+              ratings={ratings}
+              isPreviewMode={isPreviewMode}
+              points={criterionAssessment?.points}
+              onPointsChange={value => setPoints(value.toString())}
+              maxPoints={criterion.points}
+            />
+          )}
         </View>
       </View>
       {hasValidationError && !(isFreeFormCriterionComments && hidePoints) ? (

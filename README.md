@@ -8,6 +8,7 @@ This is a fork of [Canvas LMS](https://github.com/instructure/canvas-lms) custom
 - Automated CI/CD build and push to GitHub Container Registry
 - Modified notification default policy to apply to all email channels, not just the default one
 - AGPL source code link in footer
+- Rubric slider assessment mode with continuous scoring, always-visible rubric in SpeedGrader, 50/50 panel split, hidden points column, and auto-submitted rubric grade
 
 ---
 

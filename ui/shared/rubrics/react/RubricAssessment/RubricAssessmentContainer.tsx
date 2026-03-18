@@ -16,7 +16,7 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import React, {useEffect, useMemo, useState} from 'react'
+import React, {useMemo, useRef, useState} from 'react'
 import {useScope as createI18nScope} from '@canvas/i18n'
 import {Flex} from '@instructure/ui-flex'
 import {View} from '@instructure/ui-view'
@@ -91,7 +91,12 @@ export const RubricAssessmentContainer = ({
 
   const [rubricAssessmentDraftData, setRubricAssessmentDraftData] = useState<
     RubricAssessmentData[]
-  >([])
+  >(() =>
+    rubricAssessmentData.map(ra => {
+      const mc = criteria?.find(c => c.id === ra.criterionId)
+      return {...ra, ignoreForScoring: mc?.ignoreForScoring || false}
+    }),
+  )
   const [showSelfAssessment, setShowSelfAssessment] = useState<boolean>(false)
   let viewMode = viewModeOverride ?? viewModeSelect
   const isTraditionalView = viewMode === 'traditional'
@@ -124,19 +129,21 @@ export const RubricAssessmentContainer = ({
     )
   }, [selfAssessment, showSelfAssessment, selfAssessmentDate])
 
-  useEffect(() => {
+  const prevDataRef = useRef(rubricAssessmentData)
+  const prevCriteriaRef = useRef(criteria)
+  if (rubricAssessmentData !== prevDataRef.current || criteria !== prevCriteriaRef.current) {
+    prevDataRef.current = rubricAssessmentData
+    prevCriteriaRef.current = criteria
     const updatedRubricAssessmentData = rubricAssessmentData.map(rubricAssessment => {
       const matchingCriteria = criteria?.find(c => c.id === rubricAssessment.criterionId)
       const ignoreForScoring = matchingCriteria?.ignoreForScoring || false
-
       return {
         ...rubricAssessment,
         ignoreForScoring,
       }
     })
-
     setRubricAssessmentDraftData(updatedRubricAssessmentData)
-  }, [rubricAssessmentData, criteria])
+  }
 
   const preSubmitValidation = () => {
     const errors = criteria.reduce((acc: string[], criterion: RubricCriterion) => {
@@ -271,6 +278,15 @@ export const RubricAssessmentContainer = ({
     }
   }
 
+  const hasChanges = useMemo(() => {
+    if (rubricAssessmentDraftData.length !== rubricAssessmentData.length) return true
+    return rubricAssessmentDraftData.some(draft => {
+      const original = rubricAssessmentData.find(o => o.criterionId === draft.criterionId)
+      if (!original) return true
+      return draft.points !== original.points || draft.comments !== original.comments || draft.id !== original.id
+    })
+  }, [rubricAssessmentDraftData, rubricAssessmentData])
+
   const shouldShowFooter = isStandaloneContainer || (!isPreviewMode && onSubmit)
 
   return (
@@ -305,6 +321,7 @@ export const RubricAssessmentContainer = ({
             <AssessmentFooter
               isPreviewMode={isPreviewMode}
               isStandAloneContainer={isStandaloneContainer}
+              hasChanges={hasChanges}
               isRubricComplete={isRubricComplete({
                 criteria,
                 isFreeFormCriterionComments,
