@@ -28,11 +28,11 @@ import {useScope as createI18nScope} from '@canvas/i18n'
 import CoursePacingNotice from '../../react/CoursePacingNotice'
 import StudentGroupStore from '../../react/StudentGroupStore'
 import AssignToContent from '../../react/AssignToContent'
-import AssignToContent2 from '../../react/AssignToContent2'
 import GradingPeriodsAPI from '@canvas/grading/jquery/gradingPeriodsApi'
 import '@canvas/jquery/jquery.instructure_forms'
 import sanitizeData from '../../../forms/sanitizeData'
 import {showPostToSisFlashAlert, combinedDates} from '../../util/differentiatedModulesUtil'
+import {getAssignmentAndPeerReviewOverrides} from '../../../context-modules/differentiated-modules/utils/assignToHelper'
 
 const I18n = createI18nScope('DueDateOverrideView')
 
@@ -85,11 +85,7 @@ DueDateOverrideView.prototype.render = function () {
     )
   }
 
-  const AssignToComponent = ENV.FEATURES?.assign_to_in_edit_pages_rewrite
-    ? AssignToContent2
-    : AssignToContent
-
-  const assignToSection = React.createElement(AssignToComponent, {
+  const assignToSection = React.createElement(AssignToContent, {
     onSync: this.setNewOverridesCollection,
     defaultSectionId: this.model.defaultDueDateSectionId,
     overrides: this.model.overrides.models.map(model => model.toJSON().assignment_override),
@@ -380,8 +376,21 @@ DueDateOverrideView.prototype.showError = function (element, message) {
 // ==============================
 
 DueDateOverrideView.prototype.setNewOverridesCollection = function (newOverrides, importantDates) {
-  this.resetOverrides(newOverrides)
-  return this.model.assignment.importantDates(importantDates)
+  const hasPeerReviews = this.model.assignment.get('peer_reviews')
+  const peerReviewAllocationAndGradingEnabled = ENV.PEER_REVIEW_ALLOCATION_AND_GRADING_ENABLED
+
+  if (hasPeerReviews && peerReviewAllocationAndGradingEnabled) {
+    const {assignmentOverrides, peerReview} = getAssignmentAndPeerReviewOverrides(newOverrides)
+
+    this.resetOverrides(assignmentOverrides)
+    if (peerReview && Object.keys(peerReview).length > 0) {
+      this.model.assignment.set('peer_review_data', peerReview)
+    }
+  } else {
+    this.resetOverrides(newOverrides)
+  }
+
+  this.model.assignment.importantDates(importantDates)
 }
 
 DueDateOverrideView.prototype.resetOverrides = function (overrides) {

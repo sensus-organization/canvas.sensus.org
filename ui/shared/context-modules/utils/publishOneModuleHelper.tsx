@@ -347,7 +347,7 @@ function getModulePublishState(moduleId: CanvasId) {
 export function disableContextModulesPublishMenu(disabled: boolean) {
   // I'm not crazy about leaning on a global, but it's actually
   // the cleanest way to go about disabling the Publish All button
-  window.modules?.updatePublishMenuDisabledState(disabled)
+  ;(window as any).modules?.updatePublishMenuDisabledState(disabled)
 }
 
 // this little trick is so that I can spy on funcions

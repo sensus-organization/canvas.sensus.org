@@ -17,13 +17,12 @@
  */
 
 import {extend} from '@canvas/backbone/utils'
-import {includes} from 'lodash'
+import {includes} from 'es-toolkit/compat'
 import {useScope as createI18nScope} from '@canvas/i18n'
 import Backbone from '@canvas/backbone'
 import $ from 'jquery'
 import template from '../../jst/GradingTypeSelector.handlebars'
 import '../../jquery/toggleAccessibly'
-import '@canvas/util/jquery/fixDialogButtons'
 import React from 'react'
 import {createRoot} from 'react-dom/client'
 import {GradingSchemesSelector} from '@canvas/grading-scheme'
@@ -153,7 +152,10 @@ GradingTypeSelector.prototype.toJSON = function () {
     nested: this.nested,
     preventNotGraded:
       this.preventNotGraded ||
-      (((ref = this.lockedItems) != null ? ref.points : void 0) && !this.parentModel.isNotGraded()),
+      (((ref = this.lockedItems) != null ? ref.points : void 0) &&
+        !this.parentModel.isNotGraded()) ||
+      (ENV.PEER_REVIEW_ALLOCATION_AND_GRADING_ENABLED &&
+        this.parentModel.hasPeerReviewSubmissions?.()),
     freezeGradingType:
       includes(this.parentModel.frozenAttributes(), 'grading_type') ||
       this.parentModel.inClosedGradingPeriod() ||

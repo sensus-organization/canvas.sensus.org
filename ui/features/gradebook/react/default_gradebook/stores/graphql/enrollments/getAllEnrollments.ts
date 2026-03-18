@@ -17,17 +17,19 @@
  */
 
 import {getAllPages, GetAllPagesCallbacks, GetAllPagesReturnValue} from '../getAllPages'
-import {flatten} from 'lodash'
+import {flatten} from 'es-toolkit/compat'
 import {
   Enrollment,
   getEnrollments,
   GetEnrollmentsParams,
   GetEnrollmentsResult,
 } from './getEnrollments'
+import PQueue from 'p-queue'
 
 type GetAllEnrollmentsParams = {
   queryParams: Pick<GetEnrollmentsParams, 'courseId' | 'userIds'>
   headers?: Record<string, string>
+  queue?: PQueue
 } & GetAllPagesCallbacks<GetEnrollmentsResult>
 
 export const getAllEnrollments = ({

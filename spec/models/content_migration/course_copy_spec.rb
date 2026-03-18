@@ -561,8 +561,7 @@ describe ContentMigration do
                                        })
 
       tool = reg.deployments.first
-
-      # For asserting context controls don't copy
+      Lti::ContextControl.create!(course: @copy_from, deployment: tool, available: false)
       reg.new_external_tool(@copy_from)
 
       @copy_from.lti_resource_links.create!(
@@ -606,7 +605,9 @@ describe ContentMigration do
       expect(@copy_to.tab_configuration).to eq @copy_from.tab_configuration
 
       expect(@copy_to.lti_resource_links.size).to eq 2
-      expect(Lti::ContextControl.where(course: @copy_to).size).to eq 0
+      controls = Lti::ContextControl.where(context: @copy_to)
+      expect(controls.size).to eq 1
+      expect(controls.first.deployment.context).to eq @copy_to
       rla = @copy_to.lti_resource_links.find { |rl| rl.lookup_uuid == "1b302c1e-c0a2-42dc-88b6-c029699a7c7a" }
       expect(rla.url).to eq "http://example.com/resource-link-url"
 
@@ -831,15 +832,15 @@ describe ContentMigration do
     it "changes user linked files to course linked files" do
       image = attachment_model(context: @teacher, display_name: "cn_image.jpg", uploaded_data: fixture_file_upload("cn_image.jpg"))
       body = <<~HTML
-        <p><img src="/users/#{@teacher.id}/files/#{image.id}/preview"></p>
+        <p><img src="/users/#{@teacher.id}/files/#{image.id}/preview?verifier=#{image.uuid}"></p>
       HTML
       page = @copy_from.wiki_pages.create!(title: "some page", body:, updating_user: @teacher)
 
       run_course_copy
 
-      image_to = @copy_to.attachments.find_by(context: @copy_to, migration_id: mig_id(image))
+      image_to = @copy_to.attachments.find_by(migration_id: mig_id(image))
       page_to = @copy_to.wiki_pages.find_by(migration_id: mig_id(page))
-      expect(page_to.body).to include "/courses/#{@copy_to.id}/files/#{image_to.id}/preview"
+      expect(page_to.body).to eq(%(<p><img src="/courses/#{@copy_to.id}/files/#{image_to.id}/preview"></p>))
       expect(image_to.folder).to eq Folder.media_folder(@copy_to)
       expect(image_to.folder.hidden).to be_truthy
     end
@@ -1072,7 +1073,7 @@ describe ContentMigration do
         run_course_copy
         media_to = @copy_to.attachments.find_by(context: @copy_to, migration_id: mig_id(media))
         expect(@copy_to.media_objects.count).to eq 0
-        expect(@copy_to.syllabus_body).to include "/media_attachments_iframe/#{media_to.id}?type=video&amp;embedded=true"
+        expect(@copy_to.syllabus_body).to include "/media_attachments_iframe/#{media_to.id}?type=video&embedded=true"
         expect(@copy_to.attachment_associations.pluck(:attachment_id)).to include(media_to.id)
       end
 

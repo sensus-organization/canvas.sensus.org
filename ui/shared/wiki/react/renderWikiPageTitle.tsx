@@ -17,7 +17,7 @@
  */
 
 import React, {useEffect, useRef, useState} from 'react'
-import {createRoot} from 'react-dom/client'
+import {render} from '@canvas/react'
 import {TextInput} from '@instructure/ui-text-input'
 import type {TextInputProps} from '@instructure/ui-text-input'
 import {Text} from '@instructure/ui-text'
@@ -67,8 +67,7 @@ const EditableContent = (props: Props) => {
         }))
         setMessages(parsedErrors)
         return false
-      }
-      else {
+      } else {
         // we show errors from the server if any
         evt?.result.catch((error: any) => {
           const titleError = error.responseJSON.errors.title[0]
@@ -140,8 +139,7 @@ const renderWikiPageTitle = (props: Props) => {
   const titleComponent = props.canEdit ? <EditableContent {...props} /> : readOnlyContent()
   const wikiPageTitleContainer = document.getElementById('edit_wikipage_title_container')
   if (wikiPageTitleContainer) {
-    const root = createRoot(wikiPageTitleContainer)
-    root.render(titleComponent)
+    render(titleComponent, wikiPageTitleContainer)
   }
 
   return titleComponent

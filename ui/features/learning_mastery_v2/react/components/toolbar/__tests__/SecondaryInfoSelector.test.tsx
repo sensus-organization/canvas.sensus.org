@@ -17,13 +17,13 @@
  */
 
 import {render, fireEvent} from '@testing-library/react'
-import {SecondaryInfoDisplay} from '../../../utils/constants'
+import {SecondaryInfoDisplay} from '@canvas/outcomes/react/utils/constants'
 import {SecondaryInfoSelector, SecondaryInfoSelectorProps} from '../SecondaryInfoSelector'
 
 describe('SecondaryInfoSelector', () => {
   const defaultProps: SecondaryInfoSelectorProps = {
     value: SecondaryInfoDisplay.NONE,
-    onChange: jest.fn(),
+    onChange: vi.fn(),
   }
 
   it('renders all option items', () => {
@@ -35,7 +35,7 @@ describe('SecondaryInfoSelector', () => {
   })
 
   it('calls onChange when an option is clicked', () => {
-    const onChange = jest.fn()
+    const onChange = vi.fn()
     const {getByLabelText} = render(<SecondaryInfoSelector {...defaultProps} onChange={onChange} />)
     const sisIdInput = getByLabelText('SIS ID')
     fireEvent.click(sisIdInput)

@@ -159,7 +159,8 @@
           <p style="width: 200px"><%= t(:student_mute_notification, "Grades are unavailable because the instructor is working on them.") %></p>
         <% end %>
         <% if @submission.can_view_plagiarism_report('vericite', @current_user, session) && @submission.posted? %>
-          <% if (vericite_score = @submission.vericite_data(true)[@submission.asset_string]) && @submission.turnitin_data[:provider] == :vericite && vericite_score[:similarity_score] %>
+          <% vericite_data = @submission.vericite_data(true) %>
+          <% if (vericite_score = vericite_data[@submission.asset_string]) && vericite_data[:provider] == :vericite && vericite_score[:similarity_score] %>
             <% if show_updated_plagiarism_icons %>
               <%=
                 render partial: 'shared/originality_score_icon', locals: {
@@ -250,12 +251,12 @@
         <% end %>
       </div>
     </div>
-    <% if @submission.submission_type == "online_text_entry" || @submission.submission_type == "discussion_topic" %>
+    <% if %w[online_text_entry discussion_topic].include?(@submission.submission_type_for_asset_reports) %>
       <div
         id="asset_report_status_container"
         data-attempt="<%= @submission.attempt %>"
         data-submission-id="<%= @submission.id %>"
-        data-submission-type="<%= @submission.submission_type %>"
+        data-submission-type="<%= @submission.submission_type_for_asset_reports %>"
       ></div>
     <% end %>
     <% if @assessment_request %>

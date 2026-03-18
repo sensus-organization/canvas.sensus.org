@@ -562,7 +562,9 @@ fa:
     report_header_token_dev_key_id: "شناسه کلید dev"
     report_header_token_dev_key_name: "نام کلید dev"
     report_header_token_hint: "راهنمای نشانه"
+    report_header_token_id: شناسه
     report_header_token_last_used: "آخرین استفاده"
+    report_header_token_status: وضعیت
     report_header_unposted_current_grade: "نمره فعلی پست نشده"
     report_header_unposted_current_score: "نمره فعلی ارسال نشده"
     report_header_unposted_final_grade: "نمره نهایی پست نشده"
@@ -2302,6 +2304,7 @@ fa:
   alerts_add_edit_delete_d71091c6: "اخطارها - اضافه /ویرایش /حذف"
   alerts_course_settings_53551794: "هشدارها (تنظیمات درس)"
   align_outcomes_to_this_page_7d055196: "نتایج را با این صفحه تراز کنید"
+  aligned_outcomes_d0a0c159: "نتایج تطبیق داده شده"
   all_4321c3a1: همه
   all_account_types_e83c1516: "همه انواع حساب"
   all_accounts_3bafc860: "همه حساب‌ها"
@@ -4466,6 +4469,7 @@ fa:
     create_time: "زمان ایجاد کنید"
     recording_setting: "در حال ضبط"
     recording_setting_enabled_description: "فعالسازی ضبط برای این کنفرانس"
+  bio_a519d807: "شرح حال"
   blackboard: 
     no_manifest: "این Blackboard .zip هیچ فایل imsmanifest.xml در دایرکتوری ریشه ندارد."
   blackout_dates_4a140a72: "تاریخ های خاموشی"
@@ -5527,12 +5531,14 @@ fa:
   close_for_comments_ce0e5d00: "بستن امکان ارسال نظر"
   close_grade_info_58ef5a20: "بستن اطلاعات نمره"
   close_move_tray_8609e988: "بستن سینی انتقال"
+  close_rubric_a0fc8166: "بستن دستورالعمل ارزیابی"
   close_sidebar_10b0fbb4: "بستن نوار کناری"
   close_student_details_2f6900: "بستن جزئیات دانشجو"
   close_submission_tray_c4988fa8: "بستن سینی موارد ارسالی"
   close_suggestions_6fcb4985: "بستن پیشنهادات"
   close_the_window_and_try_again_7353f8e: "پنجره را ببندید و دوباره امتحان کنید."
   close_warning_d61daf2c: "بستن هشدار"
+  closed_983a96fe: "بسته شده"
   closed_for_comments_e395b42f: "امکان ارسال نظر وجود ندارد"
   closes_5c6b4367: "بستن:"
   code_93e9abbb: کد
@@ -6074,6 +6080,7 @@ fa:
   confirmation_code_required_22984955: "رمز تأیید (لازم)"
   confirmation_failed_please_try_again_ae566d37: "تأیید انجام نشد. لطفا دوباره تلاش کنید."
   confirming_2df4b68f: "درحال تأیید..."
+  confirming_course_name_5a509f48: "در حال تأیید %{course_name}..."
   confused_panda_questioning_what_to_do_next_42941484: "پاندای سردرگم می‌پرسد که بعداً چه کاری انجام دهد"
   consider_selecting_multiple_submission_types_to_ac_f7e624d5: "انتخاب چندین نوع ارسال را در نظر بگیرید چون که ممکن است دانشجویانی قادر به ایجاد حاشیه نویسی نباشند."
   consumer_key_57d9fcf1: "کلید مصرف کننده"
@@ -7336,6 +7343,7 @@ fa:
   course_id_8bd2a21c: "شناسه درس"
   course_id_a7c924d5: "شناسه درس"
   course_id_b0bc82d4: "شناسه درس"
+  course_id_course_id_2841413a: "شناسه درس \"%{course_id}\""
   course_id_f8640bb8: شناسه_درس
   course_image_for_course_cfbb08df: "تصویر درس برای %{course}"
   course_image_settings_eba3ec55: "تنظیمات تصویر درس"
@@ -7422,8 +7430,17 @@ fa:
   course_name_45175338: "نام درس"
   course_name_63b973d1: "نام درس"
   course_name_is_required_90919349: "نام درس لازم است"
+  course_name_not_authorized_for_cross_listing_353e500f: "%{course_name} برای فهرست بندی متقابل مجاز نیست"
   course_name_successfully_added_48116a50: "%{course_name} با موفقیت افزوده شد!"
   course_navigation_dd035109: "پیمایش درس"
+  course_navigation_settings: 
+    buttons: 
+      save: "ذخیره سازی"
+    drag_details: "غیرفعال کردن اکثر صفحه ها باعث می شود دانشجویانی که از این صفحه ها بازدید می کنند به صفحه ی اصلی درس هدایت شوند."
+    drag_to_hide: "موردها را اینجا بکشید تا آنها را از دانشجویان مخفی کنید."
+    help: 
+      edit_navigation: "برای مرتب کردن دوباره مورد ها در پیمایش درس، آنها را بکشید و رها کنید."
+      edit_navigation_k5: "موارد را بکشید و رها کنید تا آنها را در پیمایش موضوع مجدداً مرتب کنید."
   course_not_found_c248a721: "درس  یافت نشد"
   course_notification_settings_d9821d36: "تنظیمات اعلان دوره"
   course_notification_settings_error_page_c0512c17: "صفحه خطای تنظیمات اعلان دوره"
@@ -7718,6 +7735,15 @@ fa:
         content: محتوا
         due_dates: "تاریخ‌های مهلت"
         points: امتیازها
+    navigation_form: 
+      drag_details: "غیرفعال کردن اکثر صفحه ها باعث می شود دانشجویانی که از این صفحه ها بازدید می کنند به صفحه ی اصلی درس هدایت شوند."
+      drag_to_hide: "موردها را اینجا بکشید تا آنها را از دانشجویان مخفی کنید."
+      help: 
+        edit_navigation: "برای مرتب کردن دوباره مورد ها در پیمایش درس، آنها را بکشید و رها کنید."
+        edit_navigation_info_k5: "اگر فعال باشد، ابزارهای LTI همیشه به ترتیبی که شما انتخاب می‌کنید، در آخر و در زیر برگه منابع ظاهر می‌شوند."
+        edit_navigation_k5: "موارد را بکشید و رها کنید تا آنها را در پیمایش موضوع مجدداً مرتب کنید."
+      titles: 
+        edit_navigation: "ویرایش پیمایش درس"
     notices: 
       backup_restored: "نسخه پشتیبان با موفقیت بازیابی شد!"
       concluded: "درس با موفقیت خاتمه یافت"
@@ -8251,6 +8277,9 @@ fa:
   criterion_ratings_3eed22e2: "رتبه بندی های معیار"
   criterion_updated_36c0b3dc: "معیار به روز شد"
   croatian_d713d655: کرواسی
+  cross_list_section_27801ec9: "فهرست بندی متقابل بخش"
+  cross_list_this_section_889f7287: "فهرست بندی متقابل این بخش"
+  cross_list_this_section_90aea97f: "فهرست بندی متقابل این بخش"
   cross_listing_3318526a: "مقایسه ی لیست متقابل هم"
   crowdsourced: true
   crumbs: 
@@ -11026,6 +11055,7 @@ fa:
   generate_item_analysis_report_statuslabel_16e02c8: "ایجاد گزارش تحلیل مورد %{statusLabel}"
   generate_student_analysis_report_statuslabel_aecdc4dc: "ایجاد گزارش تحلیل دانشجو %{statusLabel}"
   generate_token_393ab5b4: "ایجاد نشانه"
+  generated_e71c6622: "ایجاد شد"
   generated_f26ee56b: "ایجاد شد:"
   generating_5b5e20f8: "در حال ایجاد:"
   generating_c2aabc02: "در حال ایجاد..."
@@ -11108,6 +11138,7 @@ fa:
       warning: هشدار
   grade_distribution_e52c9256: "توزیع نمره"
   grade_export_title: "صدور نمره"
+  grade_f949a691: "%{grade}%"
   grade_for_course_ccc8513c: "نمره برای %{course}"
   grade_for_missing_submissions_56f91c83: "نمره برای موارد ارسالی موجود نیست"
   grade_for_name_b9df168a: "نمره برای: %{name}"
@@ -12586,6 +12617,7 @@ fa:
   hide_outcomes_with_no_results_7e4ce06f: "مخفی کردن خروجی های بدون نتیجه"
   hide_params_eadf0961: "پنهان کردن پارامترها"
   hide_projections_9d4ed1e1: "مخفی کردن پیش بینی ها"
+  hide_rubric_27903c8: "مخفی کردن دستورالعمل ارزیابی"
   hide_score_total_for_assessment_results_d0ef117f: "مخفی کردن کل نمره برای نتایج ارزیابی"
   hide_sidebar_2b5b3776: "مخفی کردن نوار کناری"
   hide_student_names_3e59e862: "مخفی کردن نام دانشجویان"
@@ -16629,6 +16661,7 @@ fa:
   no_grading_periods_set_up_a20a8819: "هیچ دوره نمره گذاری ایجاد نشده است"
   no_grading_schemes_to_display_8b0e92e7: "هیچ طرح نمره گذاری برای نمایش موجود نیست"
   no_integrations_available_6729d0ca: "هیچ ادغام در دسترس نیست"
+  no_items_20cde5bf: "هیچ موردی یافت نشد."
   no_items_found_870b2d0d: "موردی یافت نشد"
   no_items_in_module_21f111a2: "هیچ موردی در ماژول موجود نیست"
   no_job_selected_d6c5e6f4: "هیچ کاری انتخاب نشده است"
@@ -16708,6 +16741,7 @@ fa:
   not_available_at_the_subaccount_level_3fc74ab: "در سطح زیر حساب موجود نیست."
   not_available_at_the_subaccount_level_6ee9b41f: "در سطح زیر حساب موجود نیست"
   not_available_during_sync_ae645e8c: "در طول همگام‌سازی، موجود نیست"
+  not_available_until_14e61f1e: "غیر قابل دسترسی تا"
   not_available_until_date_3c1c73c2: "غیر قابل دسترس تا %{date}"
   not_available_until_next_submission_2175158: "تا مورد ارسالی بعدی در دسترس نیست"
   not_calculated_in_final_grade_2b7d5bd1: "در نمره نهایی محاسبه نشده است"
@@ -16736,6 +16770,7 @@ fa:
   not_synced_message_a343fe5e: "همگام نشده است: %{message}"
   not_visible_in_student_files_22f11883: "در پرونده های دانشجویی قابل مشاهده نیست"
   not_yet_assessed_9362f199: "هنوز ارزیابی نشده است"
+  not_yet_available_9aa23a77: "هنوز در دسترس نیست"
   not_yet_completed_345a0bca: "هنوز تکمیل نشده است"
   not_yet_graded_40475341: "هنوز نمره گذاری نشده"
   not_yet_graded_8b655a7: "هنوز نمره گذاری نشده"
@@ -17295,6 +17330,7 @@ fa:
   or_a01eec62: یا
   or_choose_files_b795006d: "یا فایل ها را انتخاب کنید"
   or_ef4e808: یا
+  or_enter_the_course_s_id_46e0792a: "یا شناسه درس را وارد کنید"
   orange_81386a62: نارنجی
   orbis_report_header_assignment_id: "شناسه تکلیف"
   orbis_report_header_assignment_title: "عنوان تکلیف"
@@ -18422,6 +18458,7 @@ fa:
   priority_dd4381ee: اولویت
   privacy_290109ea: "حریم خصوصی"
   privacy_level_f0ec09a3: "سطح حریم خصوصی"
+  privacy_notice_7eff08fe: "اطلاعیه حریم خصوصی"
   privacy_policy_c68f482a: "سیاست حریم خصوصی"
   private_3883d133: خصوصی
   private_copyrighted_3cac9686: "خصوصی (دارای حق تکثیر)"
@@ -20410,6 +20447,7 @@ fa:
   rce_contents_replace_display_name: " جایگزین کردن محتوا RCE"
   rce_enhancements_5701e06: "ارتقای RCE"
   re_activate_user_f7d77c9a: "فعال سازی دوباره کاربر"
+  re_cross_list_this_section_faf7df4d: "فهرست بندی متقابل دوباره این بخش"
   re_reported_b9671073: "دوباره گزارش شده"
   re_send_confirmation_bcc66940: "ارسال دوباره تأییدیه"
   re_sending_379a8580: "در حال ارسال دوباره..."
@@ -21316,6 +21354,7 @@ fa:
   search_for_a_course_58fdc7a6: "جستجوی یک درس"
   search_for_a_deleted_course_by_id_f553398d: "جستجوی درس حذف شده بر اساس شناسه"
   search_for_assignment_8149cb1: "جستجوی تکلیف"
+  search_for_course_e1a1dfc6: "جستجو برای درس"
   search_for_files_7541fb28: "جستجوی فایل ها"
   search_for_people_by_id_or_name_36107593: "جستجوی افراد بر اساس شناسه یا نام"
   search_for_your_school_or_institution_1eb2eeaf: "مدرسه یا موسسه خود را جستجو کنید"
@@ -21388,6 +21427,7 @@ fa:
   section_specific_discussions_are_disabled_9e3fd431: "بحث های خاص بخش غیر فعال شده اند"
   section_specific_topics_must_have_sections_11868960: "موضوع های خاص بخش باید بخش داشته باشند"
   section_starts_at_65eaed1: "بخش شروع می شود در"
+  section_successfully_cross_listed_86eb2765: "بخش با موفقیت فهرست بندی متقابل شد!"
   section_successfully_de_cross_listed_df3b64e: "لغو فهرست بندی متقابل بخش با موفقیت انجام شد!"
   sections: 
     section_created: "بخش با موفقیت ایجاد شد!"
@@ -21573,6 +21613,7 @@ fa:
   selected_answer: "این پاسخ را انتخاب کرده اید."
   selected_calendars_cc7f325b: "تقویم های منتخب"
   selected_content_is_not_an_lti_link_11780d96: "محتوای انتخاب شده یک لینک LTI نمی باشد."
+  selected_course_9bf57f33: "درس انتخاب شده"
   selected_course_course_a581f834: "درس %{course} انتخاب شده"
   selected_de3a8019: "انتخاب شده"
   selected_external_tool_tool_bae095ba: "ابزار خارجی انتخاب شده %{tool}"
@@ -22941,6 +22982,7 @@ fa:
   start_a_new_course_57ae2480: "شروع درس جدید"
   start_a_new_subject_7271b3ec: "موضوع جدیدی را شروع کنید"
   start_assignment_d56256d3: "شروع تکلیف"
+  start_at_c29f35f1: "شروع از"
   start_date_c41cb23a: "تاریخ شروع:"
   start_date_e937be8a: "تاریخ شروع"
   start_date_end_date_d809dd93: "%{start_date} - %{end_date}"
@@ -23348,6 +23390,7 @@ fa:
       teachers_notified_of_comments: "اساتید و ارسال کننده از همه نظرها مطلع خواهند شد."
     show_preview: 
       anonymous_username: "این دانشجو"
+      assignment_locked: "این تکلیف در حال حاضر قفل است."
       discussion_submission_description: "موردهای ارسالی برای این تکلیف، ارسال های موجود در بحث مربوط به تکلیف هستند. در زیر ارسال های مربوط به بحث برای %{user} آمده است یا می توانید *بحث کامل را مشاهده کنید*."
       discussion_submission_description_without_link: "موردهای ارسالی این تکلیف، ارسال های موجود در بحث تکلیف هستند. در قسمت زیر، ارسال های بحث مربوط به %{user} آمده است."
       entry_no_image: "به یاد داشته باشید که این صفحه از زمان ارسال اولیه، ممکن است تغییر یافته باشد."

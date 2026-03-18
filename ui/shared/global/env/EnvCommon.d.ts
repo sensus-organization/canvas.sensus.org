@@ -272,16 +272,29 @@ export interface EnvCommon {
    */
   top_navigation_tools: Tool[]
 
+  /**
+   * Used by ui/features/assignment_index/react/IndexMenu.tsx
+   * Set in ApplicationController#js_env
+   */
+  assignment_index_menu_tools?: Tool[]
+
   BLUEPRINT_COURSES_DATA: BlueprintCoursesData | undefined
   AI_FEEDBACK_LINK?: string
+
+  /**
+   * Used by ContentTypeExternalToolDrawer for mutex management
+   */
+  INIT_DRAWER_LAYOUT_MUTEX?: string
 }
 
 /**
  * From ApplicationController#JS_ENV_SITE_ADMIN_FEATURES
  */
 export type SiteAdminFeatureId =
-  | 'accessibility_issues_in_full_page'
-  | 'a11y_checker_ai_generation'
+  | 'a11y_checker_ai_alt_text_generation'
+  | 'a11y_checker_ai_table_caption_generation'
+  | 'a11y_checker_additional_resources'
+  | 'a11y_checker_close_issues'
   | 'account_calendar_events'
   | 'account_level_blackout_dates'
   | 'courses_popout_sisid'
@@ -306,7 +319,6 @@ export type SiteAdminFeatureId =
   | 'scheduled_feedback_releases'
   | 'speedgrader_studio_media_capture'
   | 'student_access_token_management'
-  | 'top_navigation_placement_a11y_fixes'
   | 'validate_call_to_action'
   | 'youtube_migration'
   | 'youtube_overlay'
@@ -317,8 +329,10 @@ export type SiteAdminFeatureId =
 export type RootAccountFeatureId =
   | 'account_level_mastery_scales'
   | 'ams_root_account_integration'
+  | 'ams_advanced_content_organization'
   | 'api_rate_limits'
   | 'buttons_and_icons_root_account'
+  | 'canvas_apps_sub_account_access'
   | 'course_pace_allow_bulk_pace_assign'
   | 'course_pace_download_document'
   | 'course_pace_draft_state'
@@ -330,7 +344,6 @@ export type RootAccountFeatureId =
   | 'create_course_subaccount_picker'
   | 'disable_iframe_sandbox_file_show'
   | 'extended_submission_state'
-  | 'increased_top_nav_pane_size'
   | 'instui_nav'
   | 'login_registration_ui_identity'
   | 'lti_apps_page_ai_translation'
@@ -339,6 +352,7 @@ export type RootAccountFeatureId =
   | 'lti_link_to_apps_from_developer_keys'
   | 'lti_registrations_next'
   | 'lti_registrations_page'
+  | 'lti_dr_registrations_update'
   | 'lti_registrations_usage_data'
   | 'lti_registrations_usage_data_dev'
   | 'lti_registrations_usage_data_low_usage'
@@ -347,6 +361,7 @@ export type RootAccountFeatureId =
   | 'modules_requirements_allow_percentage'
   | 'non_scoring_rubrics'
   | 'open_tools_in_new_tab'
+  | 'pendo_extended'
   | 'product_tours'
   | 'rce_lite_enabled_speedgrader_comments'
   | 'rce_studio_embed_improvements'
@@ -355,6 +370,7 @@ export type RootAccountFeatureId =
   | 'rubric_criterion_range'
   | 'scheduled_page_publication'
   | 'send_usage_metrics'
+  | 'top_navigation_placement'
 
 /**
  * From ApplicationController#JS_ENV_ROOT_ACCOUNT_SERVICES

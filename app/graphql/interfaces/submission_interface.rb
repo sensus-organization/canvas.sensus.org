@@ -153,9 +153,7 @@ module Interfaces::SubmissionInterface
 
   field :has_unread_rubric_assessment, Boolean, null: false
   def has_unread_rubric_assessment
-    load_association(:content_participations).then do
-      submission.content_participations.where(workflow_state: "unread", content_item: "rubric").exists?
-    end
+    Loaders::SubmissionLoaders::HasUnreadRubricAssessmentLoader.load(submission.id)
   end
 
   field :user, Types::UserType, null: true
@@ -175,6 +173,12 @@ module Interfaces::SubmissionInterface
              required: false,
              default_value: nil
     argument :include_draft_comments, Boolean, required: false, default_value: false
+    argument :include_drafts_from_others, Boolean, <<~MD, required: false, default_value: false
+      When true and include_draft_comments is true, draft comments from other teachers will be included.
+      Only applies to users with grading permissions (teachers, TAs, etc).
+      When false, only the current user's draft comments are included.
+      Students never see draft comments from others regardless of this setting.
+    MD
     argument :include_provisional_comments, Boolean, <<~MD, required: false, default_value: false
       When true, provisional comments that the current user has permission to see will be returned.
       The Moderator has permission to see all provisional comments.
@@ -183,7 +187,7 @@ module Interfaces::SubmissionInterface
       Students cannot see provisional comments.
     MD
   end
-  def comments_connection(filter:, sort_order:, include_draft_comments:, include_provisional_comments:)
+  def comments_connection(filter:, sort_order:, include_draft_comments:, include_drafts_from_others:, include_provisional_comments:)
     filter = filter.to_h
     filter => all_comments:, for_attempt:, peer_review:
 
@@ -211,7 +215,13 @@ module Interfaces::SubmissionInterface
     load_association(:assignment).then do
       load_association(:submission_comments).then do
         provisional_comments_promise.then do |provisional_comments|
-          comments = include_draft_comments ? submission.comments_including_drafts_for(current_user) : submission.comments_excluding_drafts_for(current_user)
+          comments = if include_draft_comments && include_drafts_from_others
+                       submission.visible_submission_comments_for(current_user)
+                     elsif include_draft_comments
+                       submission.comments_including_drafts_for(current_user)
+                     else
+                       submission.comments_excluding_drafts_for(current_user)
+                     end
           comments = comments.to_a
 
           if include_provisional_comments
@@ -451,74 +461,78 @@ module Interfaces::SubmissionInterface
 
   field :vericite_data, [Types::VericiteDataType], null: true
   def vericite_data
-    return nil unless object.vericite_data(false).present? &&
+    load_association(:assignment).then do
+      next nil unless object.vericite_data(false).present? &&
                       object.grants_right?(current_user, :view_vericite_report) &&
                       object.assignment.vericite_enabled
 
-    promises =
-      object.vericite_data
-            .except(
-              :provider,
-              :last_processed_attempt,
-              :webhook_info,
-              :eula_agreement_timestamp,
-              :assignment_error,
-              :student_error,
-              :status
-            )
-            .map do |asset_string, data|
-        Loaders::AssetStringLoader
-          .load(asset_string.to_s)
-          .then do |target|
-            next if target.nil?
+      promises =
+        object.vericite_data
+              .except(
+                :provider,
+                :last_processed_attempt,
+                :webhook_info,
+                :eula_agreement_timestamp,
+                :assignment_error,
+                :student_error,
+                :status
+              )
+              .map do |asset_string, data|
+                Loaders::AssetStringLoader
+                  .load(asset_string.to_s)
+                  .then do |target|
+                    next if target.nil?
 
-            {
-              target:,
-              asset_string:,
-              report_url: data[:report_url],
-              score: data[:similarity_score],
-              status: data[:status],
-              state: data[:state],
-            }
-          end
-      end
-    Promise.all(promises).then(&:compact)
+                    {
+                      target:,
+                      asset_string:,
+                      report_url: data[:report_url],
+                      score: data[:similarity_score],
+                      status: data[:status],
+                      state: data[:state],
+                    }
+                  end
+        end
+      Promise.all(promises).then(&:compact)
+    end
   end
 
   field :turnitin_data, [Types::TurnitinDataType], null: true
   def turnitin_data
-    return nil unless object.grants_right?(current_user, :view_turnitin_report)
-    return nil if object.turnitin_data.empty?
+    load_association(:assignment).then do
+      next nil unless object.grants_right?(current_user, :view_turnitin_report)
+      next nil if object.turnitin_data.empty?
 
-    promises =
-      object
-      .turnitin_data
-      .except(
-        :last_processed_attempt,
-        :webhook_info,
-        :eula_agreement_timestamp,
-        :assignment_error,
-        :provider,
-        :student_error,
-        :status
-      )
-      .map do |asset_string, data|
-        Loaders::AssetStringLoader
-          .load(asset_string.to_s)
-          .then do |target|
-            next if target.nil?
+      promises =
+        object
+        .turnitin_data
+        .except(
+          :last_processed_attempt,
+          :webhook_info,
+          :eula_agreement_timestamp,
+          :assignment_error,
+          :provider,
+          :student_error,
+          :status
+        )
+        .map do |asset_string, data|
+          Loaders::AssetStringLoader
+            .load(asset_string.to_s)
+            .then do |target|
+              next if target.nil?
 
-            {
-              target:,
-              asset_string:,
-              report_url: data[:report_url],
-              score: data[:similarity_score],
-              status: data[:status],
-              state: data[:state]
-            }
-          end
-      end
-    Promise.all(promises).then(&:compact)
+              {
+                target:,
+                asset_string:,
+                report_url: data[:report_url],
+                score: data[:similarity_score],
+                status: data[:status],
+                state: data[:state]
+              }
+            end
+        end
+      Promise.all(promises).then(&:compact)
+    end
   end
 
   field :originality_data, GraphQL::Types::JSON, null: true
@@ -666,7 +680,8 @@ module Interfaces::SubmissionInterface
         assignment_id: submission.assignment_id,
         url: submission.external_tool_url(query_params: submission.tool_default_query_params(current_user)),
         display: "borderless",
-        host: context[:request].host_with_port
+        host: context[:request].host_with_port,
+        resource_link_lookup_uuid: submission.resource_link_lookup_uuid
       )
     else
       Loaders::AssociationLoader.for(Submission, :assignment).load(submission).then do |assignment|

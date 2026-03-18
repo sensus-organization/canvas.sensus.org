@@ -17,15 +17,28 @@
  */
 
 /**
- * @jest-environment jsdom
+ * @vi-environment jsdom
  */
 
 // Mock the ready function to immediately execute the callback
-jest.mock('@instructure/ready', () => (callback: () => void) => callback())
+vi.mock('@instructure/ready', () => ({
+  default: (callback: () => void) => callback(),
+}))
 
-// Mock ReactDOM to avoid rendering
-jest.mock('react-dom', () => ({
-  render: jest.fn(),
+// Mock i18n to avoid infinite recursion issues
+vi.mock('@canvas/i18n', () => ({
+  useScope: () => ({
+    t: (key: string) => key,
+  }),
+}))
+
+// Mock the React components to avoid actual rendering
+vi.mock('@canvas/trays/react/ContentTypeExternalToolDrawer', () => ({
+  default: () => null,
+}))
+vi.mock('../react/TopNavigationTools', () => ({
+  TopNavigationTools: () => null,
+  MobileTopNavigationTools: () => null,
 }))
 
 // Mock ENV
@@ -33,11 +46,23 @@ jest.mock('react-dom', () => ({
   top_navigation_tools: [],
 }
 
+// Mock global I18n
+;(global as any).I18n = {
+  t: (key: string) => key,
+  locale: 'en',
+}
+
 describe('href="#" scrollTop fix', () => {
   let mockDrawerContent: HTMLElement
-  let scrollToSpy: jest.SpyInstance
+  let scrollToSpy: any
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    // Mock I18n before everything else
+    vi.stubGlobal('I18n', {
+      t: (key: string) => key,
+      locale: 'en',
+    })
+
     // Reset DOM
     document.body.innerHTML = ''
 
@@ -61,7 +86,7 @@ describe('href="#" scrollTop fix', () => {
     document.body.appendChild(mockDrawerContent)
 
     // Mock scrollTo method
-    scrollToSpy = jest.fn()
+    scrollToSpy = vi.fn()
     Object.defineProperty(mockDrawerContent, 'scrollTo', {
       value: scrollToSpy,
       writable: true,
@@ -78,13 +103,13 @@ describe('href="#" scrollTop fix', () => {
     })
 
     // Load the module to register the event listener
-    jest.isolateModules(() => {
-      require('../index.tsx')
-    })
+    vi.resetModules()
+
+    await import('../index')
   })
 
   afterEach(() => {
-    jest.restoreAllMocks()
+    vi.restoreAllMocks()
   })
 
   it('scrolls drawer content to top when href="#" is clicked and HTML cannot scroll', () => {

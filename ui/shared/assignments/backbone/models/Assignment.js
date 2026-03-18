@@ -18,7 +18,7 @@
 
 import {extend} from '@canvas/backbone/utils'
 import $ from 'jquery'
-import {map, find, filter, includes, some} from 'lodash'
+import {map, find, filter, includes, some} from 'es-toolkit/compat'
 import {Model} from '@canvas/backbone'
 import DefaultUrlMixin from '@canvas/backbone/DefaultUrlMixin'
 import TurnitinSettings from '../../TurnitinSettings'
@@ -181,6 +181,7 @@ function Assignment() {
   this.peerReviewsAssignAt = this.peerReviewsAssignAt.bind(this)
   this.peerReviewSubmissionRequired = this.peerReviewSubmissionRequired.bind(this)
   this.peerReviewAcrossSections = this.peerReviewAcrossSections.bind(this)
+  this.hasPeerReviewSubmissions = this.hasPeerReviewSubmissions.bind(this)
   this.pointsPossible = this.pointsPossible.bind(this)
   this.pollUntilFinished = this.pollUntilFinished.bind(this)
   this.pollUntilFinishedCloningAlignment = this.pollUntilFinishedCloningAlignment.bind(this)
@@ -708,6 +709,10 @@ Assignment.prototype.intraGroupPeerReviews = function () {
 
 Assignment.prototype.peerReviewSubAssignment = function () {
   return this.get('peer_review_sub_assignment')
+}
+
+Assignment.prototype.hasPeerReviewSubmissions = function () {
+  return this.get('has_peer_review_submissions')
 }
 
 Assignment.prototype.notifyOfUpdate = function (notifyOfUpdateBoolean) {

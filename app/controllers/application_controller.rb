@@ -291,6 +291,7 @@ class ApplicationController < ActionController::Base
           k12: k12?,
           help_link_name:,
           help_link_icon:,
+          ADA_CHATBOT_ENABLED: @domain_root_account&.feature_enabled?(:ada_chatbot),
           use_high_contrast: @current_user&.prefers_high_contrast?,
           auto_show_cc: @current_user&.auto_show_cc?,
           disable_celebrations: @current_user&.prefers_no_celebrations?,
@@ -311,7 +312,7 @@ class ApplicationController < ActionController::Base
         }
         @js_env[:use_dyslexic_font] = @current_user&.prefers_dyslexic_font? if @current_user&.can_see_dyslexic_font_feature_flag?(session) && !mobile_device?
         widget_dashboard_flag = @domain_root_account&.lookup_feature_flag(:widget_dashboard)
-        @js_env[:widget_dashboard_overridable] = @current_user&.prefers_widget_dashboard?(@domain_root_account, widget_dashboard_flag) if @current_user && widget_dashboard_flag&.enabled? && widget_dashboard_flag.can_override? && !mobile_device?
+        @js_env[:widget_dashboard_overridable] = @current_user&.prefers_widget_dashboard?(@domain_root_account, widget_dashboard_flag) if @current_user && widget_dashboard_flag&.enabled? && !mobile_device? && widget_dashboard_eligible?
         if @domain_root_account&.feature_enabled?(:restrict_student_access)
           @js_env[:current_user_has_teacher_enrollment] = @current_user&.teacher_enrollment?
         end
@@ -390,6 +391,21 @@ class ApplicationController < ActionController::Base
                                     elsif @context.is_a?(Course)
                                       @context.account.horizon_account?
                                     end
+        if load_usage_metrics? && @domain_root_account&.feature_enabled?(:pendo_extended)
+          @js_env[:USAGE_METRICS_METADATA] ||= {}
+          @js_env[:USAGE_METRICS_METADATA][:sub_account_id] = effective_account_id(@context)
+          @js_env[:USAGE_METRICS_METADATA][:sub_account_name] = effective_account_name(@context)
+
+          if @context.is_a?(Course)
+            @js_env[:USAGE_METRICS_METADATA][:course_id] = @context.id
+            @js_env[:USAGE_METRICS_METADATA][:course_long_name] = "#{@context.name} - #{@context.short_name}"
+            @js_env[:USAGE_METRICS_METADATA][:course_sis_source_id] = @context.sis_source_id
+            @js_env[:USAGE_METRICS_METADATA][:course_sis_batch_id] = @context.sis_batch_id
+            @js_env[:USAGE_METRICS_METADATA][:course_enrollment_term_id] = @context.enrollment_term_id
+            @js_env[:USAGE_METRICS_METADATA][:course_enrollment_term_name] = @context.enrollment_term&.name
+          end
+        end
+
         if @context.is_a?(Course)
           @js_env[:FEATURES][:youtube_overlay] = @context.account.feature_enabled?(:youtube_overlay)
           @js_env[:FEATURES][:rce_studio_embed_improvements] = @context.feature_enabled?(:rce_studio_embed_improvements)
@@ -405,6 +421,7 @@ class ApplicationController < ActionController::Base
           }
         end
       end
+      preload_translation_file
     end
 
     add_to_js_env(hash, @js_env, overwrite)
@@ -438,8 +455,10 @@ class ApplicationController < ActionController::Base
   JS_ENV_SITE_ADMIN_FEATURES = %i[
     account_level_blackout_dates
     assignment_edit_placement_not_on_announcements
-    accessibility_issues_in_full_page
-    a11y_checker_ai_generation
+    a11y_checker_ai_alt_text_generation
+    a11y_checker_ai_table_caption_generation
+    a11y_checker_additional_resources
+    a11y_checker_close_issues
     block_content_editor_toolbar_reorder
     commons_new_quizzes
     consolidated_media_player
@@ -472,18 +491,17 @@ class ApplicationController < ActionController::Base
     scheduled_feedback_releases
     speedgrader_studio_media_capture
     student_access_token_management
-    top_navigation_placement_a11y_fixes
     validate_call_to_action
     block_content_editor_ai_alt_text
     ux_list_concluded_courses_in_bp
-    assign_to_in_edit_pages_rewrite
   ].freeze
   JS_ENV_ROOT_ACCOUNT_FEATURES = %i[
     account_level_mastery_scales
     ams_root_account_integration
-    ams_enhanced_rubrics
+    ams_advanced_content_organization
     api_rate_limits
     buttons_and_icons_root_account
+    canvas_apps_sub_account_access
     course_pace_allow_bulk_pace_assign
     course_pace_download_document
     course_pace_draft_state
@@ -496,7 +514,6 @@ class ApplicationController < ActionController::Base
     disable_iframe_sandbox_file_show
     extended_submission_state
     file_verifiers_for_quiz_links
-    increased_top_nav_pane_size
     instui_nav
     login_registration_ui_identity
     lti_apps_page_ai_translation
@@ -516,6 +533,7 @@ class ApplicationController < ActionController::Base
     modules_requirements_allow_percentage
     non_scoring_rubrics
     open_tools_in_new_tab
+    pendo_extended
     product_tours
     rce_lite_enabled_speedgrader_comments
     rce_transform_loaded_content
@@ -692,7 +710,6 @@ class ApplicationController < ActionController::Base
         tool.feature_flag_enabled?(context)
     end
 
-    tools.select! { |tool| tool.placement_allowed?(type) }
     tools.map do |tool|
       external_tool_display_hash(tool, type, {}, context, custom_settings)
     end
@@ -2297,7 +2314,11 @@ class ApplicationController < ActionController::Base
         render "context_modules/lock_explanation"
       else
         tag.context_module_action(@current_user, :read)
-        render "context_modules/url_show"
+        if tag.new_tab && params[:follow_redirect] && Account.site_admin.feature_enabled?(:module_external_url_seamless_redirect)
+          redirect_to tag.url, allow_other_host: true
+        else
+          render "context_modules/url_show"
+        end
       end
     elsif tag.content_type == "ContextExternalTool"
       timing_start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
@@ -2486,6 +2507,7 @@ class ApplicationController < ActionController::Base
     end
     named_context_url(@context, :context_external_content_success_url, "external_tool_redirect", include_host: true)
   end
+  public :set_return_url
 
   def lti_launch_params(adapter)
     adapter.generate_post_payload_for_assignment(@assignment, lti_grade_passback_api_url(@tool), blti_legacy_grade_passback_api_url(@tool), lti_turnitin_outcomes_placement_url(@tool.id))
@@ -2568,7 +2590,7 @@ class ApplicationController < ActionController::Base
 
   # escape everything but slashes, see http://code.google.com/p/phusion-passenger/issues/detail?id=113
   FILE_PATH_ESCAPE_PATTERN = Regexp.new("[^#{URI::PATTERN::UNRESERVED}/]")
-  def safe_domain_file_url(attachment, host_and_shard: nil, verifier: nil, download: false, return_url: nil, fallback_url: nil, authorization: nil)
+  def safe_domain_file_url(attachment, host_and_shard: nil, verifier: nil, download: false, return_url: nil, fallback_url: nil, authorization: nil, query_params: {})
     host_and_shard ||= HostUrl.file_host_with_shard(@domain_root_account || Account.default, request.host_with_port)
     host, shard = host_and_shard
     config = DynamicSettings.find(tree: :private, cluster: attachment.shard.database_server.id)
@@ -2600,6 +2622,8 @@ class ApplicationController < ActionController::Base
         # comment below for why we'd want to set :download
         opts[:inline] = 1
       end
+
+      opts.merge!(query_params)
 
       if @context && Attachment.relative_context?(@context.class.base_class) && @context == attachment.context
         # so yeah, this is right. :inline=>1 wants :download=>1 to go along with
@@ -2658,6 +2682,18 @@ class ApplicationController < ActionController::Base
     feature_enabled?(feature) && service_enabled?(feature)
   end
   helper_method :feature_and_service_enabled?
+
+  def effective_account_name(context)
+    if context.is_a?(Account)
+      context.name
+    elsif context.is_a?(Course)
+      context.account.name
+    elsif context.respond_to?(:context)
+      effective_account_name(context.context)
+    else
+      @domain_root_account&.name
+    end
+  end
 
   def random_lti_tool_form_id
     rand(0..999).to_s
@@ -3124,14 +3160,17 @@ class ApplicationController < ActionController::Base
     extend Api::V1::Group
 
     includes ||= []
+    profile_owner = profile.user
+    is_profile_owner = viewer == profile_owner
+    profile_permissions = profile_owner.details_editable_by_user
+    profile_permissions = profile_permissions.transform_values { false } unless is_profile_owner
+
     data = user_profile_json(profile, viewer, session, includes, profile)
-    data[:can_edit] = viewer == profile.user && profile.user.user_can_edit_profile?
-    data[:can_edit_channels] = viewer == profile.user && profile.user.user_can_edit_comm_channels?
-    data[:can_edit_name] = viewer == profile.user && profile.user.user_can_edit_name?
-    data[:can_edit_avatar] = data[:can_edit] && profile.user.avatar_state != :locked
-    data[:known_user] = viewer.address_book.known_user(profile.user)
-    if data[:known_user] && viewer != profile.user
-      common_courses = viewer.address_book.common_courses(profile.user)
+    data = data.merge(profile_permissions)
+    data[:can_edit_avatar] = data[:can_edit] && profile_owner.avatar_state != :locked
+    data[:known_user] = viewer.address_book.known_user(profile_owner)
+    if data[:known_user] && viewer != profile_owner
+      common_courses = viewer.address_book.common_courses(profile_owner)
       # address book can return a fake record in common courses with course_id
       # 0 which represents an admin -> user commonality.
       common_courses.delete(0)
@@ -3342,9 +3381,13 @@ class ApplicationController < ActionController::Base
         ctx = Canvas::LiveEvents.base_context_attributes(@context, @domain_root_account)
 
         if @current_pseudonym
-          ctx[:user_login] = @current_pseudonym.unique_id
+          ctx[:user_login] = AuthenticationMethods::FederatedPseudonymAttributes.unique_id ||
+                             @current_pseudonym.unique_id
+
           ctx[:user_account_id] = @current_pseudonym.global_account_id
-          ctx[:user_sis_id] = @current_pseudonym.sis_user_id
+
+          ctx[:user_sis_id] = AuthenticationMethods::FederatedPseudonymAttributes.sis_user_id ||
+                              @current_pseudonym.sis_user_id
         end
 
         ctx[:user_id] = @current_user.global_id if @current_user
@@ -3390,6 +3433,21 @@ class ApplicationController < ActionController::Base
     (@xhrs_to_prefetch_from_controller ||= []) << [args, kwargs]
   end
 
+  def preload_translation_file
+    return unless (file = @js_env && @js_env[:LOCALE_TRANSLATION_FILE])
+
+    locale = @js_env[:LOCALES]&.first
+    return if locale == "en"
+
+    (@content_for_head ||= []) << helpers.preload_link_tag(
+      file,
+      as: "fetch",
+      type: "application/json",
+      crossorigin: "anonymous"
+    )
+  end
+  helper_method :preload_translation_file
+
   def manage_live_events_context
     setup_live_events_context
     yield
@@ -3417,7 +3475,7 @@ class ApplicationController < ActionController::Base
 
   def peer_reviews_for_a2_enabled?
     current_user_is_student = @context.respond_to?(:user_is_student?) && @context.user_is_student?(@current_user)
-    current_user_is_student && @context.respond_to?(:feature_enabled?) && @context.feature_enabled?(:peer_reviews_for_a2)
+    current_user_is_student && @context.respond_to?(:feature_enabled?) && @context.feature_enabled?(:assignments_2_student)
   end
 
   # Show Student View button on the following controller/action pages, as long as defined tabs are not hidden
@@ -3463,9 +3521,9 @@ class ApplicationController < ActionController::Base
   end
 
   def new_quizzes_native_experience_enabled?
-    return false unless @context.respond_to?(:root_account)
+    return false unless @context.respond_to?(:feature_enabled?)
 
-    @context.root_account.feature_enabled?(:new_quizzes_native_experience)
+    @context.feature_enabled?(:new_quizzes_native_experience)
   end
   helper_method :new_quizzes_native_experience_enabled?
 
@@ -3477,9 +3535,30 @@ class ApplicationController < ActionController::Base
       context: @context,
       assignment: @assignment,
       tool: @tool,
+      tag: @tag || @module_tag,
       current_user: @current_user,
-      request:
+      controller: self,
+      request:,
+      variable_expander: Lti::VariableExpander.new(@domain_root_account, @context, self, {
+                                                     current_user: @current_user,
+                                                     current_pseudonym: @current_pseudonym,
+                                                     assignment: @assignment,
+                                                     content_tag: @module_tag || @tag,
+                                                     launch: @lti_launch,
+                                                     tool: @tool,
+                                                     launch_url: @resource_url
+                                                   })
     ).build_with_signature
+
+    # Calculate basename by removing the quiz subroute (full_path) from the current path
+    # E.g., /courses/3/assignments/9/moderation/1 -> /courses/3/assignments/9
+    basename = if params[:full_path].present?
+                 request.path.sub(params[:full_path], "")
+               else
+                 request.path
+               end
+
+    signed_launch_data[:basename] = basename
 
     js_env(NEW_QUIZZES: signed_launch_data)
 
@@ -3522,6 +3601,12 @@ class ApplicationController < ActionController::Base
   end
   helper_method :k5_user?
 
+  def widget_dashboard_eligible?
+    return false unless @current_user
+
+    @current_user.observer_enrollments.active_or_pending.any? || !@current_user.active_non_student_enrollment?
+  end
+
   def use_classic_font?
     observed_users(@current_user, session) if @current_user&.roles(@domain_root_account)&.include?("observer")
     K5::UserService.new(@current_user, @domain_root_account, @selected_observed_user).use_classic_font?
@@ -3557,15 +3642,6 @@ class ApplicationController < ActionController::Base
   def inject_ai_feedback_link
     js_env(AI_FEEDBACK_LINK: Setting.get("ai_feedback_link", "https://inst.bid/ai/feedback"))
   end
-
-  def add_ignite_agent_bundle?
-    return false unless @domain_root_account&.feature_enabled?(:ignite_agent_enabled)
-    return true if @domain_root_account&.grants_right?(@current_user, session, :manage_account_settings)
-    return false unless @current_user&.feature_enabled?(:ignite_agent_enabled_for_user)
-
-    true
-  end
-  helper_method :add_ignite_agent_bundle?
 
   private
 

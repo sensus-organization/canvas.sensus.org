@@ -28,7 +28,11 @@ import ToggleShowByView from '../ToggleShowByView'
 import $ from 'jquery'
 import 'jquery-migrate'
 import fakeENV from '@canvas/test-utils/fakeENV'
-import '@testing-library/jest-dom'
+
+// Mock jQuery tooltip plugin
+$.fn.tooltip = vi.fn(function () {
+  return this
+})
 
 let assignmentGroups = null
 let container = null
@@ -149,7 +153,7 @@ describe('AssignmentIndex', () => {
   })
 
   it('enable search handler should only fire on the first reset', () => {
-    const enableSearchSpy = jest.spyOn(IndexView.prototype, 'enableSearch')
+    const enableSearchSpy = vi.spyOn(IndexView.prototype, 'enableSearch')
     createAssignmentIndex()
     assignmentGroups.reset()
     expect(enableSearchSpy).toHaveBeenCalledTimes(1)

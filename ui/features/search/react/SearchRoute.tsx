@@ -18,14 +18,13 @@
 
 import {Portal} from '@instructure/ui-portal'
 import {useParams} from 'react-router-dom'
-import SearchApp from './SearchApp'
-import EnhancedSmartSearch from './enhanced_ui/EnhancedSmartSearch'
+import SmartSearch from './SmartSearch'
 import {useEffect} from 'react'
 import CanvasAiInformation from '@canvas/instui-bindings/react/AiInformation'
 import {useScope as createI18nScope} from '@canvas/i18n'
 import {theme} from '@instructure/canvas-theme'
 import {Avatar} from '@instructure/ui-avatar'
-import {createRoot} from 'react-dom/client'
+import {render} from '@canvas/react'
 
 const I18n = createI18nScope('SmartSearch')
 
@@ -35,7 +34,7 @@ export function Component(): JSX.Element | null {
   useEffect(() => {
     const aiInformation = (
       <CanvasAiInformation
-        featureName={I18n.t('Smart Search')}
+        featureName={I18n.t('IgniteAI Search')}
         modelName={I18n.t('Cohere Embed Multilingual')}
         isTrainedWithUserData={false}
         dataSharedWithModel={I18n.t('Course')}
@@ -73,8 +72,7 @@ export function Component(): JSX.Element | null {
     )
     const aiInfoElement = document.getElementById('ai-information-mount')
     if (aiInfoElement) {
-      const root = createRoot(aiInfoElement)
-      root.render(aiInformation)
+      render(aiInformation, aiInfoElement)
     }
   }, [])
 
@@ -84,16 +82,9 @@ export function Component(): JSX.Element | null {
     return null
   }
 
-  if (ENV.enhanced_ui_enabled) {
-    return (
-      <Portal open={true} mountNode={mountPoint}>
-        <EnhancedSmartSearch courseId={courseId ?? ''} />
-      </Portal>
-    )
-  }
   return (
     <Portal open={true} mountNode={mountPoint}>
-      <SearchApp courseId={courseId} />
+      <SmartSearch courseId={courseId ?? ''} />
     </Portal>
   )
 }

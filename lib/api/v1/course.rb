@@ -26,6 +26,7 @@ module Api::V1::Course
   include Api::V1::PostGradesStatus
   include Api::V1::User
   include Api::V1::Tab
+  include Api::V1::AccessibilityCourseStatistic
 
   def course_settings_json(course)
     settings = {}
@@ -175,6 +176,9 @@ module Api::V1::Course
       if Account.site_admin.feature_enabled?(:syllabus_versioning) && includes.include?("syllabus_versions") && course.grants_right?(user, :manage_course_content_edit)
         hash["syllabus_versions"] = syllabus_versions_json(course)
       end
+      if includes.include?("accessibility_course_statistic") && course.account.can_see_accessibility_tab?(user)
+        hash["accessibility_course_statistic"] = accessibility_course_statistic_json(course.accessibility_course_statistic, user, session)
+      end
       # return hash from the block for additional processing in Api::V1::CourseJson
       hash
     end
@@ -205,16 +209,29 @@ module Api::V1::Course
   end
 
   def syllabus_versions_json(course)
-    versions = course.versions.limit(5).order(number: :desc)
-    Rails.cache.fetch(["syllabus_versions", course, course.updated_at]) do
+    versions = course.versions.limit(5).order(number: :desc).to_a
+    version_count = versions.count
+    max_version_number = versions.first&.number
+    Rails.cache.fetch(["syllabus_versions", course, course.updated_at, version_count, max_version_number]) do
+      user_ids = versions.filter_map do |version|
+        version_data = YAML.safe_load(version.yaml, permitted_classes: [Time, Date, Symbol, ActiveSupport::TimeWithZone, ActiveSupport::TimeZone])
+        version_data["user_id"]
+      end
+      users_by_id = User.where(id: user_ids.uniq).index_by(&:id)
+
       versions.map do |version|
         version_data = YAML.safe_load(version.yaml, permitted_classes: [Time, Date, Symbol, ActiveSupport::TimeWithZone, ActiveSupport::TimeZone])
-        {
+        result = {
           version: version.number,
           syllabus_body: api_user_content(version_data["syllabus_body"], course),
           created_at: version.created_at,
           updated_at: version_data["updated_at"]
         }
+        if version_data["user_id"]
+          user = users_by_id[version_data["user_id"]]
+          result[:edited_by] = { id: user.id, name: user.name } if user
+        end
+        result
       end
     end
   end

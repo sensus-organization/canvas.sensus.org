@@ -152,7 +152,8 @@ class Login::OAuth2Controller < Login::OAuthBaseController
         redirect_to login_url
         return false
       end
-      if jwt["nonce"] != pop_nonce
+      unless pop_nonce(jwt["nonce"])
+        logger.error("Nonce mismatch - JWT nonce: '#{jwt["nonce"]}', Session nonce(s): #{session[:oauth2_nonce].inspect}")
         increment_statsd(:failure, reason: :invalid_nonce)
         raise ActionController::InvalidAuthenticityToken
       end
@@ -184,12 +185,15 @@ class Login::OAuth2Controller < Login::OAuthBaseController
     nonce
   end
 
-  def pop_nonce
+  def pop_nonce(expected_nonce)
     return unless (nonce_array = session[:oauth2_nonce])
-    return nonce_array if nonce_array.is_a?(String)
 
-    nonce = nonce_array.pop
+    nonce_array = Array.wrap(nonce_array)
+
+    found = nonce_array.index(expected_nonce)
+
+    nonce_array.delete_at(found) if found
     session.delete(:oauth2_nonce) if nonce_array.empty?
-    nonce
+    found
   end
 end

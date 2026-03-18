@@ -40,6 +40,11 @@ module Types
 
     field :assessment_type, AssessmentType, null: false
 
+    field :is_current_user, Boolean, null: false
+    def is_current_user
+      object.assessor_id == current_user&.id
+    end
+
     field :score, Float, null: true
 
     field :updated_at, Types::DateTimeType, null: true
@@ -86,11 +91,17 @@ module Types
       # sorts of terrible.
       return if object.data.nil?
 
-      object.data.map do |assessment_rating|
-        assessment_rating[:rubric_assessment_id] = object.id
-        assessment_rating[:rubric_id] = object.rubric_id
-        assessment_rating[:artifact_attempt] = object.artifact_attempt
-        assessment_rating
+      # Use the rubric from the rubric_association if available,
+      # otherwise fall back to the rubric_id stored on the assessment.
+      load_association(:rubric_association).then do |rubric_association|
+        rubric_id = rubric_association&.rubric_id || object.rubric_id
+
+        object.data.map do |assessment_rating|
+          assessment_rating[:rubric_assessment_id] = object.id
+          assessment_rating[:rubric_id] = rubric_id
+          assessment_rating[:artifact_attempt] = object.artifact_attempt
+          assessment_rating
+        end
       end
     end
 

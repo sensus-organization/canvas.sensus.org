@@ -19,6 +19,10 @@
 #
 
 module Types
+  # This type represents both Assignment and PeerReviewSubAssignment models
+  # (STI subclasses of AbstractAssignment). Use the `assignment_type` field
+  # to discriminate between them. By default you will only get Assignment
+  # objects unless you specifically query for PeerReviewSubAssignment objects.
   class AssignmentType < ApplicationObjectType
     graphql_name "Assignment"
 
@@ -97,7 +101,7 @@ module Types
             "Boolean indicating if students must submit their assignment before they can do peer reviews",
             null: true
       def submission_required
-        return nil unless object.context.feature_enabled?(:peer_review_allocation)
+        return nil unless object.context.feature_enabled?(:peer_review_allocation_and_grading)
 
         object.peer_review_submission_required
       end
@@ -106,9 +110,21 @@ module Types
             "Boolean indicating if peer reviews can be assigned across different sections",
             null: true
       def across_sections
-        return nil unless object.context.feature_enabled?(:peer_review_allocation)
+        return nil unless object.context.feature_enabled?(:peer_review_allocation_and_grading)
 
         object.peer_review_across_sections
+      end
+      field :points_possible,
+            Float,
+            "Points possible for the peer review sub-assignment",
+            null: true
+      def points_possible
+        return nil unless object.context.feature_enabled?(:peer_review_allocation_and_grading)
+        return nil unless object.peer_reviews
+
+        load_association(:peer_review_sub_assignment).then do |sub_assignment|
+          sub_assignment&.points_possible
+        end
       end
     end
 
@@ -284,6 +300,34 @@ module Types
 
     global_id_field :id
 
+    field :assignment_type,
+          AssignmentTypeEnum,
+          null: false,
+          description: "Discriminator indicating the actual type of this assignment"
+    def assignment_type
+      object.class.name
+    end
+
+    field :parent_assignment,
+          AssignmentType,
+          null: true,
+          description: "The parent assignment (only for PeerReviewSubAssignment)"
+    def parent_assignment
+      return nil unless object.is_a?(PeerReviewSubAssignment)
+
+      load_association(:parent_assignment)
+    end
+
+    field :parent_assignment_id,
+          ID,
+          null: true,
+          description: "The parent assignment ID (only for PeerReviewSubAssignment)"
+    def parent_assignment_id
+      return nil unless object.is_a?(PeerReviewSubAssignment)
+
+      object.parent_assignment_id
+    end
+
     field :name, String, null: true
 
     field :points_possible,
@@ -368,7 +412,37 @@ module Types
 
     field :assessment_requests_for_current_user, [AssessmentRequestType], null: true
     def assessment_requests_for_current_user
-      Loaders::AssessmentRequestLoader.for(current_user:).load(assignment)
+      Loaders::AssessmentRequestLoader.for(current_user:, order_by_id: true).load(assignment)
+    end
+
+    # Use string reference instead of constant to avoid circular dependency
+    # PeerReviewSubAssignmentType inherits from AssignmentType, so referencing
+    # the constant directly would create a loading deadlock
+    field :peer_review_sub_assignment, "Types::PeerReviewSubAssignmentType", null: true
+    def peer_review_sub_assignment
+      return nil unless object.is_a?(Assignment)
+      return nil unless assignment.grants_right?(current_user, session, :grade)
+      return nil unless assignment.context.feature_enabled?(:peer_review_allocation_and_grading)
+      return nil unless assignment.peer_reviews
+
+      load_association(:peer_review_sub_assignment)
+    end
+
+    field :assessment_requests_for_user, [AssessmentRequestType], null: true do
+      description "Assessment requests for a specific user where they are the assessor (peer reviewer)"
+      argument :user_id,
+               ID,
+               required: true,
+               prepare: GraphQLHelpers.relay_or_legacy_id_prepare_func("User")
+    end
+    def assessment_requests_for_user(user_id:)
+      return nil unless assignment.grants_right?(current_user, session, :grade)
+
+      Loaders::IDLoader.for(User).load(user_id).then do |assessor|
+        next nil unless assessor
+
+        Loaders::AssessmentRequestLoader.for(current_user: assessor).load(assignment)
+      end
     end
 
     field :moderated_grading, AssignmentModeratedGrading, null: true
@@ -419,12 +493,12 @@ module Types
 
     field :allow_google_docs_submission, Boolean, method: :allow_google_docs_submission?, null: true
     field :anonymize_students, Boolean, method: :anonymize_students?, null: true
-    field :new_quizzes_anonymous_participants, Boolean, method: :new_quizzes_anonymous_participants?, null: true
     field :expects_external_submission, Boolean, method: :expects_external_submission?, null: true
     field :expects_submission, Boolean, method: :expects_submission?, null: true
     field :grades_published_at, String, null: true
     field :important_dates, Boolean, null: true
     field :in_closed_grading_period, Boolean, method: :in_closed_grading_period?, null: true
+    field :new_quizzes_anonymous_participants, Boolean, method: :new_quizzes_anonymous_participants?, null: true
     field :non_digital_submission, Boolean, method: :non_digital_submission?, null: true
     field :submissions_downloads, Int, null: true
     field :time_zone_edited, String, null: true
@@ -439,7 +513,7 @@ module Types
 
     field :has_plagiarism_tool, Boolean, "Indicates if the assignment has LTI 2.0 plagiarism detection tool configured", null: false
     def has_plagiarism_tool
-      assignment.assignment_configuration_tool_lookup_ids.present?
+      assignment.has_non_migrated_tool?
     end
 
     field :muted, Boolean, null: true
@@ -728,6 +802,7 @@ module Types
     end
     def my_sub_assignment_submissions_connection
       return nil if current_user.nil?
+      return nil unless object.is_a?(Assignment)
 
       load_association(:sub_assignment_submissions).then do |submissions|
         submissions.active.where(user_id: current_user)
@@ -751,8 +826,8 @@ module Types
 
       scope = submissions_connection(filter:, order_by:)
       Promise.all([
-                    Loaders::AssociationLoader.for(Assignment, :submissions).load(assignment),
-                    Loaders::AssociationLoader.for(Assignment, :context).load(assignment)
+                    Loaders::AssociationLoader.for(AbstractAssignment, :submissions).load(assignment),
+                    Loaders::AssociationLoader.for(AbstractAssignment, :context).load(assignment)
                   ]).then do
         students = assignment.representatives(user: current_user)
         scope.where(user_id: students)
@@ -951,8 +1026,9 @@ module Types
       description "Allocation rules if peer review is enabled"
     end
     def allocation_rules
+      return nil unless object.is_a?(Assignment)
       return nil unless assignment.grants_right?(current_user, :grade) &&
-                        assignment.context.feature_enabled?(:peer_review_allocation) &&
+                        assignment.context.feature_enabled?(:peer_review_allocation_and_grading) &&
                         assignment.peer_reviews
 
       context.scoped_set!(:assignment_id, assignment.id)

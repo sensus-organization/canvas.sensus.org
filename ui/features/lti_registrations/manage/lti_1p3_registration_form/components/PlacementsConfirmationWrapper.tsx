@@ -19,12 +19,18 @@
 import {PlacementsConfirmation} from '../../registration_wizard_forms/PlacementsConfirmation'
 import type {Lti1p3RegistrationOverlayStore} from '../../registration_overlay/Lti1p3RegistrationOverlayStore'
 import type {InternalLtiConfiguration} from '../../model/internal_lti_configuration/InternalLtiConfiguration'
-import {AllLtiPlacements, InternalOnlyLtiPlacements} from '../../model/LtiPlacement'
+import type {LtiRegistrationUpdateRequest} from '../../model/lti_ims_registration/LtiRegistrationUpdateRequest'
+import {AllLtiPlacements, InternalOnlyLtiPlacements, LtiPlacement} from '../../model/LtiPlacement'
+import {filterPlacementsByFeatureFlags} from '@canvas/lti/model/LtiPlacementFilter'
 import {RegistrationModalBody} from '../../registration_wizard/RegistrationModalBody'
+import {LtiRegistrationWithConfiguration} from '../../model/LtiRegistration'
 
 export type PlacementsConfirmationProps = {
   internalConfig: InternalLtiConfiguration
   overlayStore: Lti1p3RegistrationOverlayStore
+  supportedPlacements?: Array<LtiPlacement>
+  registrationUpdateRequest?: LtiRegistrationUpdateRequest
+  existingRegistration?: LtiRegistrationWithConfiguration
 }
 
 const allPlacements = [...AllLtiPlacements].sort()
@@ -32,11 +38,14 @@ const allPlacements = [...AllLtiPlacements].sort()
 export const PlacementsConfirmationWrapper = ({
   internalConfig,
   overlayStore,
+  supportedPlacements,
+  registrationUpdateRequest,
+  existingRegistration,
 }: PlacementsConfirmationProps) => {
   const {state, ...actions} = overlayStore()
 
   const internalConfigPlacements = internalConfig.placements.map(p => p.placement)
-  const availablePlacements = allPlacements.filter(
+  const availablePlacements = (supportedPlacements || allPlacements).filter(
     p => !InternalOnlyLtiPlacements.includes(p as any) || internalConfigPlacements.includes(p),
   )
 
@@ -44,21 +53,15 @@ export const PlacementsConfirmationWrapper = ({
     <RegistrationModalBody>
       <PlacementsConfirmation
         appName={internalConfig.title}
-        availablePlacements={availablePlacements.filter(p => {
-          if ('ActivityAssetProcessor' === p) {
-            return window.ENV.FEATURES?.lti_asset_processor
-          }
-          if ('ActivityAssetProcessorContribution' === p) {
-            return window.ENV.FEATURES?.lti_asset_processor_discussions
-          }
-          return true
-        })}
+        availablePlacements={filterPlacementsByFeatureFlags(availablePlacements)}
         enabledPlacements={state.placements.placements ?? []}
         courseNavigationDefaultHidden={state.placements.courseNavigationDefaultDisabled ?? false}
         onToggleDefaultDisabled={actions.toggleCourseNavigationDefaultDisabled}
         topNavigationAllowFullscreen={state.placements.topNavigationAllowFullscreen ?? false}
         onToggleAllowFullscreen={actions.toggleTopNavigationAllowFullscreen}
         onTogglePlacement={actions.togglePlacement}
+        registrationUpdateRequest={registrationUpdateRequest}
+        existingRegistration={existingRegistration}
       />
     </RegistrationModalBody>
   )

@@ -16,7 +16,7 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import {Outcome, Rating, Student} from '../types/rollup'
+import {Outcome, Rating, Student, StudentRollupData} from '@canvas/outcomes/react/types/rollup'
 
 export const MOCK_STUDENTS: Student[] = [
   {
@@ -53,6 +53,12 @@ export const MOCK_RATINGS: Rating[] = [
     points: 3,
   },
   {
+    color: 'yellow',
+    description: 'rating description!',
+    mastery: false,
+    points: 2,
+  },
+  {
     color: 'red',
     description: 'not great',
     mastery: false,
@@ -74,8 +80,9 @@ export const MOCK_OUTCOMES: Outcome[] = [
     display_name: 'Friendly outcome name',
     calculation_method: 'decaying_average',
     calculation_int: 65,
+    points_possible: 5,
     mastery_points: 5,
-    ratings: [MOCK_RATINGS[0], MOCK_RATINGS[1]],
+    ratings: [MOCK_RATINGS[3], MOCK_RATINGS[0], MOCK_RATINGS[1], MOCK_RATINGS[2]],
   },
   {
     id: '2',
@@ -84,7 +91,80 @@ export const MOCK_OUTCOMES: Outcome[] = [
     display_name: 'Friendly outcome name',
     calculation_method: 'decaying_average',
     calculation_int: 65,
+    points_possible: 5,
     mastery_points: 5,
-    ratings: [MOCK_RATINGS[0], MOCK_RATINGS[1]],
+    ratings: [MOCK_RATINGS[3], MOCK_RATINGS[0], MOCK_RATINGS[1], MOCK_RATINGS[2]],
+  },
+]
+
+export const MOCK_ROLLUPS: StudentRollupData[] = [
+  {
+    studentId: '1',
+    outcomeRollups: [
+      {
+        outcomeId: '1',
+        score: 4.5,
+        rating: {
+          points: 5,
+          color: 'green',
+          mastery: true,
+        },
+      },
+      {
+        outcomeId: '2',
+        score: 3.0,
+        rating: {
+          points: 3,
+          color: 'green',
+          mastery: true,
+        },
+      },
+    ],
+  },
+  {
+    studentId: '2',
+    outcomeRollups: [
+      {
+        outcomeId: '1',
+        score: 2.5,
+        rating: {
+          points: 2,
+          color: 'yellow',
+          mastery: false,
+        },
+      },
+      {
+        outcomeId: '2',
+        score: 4.0,
+        rating: {
+          points: 5,
+          color: 'green',
+          mastery: true,
+        },
+      },
+    ],
+  },
+  {
+    studentId: '3',
+    outcomeRollups: [
+      {
+        outcomeId: '1',
+        score: 5.0,
+        rating: {
+          points: 5,
+          color: 'green',
+          mastery: true,
+        },
+      },
+      {
+        outcomeId: '2',
+        score: 1.0,
+        rating: {
+          points: 0,
+          color: 'red',
+          mastery: false,
+        },
+      },
+    ],
   },
 ]

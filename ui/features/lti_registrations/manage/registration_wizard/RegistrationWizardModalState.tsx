@@ -20,6 +20,7 @@ import {isSuccessful, type ApiResult} from '../../common/lib/apiResult/ApiResult
 import {ZUnifiedToolId, type UnifiedToolId} from '../model/UnifiedToolId'
 import type {InternalLtiConfiguration} from '../model/internal_lti_configuration/InternalLtiConfiguration'
 import type {LtiRegistrationId} from '../model/LtiRegistrationId'
+import {LtiRegistrationUpdateRequest} from '../model/lti_ims_registration/LtiRegistrationUpdateRequest'
 
 export type JsonFetchStatus =
   | {
@@ -36,7 +37,7 @@ export type JsonFetchStatus =
 export type RegistrationWizardModalState = {
   open: boolean
   /**
-   * True is the user has selected the registration type
+   * True if the user has selected the registration type
    * and method and clicked "next"
    *
    * When we launch the registration wizard from
@@ -79,13 +80,21 @@ export type RegistrationWizardModalState = {
    * If this is not set, the registration wizard will continue as if it were a new registration.
    */
   existingRegistrationId?: LtiRegistrationId
+  /**
+   * This differs from the existingRegistrationId in that it is used
+   * if we are going through the "update" flow of the wizard,
+   * which re-sends a dynamic registration request to the tool,
+   * whereas the existingRegistrationId prop is used to locally edit
+   * an existing registration.
+   */
+  reinstallingRegistrationId?: LtiRegistrationId
   unifiedToolId?: UnifiedToolId
   /**
    * Contains the state of fetching the JSON for the
    * JSON methods
    */
   jsonFetch: JsonFetchStatus
-  onSuccessfulInstallation?: () => void
+  onSuccessfulInstallation?: (registrationId: LtiRegistrationId) => void
 }
 
 type InstallMethod = 'dynamic_registration' | 'manual' | 'json' | 'json_url'
@@ -159,7 +168,7 @@ export const openJsonRegistrationWizard = (
   jsonCode: string,
   internalLtiConfig: InternalLtiConfiguration,
   unifiedToolId?: UnifiedToolId,
-  onSuccessfulInstallation?: () => void,
+  onSuccessfulInstallation?: (registrationId: LtiRegistrationId) => void,
 ) => {
   useRegistrationModalWizardState.setState(prev => {
     return {
@@ -185,7 +194,7 @@ export const openJsonUrlRegistrationWizard = (
   jsonUrl: string,
   internalLtiConfig: InternalLtiConfiguration,
   unifiedToolId?: UnifiedToolId,
-  onSuccessfulInstallation?: () => void,
+  onSuccessfulInstallation?: (registrationId: LtiRegistrationId) => void,
 ) => {
   useRegistrationModalWizardState.setState(prev => {
     return {
@@ -216,15 +225,25 @@ export const openJsonUrlRegistrationWizard = (
 export const openDynamicRegistrationWizard = (
   dynamicRegistrationUrl: string,
   unifiedToolId?: UnifiedToolId,
-  onSuccessfulInstallation?: () => void,
+  onSuccessfulInstallation?: (registrationId: LtiRegistrationId) => void,
+  reinstallingRegistrationId?: LtiRegistrationId,
 ) => {
   openRegistrationWizard({
     dynamicRegistrationUrl,
+    reinstallingRegistrationId,
     registering: true,
     onSuccessfulInstallation,
     unifiedToolId,
   })
 }
+
+export const openDynamicRegistrationUpdateRequestReview = (
+  registrationUpdateRequest: LtiRegistrationUpdateRequest,
+  onSuccessfulInstallation?: () => void,
+) =>
+  openRegistrationWizard({
+    method: 'dynamic_registration',
+  })
 
 /**
  * Allows users to edit the Dynamic Registration of an already existing LTI IMS Registration.
@@ -236,7 +255,7 @@ export const openDynamicRegistrationWizard = (
  */
 export const openEditDynamicRegistrationWizard = (
   existingRegistrationId: LtiRegistrationId,
-  onSuccessfulInstallation?: () => void,
+  onSuccessfulInstallation?: (registrationId: LtiRegistrationId) => void,
 ) => {
   openRegistrationWizard({
     existingRegistrationId,
@@ -247,7 +266,7 @@ export const openEditDynamicRegistrationWizard = (
 
 export const openEditManualRegistrationWizard = (
   existingRegistrationId: LtiRegistrationId,
-  onSuccessfulInstallation?: () => void,
+  onSuccessfulInstallation?: (registrationId: LtiRegistrationId) => void,
 ) => {
   openRegistrationWizard({
     existingRegistrationId,

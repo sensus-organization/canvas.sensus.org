@@ -126,27 +126,6 @@ describe Types::UserType do
     end
   end
 
-  context "name" do
-    it "encodes html entities" do
-      @student.update! name: "<script>alert(1)</script>"
-      expect(user_type.resolve("name")).to eq "&lt;script&gt;alert(1)&lt;/script&gt;"
-    end
-  end
-
-  context "firstName" do
-    it "encodes html entities" do
-      @student.update! sortable_name: "<script>alert(1)</script>"
-      expect(user_type.resolve("firstName")).to eq "&lt;script&gt;alert(1)&lt;/script&gt;"
-    end
-  end
-
-  context "lastName" do
-    it "encodes html entities" do
-      @student.update! sortable_name: "<script>alert(1)</script>,<script>alert(1)</script>"
-      expect(user_type.resolve("lastName")).to eq "&lt;script&gt;alert(1)&lt;/script&gt;"
-    end
-  end
-
   context "shortName" do
     before(:once) do
       @student.update! short_name: "new display name"
@@ -159,18 +138,6 @@ describe Types::UserType do
     it "returns full name if shortname is not set" do
       @student.update! short_name: nil
       expect(user_type.resolve("shortName")).to eq @student.name
-    end
-
-    it "encodes html entities" do
-      @student.update! short_name: "<script>alert(1)</script>"
-      expect(user_type.resolve("shortName")).to eq "&lt;script&gt;alert(1)&lt;/script&gt;"
-    end
-  end
-
-  context "sortableName" do
-    it "encodes html entities" do
-      @student.update! sortable_name: "<script>alert(1)</script>"
-      expect(user_type.resolve("sortableName")).to eq "&lt;script&gt;alert(1)&lt;/script&gt;"
     end
   end
 
@@ -226,40 +193,123 @@ describe Types::UserType do
         workflow_state: "active",
         sis_user_id: "a.ham"
       )
+      @admin = account_admin_user
+    end
+
+    before do
+      @resolver = GraphQLTypeTester.new(@student,
+                                        domain_root_account: @course.account.root_account,
+                                        request: ActionDispatch::TestRequest.create)
     end
 
     context "as admin" do
-      let(:admin) { account_admin_user }
-      let(:user_type_as_admin) do
-        GraphQLTypeTester.new(@student,
-                              current_user: admin,
-                              domain_root_account: @course.account.root_account,
-                              request: ActionDispatch::TestRequest.create)
-      end
-
       it "returns the sis user id if the user has permissions to read it" do
-        expect(user_type_as_admin.resolve("sisId")).to eq "a.ham"
+        expect(@resolver.resolve("sisId", current_user: @admin)).to eq @student.pseudonyms.first.sis_user_id
       end
 
       it "returns nil if the user does not have permission to read the sis user id" do
         account_admin_user_with_role_changes(role_changes: { read_sis: false, manage_sis: false })
-        admin_type = GraphQLTypeTester.new(@student,
-                                           current_user: @admin,
-                                           domain_root_account: @course.account.root_account,
-                                           request: ActionDispatch::TestRequest.create)
-        expect(admin_type.resolve("sisId")).to be_nil
+        expect(@resolver.resolve("sisId", current_user: @admin)).to be_nil
       end
     end
 
     context "as teacher" do
       it "returns the sis user id if the user has permissions to read it" do
-        expect(user_type.resolve("sisId")).to eq "a.ham"
+        expect(@resolver.resolve("sisId", current_user: @teacher)).to eq @student.pseudonyms.first.sis_user_id
       end
 
       it "returns null if the user does not have permission to read the sis user id" do
         @teacher.enrollments.find_by(course: @course).role
                 .role_overrides.create!(permission: "read_sis", enabled: false, account: @course.account)
-        expect(user_type.resolve("sisId")).to be_nil
+        expect(@resolver.resolve("sisId", current_user: @teacher)).to be_nil
+      end
+    end
+
+    context "permission check priority" do
+      context "with course context" do
+        before do
+          # Object level permissions should be never called if course is in context
+          expect(@student).not_to receive(:grants_any_right?)
+        end
+
+        it "checks account-level permission first" do
+          expect(@course.account.root_account).to receive(:grants_any_right?)
+            .with(@admin, :read_sis, :manage_sis)
+            .and_call_original
+          expect(@course).not_to receive(:grants_any_right?)
+
+          expect(@resolver.resolve("sisId", current_user: @admin)).to eq @student.pseudonyms.first.sis_user_id
+        end
+
+        it "checks course-level permission if account-level fails" do
+          expect(@course.account.root_account).to receive(:grants_any_right?)
+            .with(@teacher, :read_sis, :manage_sis)
+            .and_call_original
+          expect(@course).to receive(:grants_any_right?)
+            .with(@teacher, :read_sis, :manage_sis)
+            .and_call_original
+
+          expect(@resolver.resolve("sisId", current_user: @teacher, course: @course)).to eq @student.pseudonyms.first.sis_user_id
+        end
+
+        it "returns nil account-level and course-level permission checks fail" do
+          expect(@course.account.root_account).to receive(:grants_any_right?)
+            .with(@other_student, :read_sis, :manage_sis)
+            .and_call_original
+          expect(@course).to receive(:grants_any_right?)
+            .with(@other_student, :read_sis, :manage_sis)
+            .and_call_original
+
+          expect(@resolver.resolve("sisId", current_user: @other_student, course: @course)).to be_nil
+        end
+      end
+
+      context "without course context" do
+        before do
+          # Course-level permissions should be never called if course is not in context
+          expect(@course).not_to receive(:grants_any_right?)
+        end
+
+        it "checks account-level permission first" do
+          expect(@course.account.root_account).to receive(:grants_any_right?)
+            .with(@admin, :read_sis, :manage_sis)
+            .and_call_original
+          expect(@student).not_to receive(:grants_any_right?)
+
+          expect(@resolver.resolve("sisId", current_user: @admin)).to eq @student.pseudonyms.first.sis_user_id
+        end
+
+        it "checks object-level permission if account-level fails" do
+          expect(@course.account.root_account).to receive(:grants_any_right?)
+            .with(@teacher, :read_sis, :manage_sis)
+            .and_call_original
+
+          # Must use any_instance_of because GraphQL's IDLoader reloads User from DB (new instance)
+          # allow_any_instance_of: lets ALL grants_any_right? calls proceed (e.g., :read_full_profile checks)
+          # expect_any_instance_of: verifies our specific :read_sis, :manage_sis call happens
+          allow_any_instance_of(User).to receive(:grants_any_right?).and_call_original
+          expect_any_instance_of(User).to receive(:grants_any_right?)
+            .with(@teacher, :read_sis, :manage_sis)
+            .and_call_original
+
+          expect(@resolver.resolve("sisId", current_user: @teacher)).to eq @student.pseudonyms.first.sis_user_id
+        end
+
+        it "returns nil account-level and object-level permission checks fail" do
+          expect(@course.account.root_account).to receive(:grants_any_right?)
+            .with(@other_student, :read_sis, :manage_sis)
+            .and_call_original
+
+          # Must use any_instance_of because GraphQL's IDLoader reloads User from DB (new instance)
+          # allow_any_instance_of: lets ALL grants_any_right? calls proceed (e.g., :read_full_profile checks)
+          # expect_any_instance_of: verifies our specific :read_sis, :manage_sis call happens
+          allow_any_instance_of(User).to receive(:grants_any_right?).and_call_original
+          expect_any_instance_of(User).to receive(:grants_any_right?)
+            .with(@other_student, :read_sis, :manage_sis)
+            .and_call_original
+
+          expect(@resolver.resolve("sisId", current_user: @other_student)).to be_nil
+        end
       end
     end
   end
@@ -272,40 +322,123 @@ describe Types::UserType do
         workflow_state: "active",
         integration_id: "Rachel.Lands"
       )
+      @admin = account_admin_user
+    end
+
+    before do
+      @resolver = GraphQLTypeTester.new(@student,
+                                        domain_root_account: @course.account.root_account,
+                                        request: ActionDispatch::TestRequest.create)
     end
 
     context "as admin" do
-      let(:admin) { account_admin_user }
-      let(:user_type_as_admin) do
-        GraphQLTypeTester.new(@student,
-                              current_user: admin,
-                              domain_root_account: @course.account.root_account,
-                              request: ActionDispatch::TestRequest.create)
-      end
-
       it "returns the integration id if admin user has permissions to read SIS info" do
-        expect(user_type_as_admin.resolve("integrationId")).to eq "Rachel.Lands"
+        expect(@resolver.resolve("integrationId", current_user: @admin)).to eq @student.pseudonyms.first.integration_id
       end
 
       it "returns null for integration id if admin user does not have permission to read SIS info" do
         account_admin_user_with_role_changes(role_changes: { read_sis: false, manage_sis: false })
-        admin_type = GraphQLTypeTester.new(@student,
-                                           current_user: @admin,
-                                           domain_root_account: @course.account.root_account,
-                                           request: ActionDispatch::TestRequest.create)
-        expect(admin_type.resolve("integrationId")).to be_nil
+        expect(@resolver.resolve("integrationId", current_user: @admin)).to be_nil
       end
     end
 
     context "as teacher" do
       it "returns the integration id if teacher user has permissions to read SIS info" do
-        expect(user_type.resolve("integrationId")).to eq "Rachel.Lands"
+        expect(@resolver.resolve("integrationId", current_user: @teacher)).to eq @student.pseudonyms.first.integration_id
       end
 
       it "returns null if teacher user does not have permission to read SIS info" do
         @teacher.enrollments.find_by(course: @course).role
                 .role_overrides.create!(permission: "read_sis", enabled: false, account: @course.account)
-        expect(user_type.resolve("integrationId")).to be_nil
+        expect(@resolver.resolve("integrationId", current_user: @teacher)).to be_nil
+      end
+    end
+
+    context "permission check priority" do
+      context "with course context" do
+        before do
+          # Object level permissions should be never called if course is in context
+          expect(@student).not_to receive(:grants_any_right?)
+        end
+
+        it "checks account-level permission first" do
+          expect(@course.account.root_account).to receive(:grants_any_right?)
+            .with(@admin, :read_sis, :manage_sis)
+            .and_call_original
+          expect(@course).not_to receive(:grants_any_right?)
+
+          expect(@resolver.resolve("integrationId", current_user: @admin)).to eq @student.pseudonyms.first.integration_id
+        end
+
+        it "checks course-level permission if account-level fails" do
+          expect(@course.account.root_account).to receive(:grants_any_right?)
+            .with(@teacher, :read_sis, :manage_sis)
+            .and_call_original
+          expect(@course).to receive(:grants_any_right?)
+            .with(@teacher, :read_sis, :manage_sis)
+            .and_call_original
+
+          expect(@resolver.resolve("integrationId", current_user: @teacher, course: @course)).to eq @student.pseudonyms.first.integration_id
+        end
+
+        it "returns nil account-level and course-level permission checks fail" do
+          expect(@course.account.root_account).to receive(:grants_any_right?)
+            .with(@other_student, :read_sis, :manage_sis)
+            .and_call_original
+          expect(@course).to receive(:grants_any_right?)
+            .with(@other_student, :read_sis, :manage_sis)
+            .and_call_original
+
+          expect(@resolver.resolve("integrationId", current_user: @other_student, course: @course)).to be_nil
+        end
+      end
+
+      context "without course context" do
+        before do
+          # Course-level permissions should be never called if course is not in context
+          expect(@course).not_to receive(:grants_any_right?)
+        end
+
+        it "checks account-level permission first" do
+          expect(@course.account.root_account).to receive(:grants_any_right?)
+            .with(@admin, :read_sis, :manage_sis)
+            .and_call_original
+          expect(@student).not_to receive(:grants_any_right?)
+
+          expect(@resolver.resolve("integrationId", current_user: @admin)).to eq @student.pseudonyms.first.integration_id
+        end
+
+        it "checks object-level permission if account-level fails" do
+          expect(@course.account.root_account).to receive(:grants_any_right?)
+            .with(@teacher, :read_sis, :manage_sis)
+            .and_call_original
+
+          # Must use any_instance_of because GraphQL's IDLoader reloads User from DB (new instance)
+          # allow_any_instance_of: lets ALL grants_any_right? calls proceed (e.g., :read_full_profile checks)
+          # expect_any_instance_of: verifies our specific :read_sis, :manage_sis call happens
+          allow_any_instance_of(User).to receive(:grants_any_right?).and_call_original
+          expect_any_instance_of(User).to receive(:grants_any_right?)
+            .with(@teacher, :read_sis, :manage_sis)
+            .and_call_original
+
+          expect(@resolver.resolve("integrationId", current_user: @teacher)).to eq @student.pseudonyms.first.integration_id
+        end
+
+        it "returns nil account-level and object-level permission checks fail" do
+          expect(@course.account.root_account).to receive(:grants_any_right?)
+            .with(@other_student, :read_sis, :manage_sis)
+            .and_call_original
+
+          # Must use any_instance_of because GraphQL's IDLoader reloads User from DB (new instance)
+          # allow_any_instance_of: lets ALL grants_any_right? calls proceed (e.g., :read_full_profile checks)
+          # expect_any_instance_of: verifies our specific :read_sis, :manage_sis call happens
+          allow_any_instance_of(User).to receive(:grants_any_right?).and_call_original
+          expect_any_instance_of(User).to receive(:grants_any_right?)
+            .with(@other_student, :read_sis, :manage_sis)
+            .and_call_original
+
+          expect(@resolver.resolve("integrationId", current_user: @other_student)).to be_nil
+        end
       end
     end
   end
@@ -611,6 +744,84 @@ describe Types::UserType do
       it "returns only non-horizon courses if false" do
         @course3.enroll_student(@student, enrollment_state: "active")
         expect(user_type.resolve("enrollments(horizonCourses: false) { _id }", current_user: @student).length).to eq @student.enrollments.length - 1
+      end
+    end
+
+    context "cross-shard" do
+      specs_require_sharding
+
+      before :once do
+        @shard1.activate do
+          @cross_shard_user = user_with_pseudonym(active_all: true)
+        end
+
+        @shard2.activate do
+          @cross_shard_account = Account.create!
+          @cross_shard_course = @cross_shard_account.courses.create!
+          @cross_shard_course.offer!
+          @cross_shard_enrollment = @cross_shard_course.enroll_student(@cross_shard_user, enrollment_state: "active")
+        end
+      end
+
+      let(:cross_shard_user_type) { GraphQLTypeTester.new(@cross_shard_user, current_user: @cross_shard_user) }
+
+      it "returns enrollments from other shards" do
+        @shard1.activate do
+          enrollments = cross_shard_user_type.resolve("enrollments { _id }")
+          expect(enrollments.length).to eq(1)
+          expect(enrollments).to include(@cross_shard_enrollment.global_id.to_s)
+        end
+      end
+
+      it "returns enrollments from multiple shards" do
+        @shard1.activate do
+          @account1 = Account.create!
+          @course1 = @account1.courses.create!
+          @course1.offer!
+          @enrollment1 = @course1.enroll_student(@cross_shard_user, enrollment_state: "active")
+
+          enrollments = cross_shard_user_type.resolve("enrollments { _id }")
+          expect(enrollments.length).to eq(2)
+        end
+      end
+
+      it "filters by course_id across shards" do
+        @shard1.activate do
+          @account1 = Account.create!
+          @course1 = @account1.courses.create!
+          @course1.offer!
+          @enrollment1 = @course1.enroll_student(@cross_shard_user, enrollment_state: "active")
+
+          enrollments = cross_shard_user_type.resolve(%|enrollments(courseId: "#{@cross_shard_course.id}") { _id }|)
+          expect(enrollments.length).to eq(1)
+          expect(enrollments.first).to eq(@cross_shard_enrollment.global_id.to_s)
+        end
+      end
+
+      it "excludes concluded enrollments across shards with currentOnly" do
+        @cross_shard_enrollment.complete!
+
+        @shard1.activate do
+          @account1 = Account.create!
+          @course1 = @account1.courses.create!
+          @course1.offer!
+          @enrollment1 = @course1.enroll_student(@cross_shard_user, enrollment_state: "active")
+
+          enrollments = cross_shard_user_type.resolve("enrollments(currentOnly: true) { _id }")
+          expect(enrollments.length).to eq(1)
+        end
+      end
+
+      it "includes enrollments from multiple shards with currentOnly" do
+        @shard1.activate do
+          @account1 = Account.create!
+          @course1 = @account1.courses.create!
+          @course1.offer!
+          @enrollment1 = @course1.enroll_student(@cross_shard_user, enrollment_state: "active")
+
+          enrollments = cross_shard_user_type.resolve("enrollments(currentOnly: true) { _id }")
+          expect(enrollments.length).to eq(2)
+        end
       end
     end
   end
@@ -934,10 +1145,6 @@ describe Types::UserType do
     end
 
     context "permission check priority" do
-      before(:once) do
-        @other_student = student_in_course(course: @course).user
-      end
-
       before do
         @resolver = GraphQLTypeTester.new(
           @student,
@@ -1978,49 +2185,6 @@ describe Types::UserType do
       end
     end
 
-    describe "with the limit argument" do
-      before do
-        allow(InstStatsd::Statsd).to receive(:distributed_increment)
-      end
-
-      it "returns a limited number of results" do
-        comment_bank_item_model(user: @teacher, context: @course, comment: "2nd great comment!")
-        expect(
-          type.resolve("commentBankItemsConnection(limit: 1) { nodes { comment } }").length
-        ).to eq 1
-      end
-
-      context "with send_metrics_for_comment_bank_items_connection_limit_used ON" do
-        before do
-          Account.site_admin.enable_feature!(:send_metrics_for_comment_bank_items_connection_limit_used)
-        end
-
-        it "reports metrics when limit is used" do
-          comment_bank_item_model(user: @teacher, context: @course, comment: "2nd great comment!")
-          type.resolve("commentBankItemsConnection(limit: 1) { nodes { comment } }")
-          expect(InstStatsd::Statsd).to have_received(:distributed_increment).with(
-            "graphql.user_type.comment_bank_items_connection.limit_used",
-            { tags: { cluster: "test" } }
-          )
-        end
-      end
-
-      context "with send_metrics_for_comment_bank_items_connection_limit_used OFF" do
-        before do
-          Account.site_admin.disable_feature!(:send_metrics_for_comment_bank_items_connection_limit_used)
-        end
-
-        it "does not report metrics when limit is used" do
-          comment_bank_item_model(user: @teacher, context: @course, comment: "2nd great comment!")
-          type.resolve("commentBankItemsConnection(limit: 1) { nodes { comment } }")
-          expect(InstStatsd::Statsd).not_to have_received(:distributed_increment).with(
-            "graphql.user_type.comment_bank_items_connection.limit_used",
-            anything
-          )
-        end
-      end
-    end
-
     describe "with a search query" do
       before do
         @comment_bank_item2 = comment_bank_item_model(user: @teacher, context: @course, comment: "new comment!")
@@ -2042,78 +2206,6 @@ describe Types::UserType do
         expect(
           type.resolve("commentBankItemsConnection(query: \"  \") { nodes { _id } }").length
         ).to eq 2
-      end
-    end
-  end
-
-  context "commentBankItemsCount" do
-    specs_require_sharding
-
-    before do
-      @comment_bank_item_one = comment_bank_item_model(user: @teacher, context: @course, comment: "great comment!")
-      @comment_bank_item_two = comment_bank_item_model(user: @teacher, context: @course, comment: "another comment!")
-    end
-
-    let(:type) do
-      GraphQLTypeTester.new(
-        @teacher,
-        current_user: @teacher,
-        domain_root_account: @course.account.root_account,
-        request: ActionDispatch::TestRequest.create
-      )
-    end
-
-    it "returns the count of comment bank items" do
-      expect(type.resolve("commentBankItemsCount")).to eq 2
-    end
-
-    it "ignores deleted comment bank items" do
-      @comment_bank_item_one.destroy
-      expect(type.resolve("commentBankItemsCount")).to eq 1
-    end
-
-    it "accounts for comment bank items on different shards" do
-      @shard1.activate do
-        account = Account.create!(name: "new shard account")
-        @course2 = course_factory(account:)
-        @course2.enroll_user(@teacher)
-        @comment_bank_item_three = comment_bank_item_model(user: @teacher, context: @course2, comment: "shard 2 comment")
-      end
-
-      expect(type.resolve("commentBankItemsCount")).to eq 3
-    end
-
-    describe "metrics tracking" do
-      before do
-        allow(InstStatsd::Statsd).to receive(:distributed_increment)
-      end
-
-      context "with send_metrics_for_comment_bank_items_count_used ON" do
-        before do
-          Account.site_admin.enable_feature!(:send_metrics_for_comment_bank_items_count_used)
-        end
-
-        it "reports metrics when commentBankItemsCount is used" do
-          type.resolve("commentBankItemsCount")
-          expect(InstStatsd::Statsd).to have_received(:distributed_increment).with(
-            "graphql.user_type.comment_bank_items_count_used",
-            { tags: { cluster: "test" } }
-          )
-        end
-      end
-
-      context "with send_metrics_for_comment_bank_items_count_used OFF" do
-        before do
-          Account.site_admin.disable_feature!(:send_metrics_for_comment_bank_items_count_used)
-        end
-
-        it "does not report metrics when commentBankItemsCount is used" do
-          type.resolve("commentBankItemsCount")
-          expect(InstStatsd::Statsd).not_to have_received(:distributed_increment).with(
-            "graphql.user_type.comment_bank_items_count_used",
-            anything
-          )
-        end
       end
     end
   end
@@ -3595,7 +3687,7 @@ describe Types::UserType do
       @course.enroll_student(@student1, enrollment_state: "active")
       @course.enroll_student(@student2, enrollment_state: "active")
 
-      @course.enable_feature!(:peer_review_allocation)
+      @course.enable_feature!(:peer_review_allocation_and_grading)
 
       AllocationRule.create!(
         assignment: @assignment,
@@ -3664,7 +3756,7 @@ describe Types::UserType do
       end
 
       it "returns nil when feature is not enabled" do
-        @assignment.context.disable_feature!(:peer_review_allocation)
+        @assignment.context.disable_feature!(:peer_review_allocation_and_grading)
 
         user_type_tester = GraphQLTypeTester.new(
           @student1,
@@ -3679,7 +3771,9 @@ describe Types::UserType do
       end
 
       it "returns nil when peer reviews are not enabled on assignment" do
-        @assignment.update!(peer_reviews: false)
+        # Skip validation: testing GraphQL response format when peer reviews disabled,
+        # not the business logic that prevents this state from occurring normally
+        @assignment.update_attribute(:peer_reviews, false)
 
         user_type_tester = GraphQLTypeTester.new(
           @student1,

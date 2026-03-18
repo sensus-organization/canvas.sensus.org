@@ -78,114 +78,6 @@
 #       }
 #     }
 #
-# @model User
-#     {
-#       "id": "User",
-#       "description": "A Canvas user, e.g. a student, teacher, administrator, observer, etc.",
-#       "required": ["id"],
-#       "properties": {
-#         "id": {
-#           "description": "The ID of the user.",
-#           "example": 2,
-#           "type": "integer",
-#           "format": "int64"
-#         },
-#         "name": {
-#           "description": "The name of the user.",
-#           "example": "Sheldon Cooper",
-#           "type": "string"
-#         },
-#         "sortable_name": {
-#           "description": "The name of the user that is should be used for sorting groups of users, such as in the gradebook.",
-#           "example": "Cooper, Sheldon",
-#           "type": "string"
-#         },
-#         "last_name": {
-#           "description": "The last name of the user.",
-#           "example": "Cooper",
-#           "type": "string"
-#         },
-#         "first_name": {
-#           "description": "The first name of the user.",
-#           "example": "Sheldon",
-#           "type": "string"
-#         },
-#         "short_name": {
-#           "description": "A short name the user has selected, for use in conversations or other less formal places through the site.",
-#           "example": "Shelly",
-#           "type": "string"
-#         },
-#         "sis_user_id": {
-#           "description": "The SIS ID associated with the user.  This field is only included if the user came from a SIS import and has permissions to view SIS information.",
-#           "example": "SHEL93921",
-#           "type": "string"
-#         },
-#         "sis_import_id": {
-#           "description": "The id of the SIS import.  This field is only included if the user came from a SIS import and has permissions to manage SIS information.",
-#           "example": "18",
-#           "type": "integer",
-#           "format": "int64"
-#         },
-#         "integration_id": {
-#           "description": "The integration_id associated with the user.  This field is only included if the user came from a SIS import and has permissions to view SIS information.",
-#           "example": "ABC59802",
-#           "type": "string"
-#         },
-#         "login_id": {
-#           "description": "The unique login id for the user.  This is what the user uses to log in to Canvas.",
-#           "example": "sheldon@caltech.example.com",
-#           "type": "string"
-#         },
-#         "avatar_url": {
-#           "description": "If avatars are enabled, this field will be included and contain a url to retrieve the user's avatar.",
-#           "example": "https://en.gravatar.com/avatar/d8cb8c8cd40ddf0cd05241443a591868?s=80&r=g",
-#           "type": "string"
-#         },
-#         "avatar_state": {
-#           "description": "Optional: If avatars are enabled and caller is admin, this field can be requested and will contain the current state of the user's avatar.",
-#           "example": "approved",
-#           "type": "string"
-#         },
-#         "enrollments": {
-#           "description": "Optional: This field can be requested with certain API calls, and will return a list of the users active enrollments. See the List enrollments API for more details about the format of these records.",
-#           "type": "array",
-#           "items": { "$ref": "Enrollment" }
-#         },
-#         "email": {
-#           "description": "Optional: This field can be requested with certain API calls, and will return the users primary email address.",
-#           "example": "sheldon@caltech.example.com",
-#           "type": "string"
-#         },
-#         "locale": {
-#           "description": "Optional: This field can be requested with certain API calls, and will return the users locale in RFC 5646 format.",
-#           "example": "tlh",
-#           "type": "string"
-#         },
-#         "last_login": {
-#           "description": "Optional: This field is only returned in certain API calls, and will return a timestamp representing the last time the user logged in to canvas.",
-#           "example": "2012-05-30T17:45:25Z",
-#           "type": "string",
-#           "format": "date-time"
-#         },
-#         "time_zone": {
-#           "description": "Optional: This field is only returned in certain API calls, and will return the IANA time zone name of the user's preferred timezone.",
-#           "example": "America/Denver",
-#           "type": "string"
-#         },
-#         "bio": {
-#           "description": "Optional: The user's bio.",
-#           "example": "I like the Muppets.",
-#           "type": "string"
-#         },
-#         "pronouns": {
-#           "description": "Optional: This field is only returned if pronouns are enabled, and will return the pronouns of the user.",
-#           "example": "he/him",
-#           "type": "string"
-#         }
-#       }
-#     }
-#
-#
 #
 class UsersController < ApplicationController
   include SearchHelper
@@ -413,7 +305,7 @@ class UsersController < ApplicationController
     get_context
     return unless authorized_action(@context, @current_user, :read_roster)
 
-    includes = (params[:include] || []) & %w[avatar_url email last_login time_zone uuid]
+    includes = (params[:include] || []) & %w[avatar_url email last_login time_zone uuid ui_invoked]
     includes << "last_login" if params[:sort] == "last_login" && !includes.include?("last_login")
     include_deleted_users = value_to_boolean(params[:include_deleted_users])
     includes << "deleted_pseudonyms" if include_deleted_users
@@ -458,8 +350,9 @@ class UsersController < ApplicationController
     users.preload(:pseudonyms) if includes.include? "deleted_pseudonyms"
 
     page_opts = { total_entries: nil }
-    if in_app?
+    if in_app? || includes.include?("ui_invoked")
       page_opts = {} # let Folio calculate total entries
+      includes.delete("ui_invoked")
     elsif params[:sort] == "id"
       # for a more efficient way to retrieve many pages in bulk
       users = BookmarkedCollection.wrap(Plannable::Bookmarker.new(User, params[:order] == "desc", :id),
@@ -526,6 +419,7 @@ class UsersController < ApplicationController
   end
 
   def user_dashboard
+    @current_user.reload if @domain_root_account&.feature_enabled?(:widget_dashboard)
     observed_users_list = observed_users(@current_user, session)
     if should_show_widget_dashboard?
       js_bundle :widget_dashboard
@@ -551,7 +445,10 @@ class UsersController < ApplicationController
                                    .tabs_available(@current_user, root_account: @domain_root_account)
                                    .any? { |t| t[:id] == UserProfile::TAB_OBSERVEES },
                SHARED_COURSE_DATA: course_data_with_grades,
-               DASHBOARD_FEATURES: { widget_dashboard_customization: Account.site_admin.feature_enabled?(:widget_dashboard_customization) }
+               DASHBOARD_FEATURES: {
+                 widget_dashboard_customization: Account.site_admin.feature_enabled?(:widget_dashboard_customization),
+                 platform_ui_unified_widgets_dashboard: Account.site_admin.feature_enabled?(:platform_ui_unified_widgets_dashboard)
+               }
              })
       return render html: "", layout: true
     end
@@ -577,7 +474,8 @@ class UsersController < ApplicationController
     disable_page_views if @current_pseudonym && @current_pseudonym.unique_id == "pingdom@instructure.com"
 
     # Reload user settings so we don't get a stale value for K5_USER when switching dashboards
-    @current_user.reload
+    # (skip if already reloaded above for widget_dashboard)
+    @current_user.reload unless @domain_root_account&.feature_enabled?(:widget_dashboard)
     k5_disabled = k5_disabled?
     k5_user = k5_user?(check_disabled: false)
     js_env({ K5_USER: k5_user && !k5_disabled }, true)
@@ -1535,7 +1433,7 @@ class UsersController < ApplicationController
   #       -X GET \
   #       -H 'Authorization: Bearer <token>'
   #
-  # @returns User
+  # @returns Schemas::Docs::User
   def api_show
     @user = api_find(User, params[:id])
     if @user.grants_right?(@current_user, session, :api_show_user)
@@ -3281,7 +3179,7 @@ class UsersController < ApplicationController
     cc_params = params[:communication_channel]
 
     if cc_params
-      cc_type = cc_params[:type] || CommunicationChannel::TYPE_EMAIL
+      cc_type = (cc_params[:type] || CommunicationChannel::TYPE_EMAIL).downcase
       cc_addr = cc_params[:address] || params[:pseudonym][:unique_id]
 
       cc_addr = nil if cc_type == CommunicationChannel::TYPE_EMAIL && !EmailAddressValidator.valid?(cc_addr)
@@ -3416,7 +3314,6 @@ class UsersController < ApplicationController
     save_user = @recaptcha_errors.nil? && @user.valid? && @pseudonym.valid? && (@invalid_observee_creds.nil? & @invalid_observee_code.nil?)
 
     message_sent = User.transaction do
-      handle_instructure_identity(save_user)
       if save_user
         # saving the user takes care of the @pseudonym and @cc, so we can't call
         # save_without_session_maintenance directly. we don't want to auto-log-in
@@ -3430,6 +3327,9 @@ class UsersController < ApplicationController
         end
 
         @user.save!
+        # Explicitly save communication channel if it exists (especially when reactivating a retired CC)
+        # @user.save! only auto-saves new associated records, not existing ones that were found and modified
+        @cc.save! if @cc&.changed?
 
         if @observee && !@user.as_observer_observation_links.where(user_id: @observee, root_account: @context).exists?
           UserObservationLink.create_or_restore(student: @observee, observer: @user, root_account: @context)
@@ -3491,8 +3391,6 @@ class UsersController < ApplicationController
       render json: errors, status: :bad_request
     end
   end
-
-  def handle_instructure_identity(will_be_saving_user) end
 
   def perform_sis_reactivation(sis_user_id)
     @pseudonym = @context.pseudonyms.where(sis_user_id:, workflow_state: "deleted").first
@@ -3662,18 +3560,15 @@ class UsersController < ApplicationController
 
     # Single feature flag lookup to avoid redundant queries
     flag = @domain_root_account&.lookup_feature_flag(:widget_dashboard)
-    return false unless flag
+    return false unless flag&.enabled? || flag&.can_override?
 
-    # Check if feature is locked on (cannot be overridden)
-    force_on = flag.enabled? && !flag.can_override?
+    # Check user preference (pass flag to avoid re-lookup)
+    return false unless @current_user.prefers_widget_dashboard?(@domain_root_account, flag)
 
-    # If not forced on, check user preference (pass flag to avoid re-lookup)
-    return false unless force_on || @current_user.prefers_widget_dashboard?(@domain_root_account, flag)
-
-    if @current_user.observer_enrollments.active.any?
+    if @current_user.observer_enrollments.active_or_pending.any?
       # only show widget dashboard if observer is actively observing a student
       return true if @selected_observed_user && @selected_observed_user != @current_user
-    elsif !@current_user.non_student_enrollment?
+    elsif !@current_user.active_non_student_enrollment?
       return true
     end
     false

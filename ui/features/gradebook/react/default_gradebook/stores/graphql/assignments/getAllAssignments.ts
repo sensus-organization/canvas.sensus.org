@@ -17,17 +17,19 @@
  */
 
 import {GetAllPagesCallbacks, getAllPages, GetAllPagesReturnValue} from '../getAllPages'
-import {flatten} from 'lodash'
+import {flatten} from 'es-toolkit/compat'
 import {
   Assignment,
   getAssignments,
   GetAssignmentsParams,
   GetAssignmentsResult,
 } from './getAssignments'
+import PQueue from 'p-queue'
 
 type GetAllAssignmentsParams = {
   queryParams: Pick<GetAssignmentsParams, 'assignmentGroupId' | 'gradingPeriodId'>
   headers?: Record<string, string>
+  queue?: PQueue
 } & GetAllPagesCallbacks<GetAssignmentsResult>
 
 export const getAllAssignments = ({

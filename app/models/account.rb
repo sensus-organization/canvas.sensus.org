@@ -28,6 +28,8 @@ class Account < ActiveRecord::Base
   CALENDAR_SUBSCRIPTION_TYPES = %w[manual auto].freeze
   HORIZON_FEATURE_SLUG = "horizon"
 
+  self.ignored_columns += [:equella_endpoint]
+
   include Workflow
   include BrandConfigHelpers
   include Canvas::Security::PasswordPolicyAccountSettingValidator
@@ -335,12 +337,13 @@ class Account < ActiveRecord::Base
   add_setting :pronouns, root_only: true
 
   add_setting :self_enrollment
-  add_setting :equella_endpoint
-  add_setting :equella_teaser
   add_setting :enable_alerts, boolean: true, root_only: true
   add_setting :enable_eportfolios, boolean: true, root_only: true
   add_setting :users_can_edit_name, boolean: true, root_only: true, default: true
   add_setting :users_can_edit_profile, boolean: true, root_only: true, default: true
+  add_setting :users_can_edit_bio, boolean: true, root_only: true, default: true
+  add_setting :users_can_edit_title, boolean: true, root_only: true, default: true
+  add_setting :users_can_edit_profile_links, boolean: true, root_only: true, default: true
   add_setting :users_can_edit_comm_channels, boolean: true, root_only: true, default: true
   add_setting :open_registration, boolean: true, root_only: true
   add_setting :show_scheduler, boolean: true, root_only: true, default: false
@@ -771,19 +774,6 @@ class Account < ActiveRecord::Base
       end
 
       Account.clear_cache_keys([id] + Account.sub_account_ids_recursive(id), *keys_to_clear)
-    end
-  end
-
-  def equella_settings
-    endpoint = settings[:equella_endpoint] || equella_endpoint
-    if endpoint.blank?
-      nil
-    else
-      {
-        endpoint:,
-        default_action: settings[:equella_action] || "selectOrAdd",
-        teaser: settings[:equella_teaser]
-      }
     end
   end
 
@@ -1564,6 +1554,10 @@ class Account < ActiveRecord::Base
     state :deleted
   end
 
+  def marked_for_deletion?
+    deleted? && external_status == "delete_me_frd"
+  end
+
   def account_users_for(user)
     if self == Account.site_admin
       shard.activate do
@@ -2153,6 +2147,7 @@ class Account < ActiveRecord::Base
   TAB_ACCOUNT_CALENDARS = 22
   TAB_REPORTS = 23
   TAB_RATE_LIMITING = 24
+  TAB_ACCESSIBILITY = 25
 
   # site admin tabs
   TAB_PLUGINS = 14
@@ -2209,6 +2204,7 @@ class Account < ActiveRecord::Base
                               end
       tabs << { id: TAB_GRADING_STANDARDS, label: t("#account.tab_grading_standards", "Grading"), css_class: "grading_standards", href: grading_settings_href } if user && grants_right?(user, :manage_grades)
       tabs << { id: TAB_QUESTION_BANKS, label: t("#account.tab_question_banks", "Question Banks"), css_class: "question_banks", href: :account_question_banks_path } if user && grants_any_right?(user, *RoleOverride::GRANULAR_MANAGE_ASSIGNMENT_PERMISSIONS)
+      tabs << { id: TAB_ACCESSIBILITY, label: t("#account.tab_accessibility", "Accessibility"), css_class: "accessibility", href: :account_accessibility_path } if can_see_accessibility_tab?(user)
       tabs << { id: TAB_SUB_ACCOUNTS, label: t("#account.tab_sub_accounts", "Sub-Accounts"), css_class: "sub_accounts", href: :account_sub_accounts_path } if manage_settings
       tabs << { id: TAB_ACCOUNT_CALENDARS, label: t("Account Calendars"), css_class: "account_calendars", href: :account_calendar_settings_path } if user && grants_right?(user, :manage_account_calendar_visibility)
       tabs << { id: TAB_TERMS, label: t("#account.tab_terms", "Terms"), css_class: "terms", href: :account_terms_path } if root_account? && manage_settings
@@ -2268,6 +2264,12 @@ class Account < ActiveRecord::Base
     admin_tool_permissions.any? do |p|
       grants_right?(user, p.first)
     end
+  end
+
+  def can_see_accessibility_tab?(user)
+    return false if !user || !grants_right?(user, :read_course_list)
+
+    feature_enabled?(:a11y_checker) && Account.site_admin.feature_enabled?(:a11y_checker_account_statistics)
   end
 
   def is_a_context?
@@ -2883,8 +2885,6 @@ class Account < ActiveRecord::Base
   end
 
   def provision_horizon_tenants(root_account, current_user)
-    return unless horizon_account?
-
     [PineClient, RedwoodClient].each do |client|
       next unless client.enabled?
 
@@ -2893,8 +2893,6 @@ class Account < ActiveRecord::Base
   end
 
   def delete_horizon_tenants(root_account, current_user)
-    return if horizon_account?
-
     [PineClient, RedwoodClient].each do |client|
       next unless client.enabled?
 

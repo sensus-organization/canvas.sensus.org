@@ -21,53 +21,45 @@ import {z} from 'zod'
 import {renderToElements, renderAPComponent, renderAPComponentNoQC} from '../renderToElements'
 
 // Mock only what's actually used
-jest.mock('@canvas/alerts/react/FlashAlert', () => ({
-  showFlashError: jest.fn(),
+vi.mock('@canvas/alerts/react/FlashAlert', () => ({
+  showFlashError: vi.fn(),
 }))
 
-jest.mock('react-dom/client', () => ({
-  createRoot: jest.fn(),
+vi.mock('@canvas/react', () => ({
+  render: vi.fn(),
 }))
 
-jest.mock('@canvas/query', () => ({
+vi.mock('@canvas/query', () => ({
   queryClient: {},
 }))
 
-jest.mock('@canvas/i18n', () => ({
-  useScope: () => ({
-    t: (key: string) => key,
-  }),
+vi.mock('@canvas/i18n', () => ({
+  useScope: vi.fn(() => ({
+    t: vi.fn((key: string) => key),
+  })),
 }))
 
 import {showFlashError} from '@canvas/alerts/react/FlashAlert'
-import {createRoot} from 'react-dom/client'
+import {render} from '@canvas/react'
 
-const mockShowFlashError = showFlashError as jest.MockedFunction<typeof showFlashError>
-const mockCreateRoot = createRoot as jest.MockedFunction<typeof createRoot>
+const mockShowFlashError = showFlashError as ReturnType<typeof vi.fn>
+const mockRender = render as ReturnType<typeof vi.fn>
 
 describe('renderToElements', () => {
-  let mockRender: jest.Mock
-  let mockRoot: any
-
   beforeEach(() => {
     // Reset DOM
     document.body.innerHTML = ''
 
     // Reset mocks
-    jest.clearAllMocks()
-
-    // Setup mock root
-    mockRender = jest.fn()
-    mockRoot = {render: mockRender}
-    mockCreateRoot.mockReturnValue(mockRoot)
+    vi.clearAllMocks()
 
     // Mock console methods
-    jest.spyOn(console, 'warn').mockImplementation(() => {})
-    jest.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
   })
 
   afterEach(() => {
-    jest.restoreAllMocks()
+    vi.restoreAllMocks()
   })
 
   describe('basic functionality', () => {
@@ -89,7 +81,6 @@ describe('renderToElements', () => {
       })
 
       expect(count).toBe(2)
-      expect(mockCreateRoot).toHaveBeenCalledTimes(2)
       expect(mockRender).toHaveBeenCalledTimes(2)
       expect(mockShowFlashError).not.toHaveBeenCalled()
     })
@@ -106,7 +97,6 @@ describe('renderToElements', () => {
       })
 
       expect(count).toBe(0)
-      expect(mockCreateRoot).not.toHaveBeenCalled()
       expect(mockRender).not.toHaveBeenCalled()
       expect(mockShowFlashError).not.toHaveBeenCalled()
     })
@@ -140,7 +130,6 @@ describe('renderToElements', () => {
       })
 
       expect(count).toBe(1)
-      expect(mockCreateRoot).toHaveBeenCalledTimes(1)
       expect(mockRender).toHaveBeenCalledTimes(1)
       expect(mockShowFlashError).not.toHaveBeenCalled()
     })
@@ -160,7 +149,6 @@ describe('renderToElements', () => {
       })
 
       expect(count).toBe(0)
-      expect(mockCreateRoot).not.toHaveBeenCalled()
       expect(mockRender).not.toHaveBeenCalled()
       expect(console.warn).toHaveBeenCalledWith(
         'Invalid props for element .test-component:',
@@ -192,7 +180,6 @@ describe('renderToElements', () => {
       })
 
       expect(count).toBe(1)
-      expect(mockCreateRoot).toHaveBeenCalledTimes(1)
       expect(mockRender).toHaveBeenCalledTimes(1)
       expect(mockShowFlashError).toHaveBeenCalledWith('Test Error')
     })
@@ -239,29 +226,6 @@ describe('renderToElements', () => {
   describe('error handling', () => {
     const TestComponent = () => <div>Test Component</div>
 
-    it('shows flash error when createRoot throws', () => {
-      document.body.innerHTML = '<div class="test-component"></div>'
-
-      mockCreateRoot.mockImplementationOnce(() => {
-        throw new Error('createRoot failed')
-      })
-
-      const count = renderToElements({
-        selector: '.test-component',
-        Component: TestComponent,
-        datasetSchema: undefined,
-        flashErrorTitle: 'Test Error',
-        withQueryClient: false,
-      })
-
-      expect(count).toBe(0)
-      expect(console.error).toHaveBeenCalledWith(
-        'Error rendering element .test-component',
-        expect.any(Error),
-      )
-      expect(mockShowFlashError).toHaveBeenCalledWith('Test Error')
-    })
-
     it('shows flash error when render throws', () => {
       document.body.innerHTML = '<div class="test-component"></div>'
 
@@ -291,7 +255,7 @@ describe('renderToElements', () => {
 
     it('correctly formats selector with div prefix', () => {
       document.body.innerHTML = '<div class="test-component"></div>'
-      jest.spyOn(document, 'querySelectorAll')
+      vi.spyOn(document, 'querySelectorAll')
 
       renderToElements({
         selector: '.test-component',
@@ -306,7 +270,7 @@ describe('renderToElements', () => {
 
     it('works with ID selectors', () => {
       document.body.innerHTML = '<div id="test-component"></div>'
-      jest.spyOn(document, 'querySelectorAll')
+      vi.spyOn(document, 'querySelectorAll')
 
       renderToElements({
         selector: '#test-component',
@@ -326,11 +290,7 @@ describe('convenience functions', () => {
 
   beforeEach(() => {
     document.body.innerHTML = ''
-    jest.clearAllMocks()
-
-    const mockRender = jest.fn()
-    const mockRoot = {render: mockRender}
-    mockCreateRoot.mockReturnValue(mockRoot as any)
+    vi.clearAllMocks()
   })
 
   describe('renderAPComponent', () => {
@@ -340,7 +300,7 @@ describe('convenience functions', () => {
       const count = renderAPComponent('.test-component', TestComponent)
 
       expect(count).toBe(1)
-      expect(mockCreateRoot).toHaveBeenCalledTimes(1)
+      expect(mockRender).toHaveBeenCalledTimes(1)
     })
 
     it('works with schema', () => {
@@ -353,7 +313,7 @@ describe('convenience functions', () => {
       const count = renderAPComponent('.test-component', TestComponent, schema)
 
       expect(count).toBe(1)
-      expect(mockCreateRoot).toHaveBeenCalledTimes(1)
+      expect(mockRender).toHaveBeenCalledTimes(1)
     })
   })
 
@@ -364,7 +324,7 @@ describe('convenience functions', () => {
       const count = renderAPComponentNoQC('.test-component', TestComponent)
 
       expect(count).toBe(1)
-      expect(mockCreateRoot).toHaveBeenCalledTimes(1)
+      expect(mockRender).toHaveBeenCalledTimes(1)
     })
 
     it('works with schema', () => {
@@ -377,7 +337,7 @@ describe('convenience functions', () => {
       const count = renderAPComponentNoQC('.test-component', TestComponent, schema)
 
       expect(count).toBe(1)
-      expect(mockCreateRoot).toHaveBeenCalledTimes(1)
+      expect(mockRender).toHaveBeenCalledTimes(1)
     })
   })
 })

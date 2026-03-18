@@ -28,8 +28,13 @@ import {clearWidgetDashboardCache} from '../../../../__tests__/testHelpers'
 import {WidgetLayoutProvider} from '../../../../hooks/useWidgetLayout'
 import {WidgetDashboardEditProvider} from '../../../../hooks/useWidgetDashboardEdit'
 
-jest.mock('@canvas/message-students-modal/react', () => {
-  return function MockMessageStudents({onRequestClose, title, recipients, contextCode}: any) {
+// Mock useBroadcastQuery to avoid BroadcastChannel issues in jsdom
+vi.mock('@canvas/query/broadcast', () => ({
+  useBroadcastQuery: vi.fn(),
+}))
+
+vi.mock('@canvas/message-students-modal/react', () => ({
+  default: function MockMessageStudents({onRequestClose, title, recipients, contextCode}: any) {
     return (
       <div data-testid="message-students-modal">
         <h2>{title}</h2>
@@ -42,8 +47,8 @@ jest.mock('@canvas/message-students-modal/react', () => {
         </button>
       </div>
     )
-  }
-})
+  },
+}))
 
 const server = setupServer(
   // Mock useSharedCourses query
@@ -165,13 +170,21 @@ describe('PeopleWidget', () => {
     expect(screen.getByText('Test People Widget')).toBeInTheDocument()
   })
 
+  it('renders course and role filters', async () => {
+    renderWithQueryClient(<PeopleWidget {...buildDefaultProps()} />)
+
+    await screen.findByText('John Doe')
+    expect(screen.getByTestId('course-filter-select')).toBeInTheDocument()
+    expect(screen.getByTestId('role-filter-select')).toBeInTheDocument()
+  })
+
   it('handles external loading state', () => {
     renderWithQueryClient(<PeopleWidget {...buildDefaultProps({isLoading: true})} />)
     expect(screen.getByText('Loading people data...')).toBeInTheDocument()
   })
 
   it('handles external error state', () => {
-    const onRetry = jest.fn()
+    const onRetry = vi.fn()
     renderWithQueryClient(
       <PeopleWidget {...buildDefaultProps({error: 'Failed to load', onRetry})} />,
     )
@@ -347,7 +360,7 @@ describe('PeopleWidget', () => {
 
   describe('GraphQL Errors', () => {
     beforeEach(() => {
-      jest.spyOn(console, 'error').mockImplementation()
+      vi.spyOn(console, 'error').mockImplementation(() => {})
       server.use(
         graphql.query('GetCourseInstructorsPaginated', () => {
           return HttpResponse.json({
@@ -358,7 +371,7 @@ describe('PeopleWidget', () => {
     })
 
     afterEach(() => {
-      jest.restoreAllMocks()
+      vi.restoreAllMocks()
     })
 
     it('displays error message when query fails', async () => {

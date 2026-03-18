@@ -172,9 +172,10 @@ function DiscussionTopicForm({
 
   const isAlreadyAGroupDiscussion = !!currentDiscussionTopic?.groupSet?._id
 
-  const isCheckpointsForbidden =
-    currentDiscussionTopic?.assignment?.hasSubmittedSubmissions ||
-    currentDiscussionTopic?.entryCounts?.repliesCount > 0
+  // Both group discussion and checkpoints settings are disabled when there are submissions or replies
+  const hasSubmissionsOrReplies = isEditing && !currentDiscussionTopic?.canGroup
+
+  const isCheckpointsForbidden = hasSubmissionsOrReplies
 
   const checkPointsToolTipText = isCheckpointsForbidden
     ? I18n.t('Checkpoints cannot be toggled after replies have been made.')
@@ -289,7 +290,10 @@ function DiscussionTopicForm({
   useEffect(() => {
     const graphqlAps = currentDiscussionTopic?.assignment?.ltiAssetProcessorsConnection?.nodes || []
     setFromExistingAttachedProcessors(graphqlAps.map(existingAttachedAssetProcessorFromGraphql))
-  }, [currentDiscussionTopic?.assignment?.assetProcessors, setFromExistingAttachedProcessors])
+  }, [
+    currentDiscussionTopic?.assignment?.ltiAssetProcessorsConnection,
+    setFromExistingAttachedProcessors,
+  ])
 
   const [displayGradeAs, setDisplayGradeAs] = useState(
     currentDiscussionTopic?.assignment?.gradingType || 'points',
@@ -540,7 +544,7 @@ function DiscussionTopicForm({
     isAlreadyAGroupDiscussion,
   )
 
-  const canGroupDiscussion = !isEditing || currentDiscussionTopic?.canGroup || false
+  const canGroupDiscussion = !hasSubmissionsOrReplies
 
   const createSubmitPayload = shouldPublish => {
     let message = currentDiscussionTopic?.message
@@ -814,9 +818,17 @@ function DiscussionTopicForm({
   }
 
   const renderLabelWithPublishStatus = () => {
+    const hasValidationError = titleValidationMessages.some(message => message.type === 'error')
+    const asteriskColor = hasValidationError ? 'danger' : 'secondary'
+
     return (
       <Flex justifyItems="space-between">
-        <Flex.Item>{I18n.t('Topic Title')}</Flex.Item>
+        <Flex.Item>
+          {I18n.t('Topic Title')}
+          <Text color={asteriskColor} margin="0 0 0 xxSmall">
+            *
+          </Text>
+        </Flex.Item>
         {!isAnnouncement && !instUINavEnabled() && (
           <Flex.Item style={{marginLeft: '1rem', whiteSpace: 'nowrap'}}>
             {getPublishStatus()}
@@ -1038,6 +1050,7 @@ function DiscussionTopicForm({
             autoFocus={true}
             width={inputWidth}
             disabled={ENV?.DISCUSSION_CONTENT_LOCKED}
+            aria-required="true"
           />
           <View>
             {!ENV?.DISCUSSION_CONTENT_LOCKED ? (
@@ -1056,7 +1069,6 @@ function DiscussionTopicForm({
                     }}
                     height={300}
                     defaultContent={isEditing ? currentDiscussionTopic?.message : ''}
-                    autosave={false}
                     resourceType={isAnnouncement ? 'announcement.body' : 'discussion_topic.body'}
                     resourceId={currentDiscussionTopic?._id}
                   />

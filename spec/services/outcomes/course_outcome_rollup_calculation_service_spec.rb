@@ -104,7 +104,9 @@ describe Outcomes::CourseOutcomeRollupCalculationService do
             user: student,
             alignment:,
             score: 2.0 + i,
-            possible: 5.0
+            possible: 5.0,
+            title: "#{course.name}, #{assignment.title}",
+            submitted_at: (i + 1).days.ago
           )
         end
       end
@@ -129,6 +131,135 @@ describe Outcomes::CourseOutcomeRollupCalculationService do
           expect(rollup).to be_present
           expect(rollup.aggregate_score).to eq(2.0 + i)
           expect(rollup.calculation_method).to eq(outcome.calculation_method)
+          expect(rollup.submitted_at).to be_present
+          expect(rollup.title).to be_present
+          expect(rollup.hide_points).to be false
+          expect(rollup.results_count).to eq(1)
+        end
+      end
+
+      it "sets hide_points to true when all results have hide_points true" do
+        # Clear the results from the before block
+        LearningOutcomeResult.where(user_id: students.map(&:id)).destroy_all
+
+        # Create two results per student, both with hide_points: true
+        students.each_with_index do |student, i|
+          2.times do |j|
+            LearningOutcomeResult.create!(
+              learning_outcome: outcome,
+              context: course,
+              user: student,
+              alignment:,
+              score: 3.0 + j,
+              possible: 5.0,
+              title: "#{course.name}, #{assignment.title}",
+              submitted_at: (i + j + 1).days.ago,
+              hide_points: true
+            )
+          end
+        end
+
+        subject.call
+
+        rollups = OutcomeRollup.where(
+          course_id: course.id,
+          outcome_id: outcome.id,
+          workflow_state: "active"
+        )
+
+        students.each do |student|
+          rollup = rollups.find_by(user_id: student.id)
+          expect(rollup).to be_present
+          expect(rollup.hide_points).to be true
+        end
+      end
+
+      it "sets hide_points to false when all results have hide_points false" do
+        # Clear the results from the before block
+        LearningOutcomeResult.where(user_id: students.map(&:id)).destroy_all
+
+        # Create two results per student, both with hide_points: false
+        students.each_with_index do |student, i|
+          2.times do |j|
+            LearningOutcomeResult.create!(
+              learning_outcome: outcome,
+              context: course,
+              user: student,
+              alignment:,
+              score: 3.0 + j,
+              possible: 5.0,
+              title: "#{course.name}, #{assignment.title}",
+              submitted_at: (i + j + 1).days.ago,
+              hide_points: false
+            )
+          end
+        end
+
+        subject.call
+
+        rollups = OutcomeRollup.where(
+          course_id: course.id,
+          outcome_id: outcome.id,
+          workflow_state: "active"
+        )
+
+        students.each do |student|
+          rollup = rollups.find_by(user_id: student.id)
+          expect(rollup).to be_present
+          expect(rollup.hide_points).to be false
+        end
+      end
+
+      it "sets hide_points to false when results have mixed hide_points values" do
+        # Clear the results from the before block
+        LearningOutcomeResult.where(user_id: students.map(&:id)).destroy_all
+
+        # Change to average calculation method so all results are considered
+        outcome.calculation_method = "average"
+        outcome.save!
+
+        # Create two results per student: one with hide_points true, one false
+        # With average calculation, ALL results are considered, so .all?(&:hide_points) will be false
+        students.each do |student|
+          LearningOutcomeResult.create!(
+            learning_outcome: outcome,
+            context: course,
+            user: student,
+            alignment:,
+            score: 3.0,
+            possible: 5.0,
+            title: "#{course.name}, #{assignment.title}",
+            submitted_at: 2.days.ago,
+            hide_points: false
+          )
+          LearningOutcomeResult.create!(
+            learning_outcome: outcome,
+            context: course,
+            user: student,
+            alignment:,
+            score: 4.0,
+            possible: 5.0,
+            title: "#{course.name}, #{assignment.title}",
+            submitted_at: 1.day.ago,
+            hide_points: true
+          )
+        end
+
+        # Create a new service instance with the updated outcome
+        service = described_class.new(course_id: course.id, outcome_id: outcome.id)
+        service.call
+
+        rollups = OutcomeRollup.where(
+          course_id: course.id,
+          outcome_id: outcome.id,
+          workflow_state: "active"
+        )
+
+        # All students have mixed values → rollup should be false (not ALL are true)
+        students.each do |student|
+          rollup = rollups.find_by(user_id: student.id)
+          expect(rollup).to be_present
+          expect(rollup.hide_points).to be false
         end
       end
 
@@ -157,6 +288,7 @@ describe Outcomes::CourseOutcomeRollupCalculationService do
         students.each_with_index do |student, i|
           rollup = rollups.find_by(user_id: student.id)
           expect(rollup.aggregate_score).to eq(2.0 + i)
+          expect(rollup.results_count).to eq(1)
           expect(rollup.last_calculated_at).to be > 30.minutes.ago
         end
       end
@@ -518,6 +650,35 @@ describe Outcomes::CourseOutcomeRollupCalculationService do
 
         expect(rollups.count).to eq(1)
         expect(rollups.first.aggregate_score).to eq(0.0)
+      end
+
+      it "correctly stores results_count reflecting number of aggregated results" do
+        assignments = Array.new(3) { assignment_model(context: course) }
+        alignments = assignments.map { |a| outcome.align(a, course) }
+
+        alignments.each_with_index do |align, i|
+          LearningOutcomeResult.create!(
+            learning_outcome: outcome,
+            context: course,
+            user: students[0],
+            alignment: align,
+            score: 2.0 + i,
+            possible: 5.0
+          )
+        end
+
+        subject.call
+
+        rollup = OutcomeRollup.find_by(
+          course_id: course.id,
+          outcome_id: outcome.id,
+          user_id: students[0].id,
+          workflow_state: "active"
+        )
+
+        expect(rollup).to be_present
+        expect(rollup.results_count).to eq(3)
+        expect(rollup.aggregate_score).to be_present
       end
     end
 

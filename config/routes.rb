@@ -349,15 +349,6 @@ CanvasRails::Application.routes.draw do
       get :tool_launch
     end
 
-    # Support wildcard paths to enable routing in the federated New Quizzes app.
-    #
-    # When the `new_quizzes_native_experience_enabled` feature flag is enabled, path segments after
-    # `/assignment/:id` will be handled by the router in the federated New Quizzes app. Otherwise,
-    # pages will fall back to the assignment view page.
-    #
-    # This route must come after the resources :assignments block to avoid conflicts.
-    get "assignments/:id#{full_path_glob}", controller: :assignments, action: :show
-
     resources :grading_standards, only: %i[index create update destroy]
 
     resources :assignment_groups do
@@ -448,7 +439,7 @@ CanvasRails::Application.routes.draw do
 
       post "extensions/:user_id" => "quizzes/quiz_submissions#extensions", :as => :extensions
       resources :quiz_questions, controller: "quizzes/quiz_questions", path: :questions, only: %i[create update destroy show]
-      resources :quiz_groups, controller: "quizzes/quiz_groups", path: :groups, only: %i[create update destroy] do
+      resources :quiz_groups, controller: "quizzes/quiz_groups", path: :groups, only: %i[index show create update destroy] do
         member do
           post :reorder
         end
@@ -561,18 +552,22 @@ CanvasRails::Application.routes.draw do
         resource :issues, only: [:create, :update], module: "accessibility"
         post "preview" => "accessibility/preview#create"
         get "preview" => "accessibility/preview#show"
-        post "generate" => "accessibility/generate#create"
+        post "generate/table_caption" => "accessibility/generate#create_table_caption"
+        post "generate/alt_text" => "accessibility/generate#create_image_alt_text"
         get "course_scan" => "accessibility/course_scan#show"
         post "course_scan" => "accessibility/course_scan#create"
         get "resource_scan" => "accessibility/resource_scan#index"
         get "resource_scan/poll" => "accessibility/resource_scan#poll"
+        patch "resource_scan/:id/close_issues" => "accessibility/resource_scan#close_issues"
         get "issue_summary" => "accessibility/issue_summary#show"
       end
     end
 
-    resources :accessibility_issues, only: [:update, :show]
+    resources :accessibility_issues, only: [:update]
 
-    resources :ai_experiences, only: %i[index create new show edit update destroy]
+    resources :ai_experiences, only: %i[index create new show edit update destroy] do
+      get "ai_conversations", to: "ai_conversations#index", as: :ai_conversations
+    end
     resources :ai_experiences, only: %i[index show new edit]
   end
 
@@ -715,6 +710,7 @@ CanvasRails::Application.routes.draw do
     get :rate_limiting, controller: :rate_limiting_settings, action: :index, as: :rate_limiting
     resources :rate_limiting_settings, only: %i[index show create update destroy]
     get :eportfolio_moderation
+    get :accessibility
     get "search" => "accounts#course_user_search", :as => :course_user_search
     post "account_users" => "accounts#add_account_user", :as => :add_account_user
     delete "account_users/:id" => "accounts#remove_account_user", :as => :remove_account_user
@@ -1105,6 +1101,7 @@ CanvasRails::Application.routes.draw do
   # To be used by ALB
   get "internal/readiness" => "info#readiness"
   get "deep" => "info#deep"
+  get "shard_info" => "info#shard_info"
 
   get "web-app-manifest/manifest.json" => "info#web_app_manifest"
 
@@ -1275,13 +1272,16 @@ CanvasRails::Application.routes.draw do
       get "courses/:course_id/ai_experiences/:id/edit", action: :edit, as: "course_ai_experience_edit"
       put "courses/:course_id/ai_experiences/:id", action: :update
       delete "courses/:course_id/ai_experiences/:id", action: :destroy, as: "course_ai_experience_destroy"
+      get "courses/:course_id/ai_experiences/:id/ai_conversations", action: :ai_conversations_index, as: "course_ai_experience_ai_conversations"
+      get "courses/:course_id/ai_experiences/:id/ai_conversations/:conversation_id", action: :ai_conversation_show, as: "course_ai_experience_ai_conversation"
     end
 
     scope(controller: :ai_conversations) do
       get "courses/:course_id/ai_experiences/:ai_experience_id/conversations", action: :active_conversation, as: "course_ai_experience_conversations"
+      get "courses/:course_id/ai_experiences/:ai_experience_id/conversations/:id", action: :show, as: "course_ai_experience_conversation"
       post "courses/:course_id/ai_experiences/:ai_experience_id/conversations", action: :create
       post "courses/:course_id/ai_experiences/:ai_experience_id/conversations/:id/messages", action: :post_message, as: "course_ai_experience_conversation_messages"
-      delete "courses/:course_id/ai_experiences/:ai_experience_id/conversations/:id", action: :destroy, as: "course_ai_experience_conversation"
+      delete "courses/:course_id/ai_experiences/:ai_experience_id/conversations/:id", action: :destroy
     end
 
     scope(controller: :microfrontends_release_tag_override) do
@@ -1343,6 +1343,7 @@ CanvasRails::Application.routes.draw do
       get "courses/:course_id/sections", action: :index, as: "course_sections"
       get "courses/:course_id/sections/:id", action: :show, as: "course_section"
       get "sections/:id", action: :show
+      get "sections/:id/users", action: :users, as: "section_users"
       post "courses/:course_id/sections", action: :create
       put "sections/:id", action: :update
       delete "sections/:id", action: :destroy
@@ -1463,6 +1464,7 @@ CanvasRails::Application.routes.draw do
       post "courses/:course_id/assignments/:assignment_id/retry_alignment_clone", action: :retry_alignment_clone
       delete "courses/:course_id/assignments/:id", action: :destroy, controller: :assignments
       post "courses/:course_id/assignments/:assignment_id/accessibility/scan", action: :accessibility_scan, as: "assignment_accessibility_scan"
+      post "courses/:course_id/assignments/:assignment_id/accessibility/queue_scan", action: :accessibility_queue_scan, as: "assignment_accessibility_queue_scan"
     end
 
     scope(controller: "assignment_extensions") do
@@ -1610,6 +1612,7 @@ CanvasRails::Application.routes.draw do
         get "#{context.pluralize}/:#{context}_id/discussion_topics/:topic_id/insights/entries", action: :insight_entries, as: "#{context}_discussion_topic_insight_entries"
         put "#{context.pluralize}/:#{context}_id/discussion_topics/:topic_id/insights/entries/:entry_id", action: :insight_entry_update, as: "#{context}_discussion_topic_insight_entry_update"
         post "#{context.pluralize}/:#{context}_id/discussion_topics/:topic_id/duplicate", action: :duplicate
+        post "#{context.pluralize}/:#{context}_id/discussion_topics/:topic_id/accessibility/scan", action: :accessibility_scan, as: "#{context}_discussion_topic_accessibility_scan"
         get "#{context.pluralize}/:#{context}_id/discussion_topics/:topic_id/entry_list", action: :entry_list, as: "#{context}_discussion_topic_entry_list"
         post "#{context.pluralize}/:#{context}_id/discussion_topics/:topic_id/entries", action: :add_entry, as: "#{context}_discussion_add_entry"
         get "#{context.pluralize}/:#{context}_id/discussion_topics/:topic_id/entries", action: :entries, as: "#{context}_discussion_entries"
@@ -1656,6 +1659,7 @@ CanvasRails::Application.routes.draw do
 
       %w[course account].each do |context|
         get "#{context}s/:#{context}_id/external_tools/sessionless_launch", action: :generate_sessionless_launch, as: "#{context}_external_tool_sessionless_launch"
+
         get "#{context}s/:#{context}_id/external_tools/:external_tool_id", action: :show, as: "#{context}_external_tool_show"
 
         # Migration URL
@@ -2112,6 +2116,7 @@ CanvasRails::Application.routes.draw do
       get "accounts/:account_id/lti_registrations/:id/overlay_history", action: :overlay_history
       get "accounts/:account_id/lti_registrations/:id/history", action: :history, as: :lti_registration_history
       get "accounts/:account_id/lti_registration_by_client_id/:client_id", action: :show_by_client_id
+      get "accounts/:account_id/lti_registrations/:id/update_requests/:update_request_id", action: :show_registration_update_request, as: "lti_registration_update_request"
       put "accounts/:account_id/lti_registrations/:id/update_requests/:update_request_id/apply", action: :apply_registration_update_request, as: "apply_lti_registration_update_request"
       put "accounts/:account_id/lti_registrations/:id", action: :update
       put "accounts/:account_id/lti_registrations/:id/reset", action: :reset
@@ -2142,6 +2147,12 @@ CanvasRails::Application.routes.draw do
       get "courses/:course_id/lti_resource_links/:id", action: :show
       put "courses/:course_id/lti_resource_links/:id", action: :update
       delete "courses/:course_id/lti_resource_links/:id", action: :destroy
+    end
+
+    scope(controller: "lti/asset_processor_tii_migrations_api") do
+      get "accounts/:account_id/asset_processors/tii_migrations", action: :index
+      post "accounts/:account_id/asset_processors/tii_migrations", action: :create
+      post "accounts/:account_id/asset_processors/tii_migrations/migrate_all", action: :migrate_all
     end
 
     scope(controller: :immersive_reader) do
@@ -2250,6 +2261,7 @@ CanvasRails::Application.routes.draw do
       post "courses/:course_id/pages_ai/alt_text", action: :ai_generate_alt_text
       post "groups/:group_id/pages_ai/alt_text", action: :ai_generate_alt_text
       post "courses/:course_id/pages/:url_or_id/accessibility/scan", action: :accessibility_scan, as: "pages_accessibility_scan"
+      post "courses/:course_id/pages/:url_or_id/accessibility/queue_scan", action: :accessibility_queue_scan, as: "pages_accessibility_queue_scan"
     end
 
     scope(controller: :context_modules_api) do
@@ -2309,6 +2321,7 @@ CanvasRails::Application.routes.draw do
     end
 
     scope(controller: "quizzes/quiz_groups") do
+      get "courses/:course_id/quizzes/:quiz_id/groups", action: :index, as: "course_quiz_groups"
       get "courses/:course_id/quizzes/:quiz_id/groups/:id", action: :show, as: "course_quiz_group"
       post "courses/:course_id/quizzes/:quiz_id/groups", action: :create, as: "course_quiz_group_create"
       put "courses/:course_id/quizzes/:quiz_id/groups/:id", action: :update, as: "course_quiz_group_update"
@@ -2424,6 +2437,12 @@ CanvasRails::Application.routes.draw do
       post "courses/:course_id/live_assessments/:assessment_id/results", action: :create, as: "course_live_assessment_result_create"
     end
 
+    scope(controller: :assessment_question_banks) do
+      get "question_banks", action: :index, as: "question_banks"
+      get "question_banks/:id", action: :show, as: "question_bank"
+      get "question_banks/:id/questions", action: :questions, as: "question_bank_questions"
+    end
+
     scope(controller: "support_helpers/turnitin") do
       get "support_helpers/turnitin/md5", action: :md5
       get "support_helpers/turnitin/error2305", action: :error2305
@@ -2483,6 +2502,7 @@ CanvasRails::Application.routes.draw do
     scope(controller: :outcome_results) do
       get "courses/:course_id/outcome_rollups", action: :rollups, as: "course_outcome_rollups"
       get "courses/:course_id/outcome_results", action: :index, as: "course_outcome_results"
+      get "courses/:course_id/outcomes/:outcome_id/contributing_scores", action: :contributing_scores, as: "course_outcome_contributing_scores"
       post "courses/:course_id/assign_outcome_order", action: :outcome_order, as: "course_outcomes_order"
       post "enqueue_outcome_rollup_calculation", action: :enqueue_outcome_rollup_calculation
     end
@@ -2952,6 +2972,7 @@ CanvasRails::Application.routes.draw do
     end
 
     scope(controller: :career_experience) do
+      get "career/enabled", action: :enabled
       get "career/experience_summary", action: :experience_summary
       post "career/switch_experience", action: :switch_experience
       post "career/switch_role", action: :switch_role
@@ -3156,6 +3177,7 @@ CanvasRails::Application.routes.draw do
       get "registrations/:registration_id/view", action: :registration_view, as: :lti_registration_config
       post "registrations", action: :create, as: :create_lti_registration
       put "registrations/:registration_id", action: :update, as: :update_lti_registration
+      get "registrations/:registration_id", action: :show_configuration, as: :get_lti_registration
     end
 
     # Public JWK Service

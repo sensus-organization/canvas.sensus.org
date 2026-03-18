@@ -273,6 +273,66 @@ describe FilesController do
         expect(response).to be_successful
       end
     end
+
+    context "root folder permissions with files_a11y_rewrite" do
+      before do
+        Account.site_admin.enable_feature!(:files_a11y_rewrite)
+      end
+
+      it "excludes course context where Files tab is disabled for student" do
+        user_session(@student)
+        @course.update_attribute(:tab_configuration, [{ "id" => 11, "hidden" => true }])
+
+        get "index", params: { user_id: @student.id }
+        expect(response).to be_successful
+
+        files_contexts = assigns[:js_env][:FILES_CONTEXTS]
+        context_asset_strings = files_contexts.pluck(:asset_string)
+
+        expect(context_asset_strings).not_to include(@course.asset_string)
+        expect(context_asset_strings).to include(@student.asset_string)
+      end
+
+      it "includes course context where Files tab is enabled for teacher" do
+        user_session(@teacher)
+        get "index", params: { course_id: @course.id }
+        expect(response).to be_successful
+
+        files_contexts = assigns[:js_env][:FILES_CONTEXTS]
+        course_context = files_contexts.find { |c| c[:asset_string] == @course.asset_string }
+
+        expect(course_context).to be_present
+        expect(course_context[:root_folder_right]).to be true
+      end
+
+      it "includes root_folder_right field in context data when feature enabled" do
+        user_session(@teacher)
+        get "index", params: { course_id: @course.id }
+        expect(response).to be_successful
+
+        files_contexts = assigns[:js_env][:FILES_CONTEXTS]
+        files_contexts.each { |c| expect(c).to have_key(:root_folder_right) }
+      end
+
+      it "includes user context with accessible courses" do
+        user_session(@student)
+        get "index", params: { user_id: @student.id }
+        expect(response).to be_successful
+
+        files_contexts = assigns[:js_env][:FILES_CONTEXTS]
+        context_asset_strings = files_contexts.pluck(:asset_string)
+
+        expect(context_asset_strings).to include(@student.asset_string)
+      end
+
+      it "handles contexts with root folders gracefully" do
+        user_session(@teacher)
+        get "index", params: { course_id: @course.id }
+        expect(response).to be_successful
+
+        expect(assigns[:js_env][:FILES_CONTEXTS]).to be_present
+      end
+    end
   end
 
   describe "GET 'show'" do
@@ -721,6 +781,24 @@ describe FilesController do
       expect(allow_any_instantiation_of(@course)).not_to receive(:elementary_subject_course?)
       get "show", params: { course_id: @course.id, id: @file.id, download: 1 }
       expect(response).to be_redirect
+    end
+
+    it "preserves location parameter when redirecting to files domain for preview" do
+      user_session(@teacher)
+      # create an HTML file to trigger inline content check
+      html_file = @course.attachments.create!(
+        uploaded_data: StringIO.new("<html><body>test</body></html>"),
+        filename: "test.html",
+        content_type: "text/html"
+      )
+
+      allow_any_instance_of(FilesController).to receive(:safer_domain_available?).and_return(true)
+      allow(HostUrl).to receive(:file_host_with_shard).and_return(["files.example.com", Shard.default])
+
+      get "show", params: { course_id: @course.id, id: html_file.id, preview: 1, location: "course_syllabus_#{@course.id}" }
+
+      expect(response).to be_redirect
+      expect(response.location).to include("location=course_syllabus_#{@course.id}")
     end
 
     it "forces download when download_frd is set" do
@@ -2347,9 +2425,9 @@ describe FilesController do
         user_session @teacher
       end
 
-      it "fails if no submission_id is given" do
+      it "allows a teacher to download an attachment if no submission_id is given" do
         get "public_url", params: { id: @attachment.id }
-        assert_unauthorized
+        expect(json_parse).to eq({ "public_url" => @attachment.public_url(secure: false) })
       end
 
       it "allows a teacher to download a student's submission" do
@@ -2519,6 +2597,10 @@ describe FilesController do
 
     it "leaves other content types alone" do
       expect(controller.send(:process_content_type_from_instfs, "application/pdf", "file.pdf")).to eq "application/pdf"
+    end
+
+    it "fixes sql files" do
+      expect(controller.send(:process_content_type_from_instfs, "audio/mpeg", "file.sql")).to eq "text/x-sql"
     end
   end
 

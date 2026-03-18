@@ -317,7 +317,7 @@ describe('OutcomeView', () => {
 
   describe('Confirmation Dialog', () => {
     beforeEach(() => {
-      jest.spyOn(console, 'warn').mockImplementation(() => {})
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
     })
 
     afterEach(() => {
@@ -361,7 +361,7 @@ describe('OutcomeView', () => {
       await waitFrames(10)
       view.edit($.Event())
       await waitFrames(10)
-      const submitSpy = jest.fn()
+      const submitSpy = vi.fn()
       view.on('submit', submitSpy)
       view.$('form').trigger('submit')
       await waitFrames(10)
@@ -387,7 +387,7 @@ describe('OutcomeView', () => {
       await waitFrames(10)
       view.edit($.Event())
       await waitFrames(10)
-      const submitSpy = jest.fn()
+      const submitSpy = vi.fn()
       view.on('submit', submitSpy)
       view.$('form').trigger('submit')
       await waitFrames(10)

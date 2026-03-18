@@ -18,6 +18,7 @@
 
 import $ from 'jquery'
 import 'jquery-migrate'
+import '@canvas/jquery/jquery.toJSON'
 import Outcome from '../../../../backbone/models/Outcome'
 import OutcomeContentBase from '../OutcomeContentBase'
 import OutcomeView from '../OutcomeView'

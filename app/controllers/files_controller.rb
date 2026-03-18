@@ -436,6 +436,10 @@ class FilesController < ApplicationController
                            folder = root_folders_by_context[context.asset_string]
                            folder&.id
                          end
+        root_folder_right = if files_version_2 && root_folder_id
+                              folder = root_folders_by_context[context.asset_string]
+                              folder ? folder.grants_right?(@current_user, session, :read_contents) : true
+                            end
         {
           asset_string: context.asset_string,
           name: (context == @current_user) ? t("my_files", "My Files") : context.name,
@@ -447,7 +451,8 @@ class FilesController < ApplicationController
           },
           file_menu_tools:,
           file_index_menu_tools:,
-          root_folder_id:
+          root_folder_id:,
+          root_folder_right:
         }
       end
 
@@ -460,7 +465,7 @@ class FilesController < ApplicationController
       end
       css_bundle :react_files
       js_env({
-               FILES_CONTEXTS: files_contexts,
+               FILES_CONTEXTS: files_version_2 ? files_contexts.filter { |c| c[:root_folder_right] } : files_contexts,
                COURSE_ID: context.id.to_s
              })
       log_asset_access(["files", @context], "files", "other")
@@ -879,6 +884,7 @@ class FilesController < ApplicationController
 
     options = {}
     options[:fallback_url] = @access_verifier[:fallback_url] if @access_verifier
+    options[:location] = params[:location] if params[:location]
     render_or_redirect_to_stored_file(
       attachment:,
       verifier: params[:verifier],
@@ -1799,6 +1805,12 @@ class FilesController < ApplicationController
     when "application/xml"
       case ext
       when ".kml" then "application/vnd.google-earth.kml+xml"
+      else content_type
+      end
+    # sql files are sometimes detected as audio/mpeg by the above mentioned NPM package
+    when "audio/mpeg"
+      case ext
+      when ".sql" then "text/x-sql"
       else content_type
       end
     else

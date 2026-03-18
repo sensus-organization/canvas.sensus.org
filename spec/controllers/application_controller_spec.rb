@@ -256,14 +256,14 @@ RSpec.describe ApplicationController do
             expect(controller.js_env[:widget_dashboard_overridable]).to be_nil
           end
 
-          it "is set to true when feature flag is in 'allowed_on' state and user has no preference" do
+          it "is set to false when feature flag is in 'allowed_on' state and user has no preference (requires opt-in)" do
             Account.default.set_feature_flag!(:widget_dashboard, "allowed_on")
-            expect(controller.js_env[:widget_dashboard_overridable]).to be true
+            expect(controller.js_env[:widget_dashboard_overridable]).to be false
           end
 
-          it "is not set when feature flag is in 'on' state" do
+          it "is set to false when feature flag is in 'on' state and user has no preference (requires opt-in)" do
             Account.default.enable_feature!(:widget_dashboard)
-            expect(controller.js_env[:widget_dashboard_overridable]).to be_nil
+            expect(controller.js_env[:widget_dashboard_overridable]).to be false
           end
 
           it "respects user preference when feature is in 'allowed_on' state" do
@@ -271,6 +271,76 @@ RSpec.describe ApplicationController do
             @user.preferences[:widget_dashboard_user_preference] = false
             @user.save!
             expect(controller.js_env[:widget_dashboard_overridable]).to be false
+          end
+
+          context "enrollment-based eligibility" do
+            before do
+              Account.default.set_feature_flag!(:widget_dashboard, "allowed_on")
+            end
+
+            it "is not set for users with teacher enrollment" do
+              course_with_teacher(user: @user, active_all: true)
+              expect(controller.js_env[:widget_dashboard_overridable]).to be_nil
+            end
+
+            it "is not set for users with TA enrollment" do
+              course_with_ta(user: @user, active_all: true)
+              expect(controller.js_env[:widget_dashboard_overridable]).to be_nil
+            end
+
+            it "is not set for users with designer enrollment" do
+              course_with_designer(user: @user, active_all: true)
+              expect(controller.js_env[:widget_dashboard_overridable]).to be_nil
+            end
+
+            it "is set for users with only student enrollment" do
+              course_with_student(user: @user, active_all: true)
+              expect(controller.js_env[:widget_dashboard_overridable]).to be false
+            end
+
+            it "is set for users with observer enrollment" do
+              course_with_observer(user: @user, active_all: true)
+              expect(controller.js_env[:widget_dashboard_overridable]).to be false
+            end
+
+            it "is not set for users with mixed teacher and student enrollment" do
+              course_with_teacher(user: @user, active_all: true)
+              course_with_student(user: @user, active_all: true)
+              expect(controller.js_env[:widget_dashboard_overridable]).to be_nil
+            end
+
+            it "is set for users with concluded teacher enrollment and active student enrollment" do
+              course1 = course_factory(active_all: true)
+              course1.enroll_teacher(@user).tap do |e|
+                e.accept!
+                e.complete!
+              end
+              course2 = course_factory(active_all: true)
+              course2.enroll_student(@user).tap(&:accept!)
+              expect(controller.js_env[:widget_dashboard_overridable]).to be false
+            end
+
+            it "is set for users with concluded observer enrollment and active student enrollment" do
+              course1 = course_factory(active_all: true)
+              course1.enroll_user(@user, "ObserverEnrollment").tap do |e|
+                e.accept!
+                e.complete!
+              end
+              course2 = course_factory(active_all: true)
+              course2.enroll_student(@user).tap(&:accept!)
+              expect(controller.js_env[:widget_dashboard_overridable]).to be false
+            end
+
+            it "is set for users with inactive teacher enrollment and active student enrollment" do
+              course1 = course_factory(active_all: true)
+              course1.enroll_teacher(@user).tap do |e|
+                e.accept!
+                e.deactivate
+              end
+              course2 = course_factory(active_all: true)
+              course2.enroll_student(@user).tap(&:accept!)
+              expect(controller.js_env[:widget_dashboard_overridable]).to be false
+            end
           end
         end
       end
@@ -506,8 +576,6 @@ RSpec.describe ApplicationController do
 
         before do
           controller.instance_variable_set(:@context, Account.default)
-          Setting.set("top_navigation_allowed_dev_keys", developer_key.id.to_s)
-          Setting.set("top_navigation_allowed_launch_domains", domain)
           allow(Lti::ContextToolFinder).to receive(:all_tools_for).and_return([devkey_tool, domain_tool, unauth_tool])
           allow(controller).to receive(:polymorphic_url).and_return(domain)
           Account.site_admin.disable_feature!(:top_navigation_placement)
@@ -685,6 +753,31 @@ RSpec.describe ApplicationController do
         it "is set to the dark theme url if career is enabled" do
           allow(CanvasCareer::ExperienceResolver).to receive(:career_affiliated_institution?).and_return(true)
           expect(@controller.js_env[:CAREER_DARK_THEME_URL]).to eq "https://dark-theme.url"
+        end
+      end
+
+      describe "translation file preloading" do
+        before do
+          allow(controller).to receive(:api_request?).and_return(false)
+        end
+
+        it "does not preload translation file for English locale" do
+          I18n.with_locale(:en) do
+            controller.js_env({})
+            expect(controller.instance_variable_get(:@content_for_head)).to be_nil
+          end
+        end
+
+        it "preloads translation file for non-english locale" do
+          I18n.with_locale(:fr) do
+            controller.js_env({})
+            content_for_head = controller.instance_variable_get(:@content_for_head)
+            expect(content_for_head).not_to be_nil
+            expect(content_for_head.first).to include('rel="preload"')
+            expect(content_for_head.first).to include('as="fetch"')
+            expect(content_for_head.first).to include('type="application/json"')
+            expect(content_for_head.first).to match(%r{translations/fr.*\.json})
+          end
         end
       end
     end
@@ -1974,31 +2067,6 @@ RSpec.describe ApplicationController do
         external_tools = controller.external_tools_display_hashes(:account_navigation, @account)
         expect(external_tools).to include({ id: tool.id, title: "Admin Analytics", base_url: "http://admin_analytics.example.com/", icon_url: nil, canvas_icon_class: "icon-analytics", tool_id: ContextExternalTool::ADMIN_ANALYTICS })
       end
-
-      context "LTI tool has a submission_type_selection placement" do
-        let(:developer_key) { DeveloperKey.create! }
-        let(:domain) { "http://example.com" }
-        let(:tool1) { external_tool_1_3_model(developer_key:, opts: { domain:, settings: { submission_type_selection: {} } }) }
-        let(:tool2) { external_tool_1_3_model(developer_key:, opts: { domain:, settings: { submission_type_selection: {} } }) }
-
-        before do
-          allow(Account.site_admin).to receive(:feature_enabled?).with(:instructure_identity_global_flag)
-        end
-
-        def setup_tools
-          allow(Lti::ContextToolFinder).to receive(:all_tools_for).and_return([tool1, tool2])
-          allow(controller).to receive(:polymorphic_url).and_return(domain)
-        end
-
-        it "is filtering out not allowed placements" do
-          setup_tools
-          expect(tool1).to receive(:placement_allowed?).and_return(true)
-          expect(tool2).to receive(:placement_allowed?).and_return(false)
-          external_tools = controller.send(:external_tools_display_hashes, :submission_type_selection)
-          expect(external_tools).to include({ id: tool1.id, title: "a", base_url: domain, icon_url: nil, canvas_icon_class: nil })
-          expect(external_tools).to_not include({ id: tool2.id, title: "a", base_url: domain, icon_url: nil, canvas_icon_class: nil })
-        end
-      end
     end
 
     describe "external_tool_display_hash" do
@@ -2857,6 +2925,45 @@ RSpec.describe ApplicationController do
         expect(LiveEvents.get_context).to eq(expected_context_attributes)
       end
     end
+
+    context "with federated pseudonym attributes" do
+      before do
+        user_with_pseudonym
+        controller.instance_variable_set(:@current_user, @user)
+        controller.instance_variable_set(:@current_pseudonym, @pseudonym)
+        @pseudonym.unique_id = "pseudonym_user"
+        @pseudonym.sis_user_id = "pseudonym_sis_456"
+      end
+
+      after do
+        AuthenticationMethods::FederatedPseudonymAttributes.reset
+      end
+
+      context "when federated attributes are loaded" do
+        before do
+          AuthenticationMethods::FederatedPseudonymAttributes.unique_id = "federated_user"
+          AuthenticationMethods::FederatedPseudonymAttributes.sis_user_id = "federated_sis_123"
+        end
+
+        it "uses federated unique_id in live events context" do
+          controller.send(:setup_live_events_context)
+          expect(LiveEvents.get_context[:user_login]).to eq "federated_user"
+          expect(LiveEvents.get_context[:user_sis_id]).to eq "federated_sis_123"
+        end
+      end
+
+      context "when federated attributes are not loaded" do
+        before do
+          AuthenticationMethods::FederatedPseudonymAttributes.reset
+        end
+
+        it "falls back to pseudonym attributes in live events context" do
+          controller.send(:setup_live_events_context)
+          expect(LiveEvents.get_context[:user_login]).to eq "pseudonym_user"
+          expect(LiveEvents.get_context[:user_sis_id]).to eq "pseudonym_sis_456"
+        end
+      end
+    end
   end
 
   describe "show_student_view_button? helper" do
@@ -3040,12 +3147,12 @@ RSpec.describe ApplicationController do
       expect(controller.send(:new_quizzes_native_experience_enabled?)).to be false
     end
 
-    it "returns true when the feature flag is enabled on the root account" do
-      @course.root_account.enable_feature!(:new_quizzes_native_experience)
+    it "returns true when the feature flag is enabled on the course" do
+      @course.enable_feature!(:new_quizzes_native_experience)
       expect(controller.send(:new_quizzes_native_experience_enabled?)).to be true
     end
 
-    it "returns false when context does not respond to root_account" do
+    it "returns false when context does not respond to feature_enabled?" do
       controller.instance_variable_set(:@context, Object.new)
       expect(controller.send(:new_quizzes_native_experience_enabled?)).to be false
     end
@@ -3329,6 +3436,38 @@ RSpec.describe ApplicationController do
       end
     end
   end
+
+  describe "#preload_translation_file" do
+    before do
+      controller.instance_variable_set(:@domain_root_account, Account.default)
+      allow(controller).to receive_messages(api_request?: false, helpers: double(preload_link_tag: "<link>"))
+    end
+
+    it "handles null @js_env" do
+      expect { controller.send(:preload_translation_file) }.not_to raise_error
+      expect(controller.instance_variable_get(:@content_for_head)).to be_nil
+    end
+
+    it "handles unset @js_env[:LOCALES]" do
+      controller.instance_variable_set(:@js_env, {})
+      expect { controller.send(:preload_translation_file) }.not_to raise_error
+      expect(controller.instance_variable_get(:@content_for_head)).to be_nil
+    end
+
+    it "does not add preload link for en locale" do
+      controller.instance_variable_set(:@js_env, { LOCALES: ["en"], LOCALE_TRANSLATION_FILE: "/translations/en.json" })
+      controller.send(:preload_translation_file)
+      expect(controller.instance_variable_get(:@content_for_head)).to be_nil
+    end
+
+    it "adds preload link for non-en locale" do
+      controller.instance_variable_set(:@js_env, { LOCALES: ["fr"], LOCALE_TRANSLATION_FILE: "/translations/fr.json" })
+      controller.send(:preload_translation_file)
+      content_for_head = controller.instance_variable_get(:@content_for_head)
+      expect(content_for_head).not_to be_nil
+      expect(content_for_head).to include("<link>")
+    end
+  end
 end
 
 describe WikiPagesController do
@@ -3441,12 +3580,7 @@ describe CoursesController do
 
     context "when Sentry is enabled on the frontend" do
       before do
-        ConfigFile.stub("sentry", { dsn: "dummy-dsn", frontend_dsn: "dummy-frontend-dsn" })
-      end
-
-      after do
-        ConfigFile.unstub
-        SentryExtensions::Settings.reset_settings
+        stub_consul_config("sentry", { dsn: "dummy-dsn", frontend_dsn: "dummy-frontend-dsn" })
       end
 
       context "given a standard route" do
@@ -3852,47 +3986,74 @@ RSpec.describe ApplicationController, "#cached_js_env_account_features" do
   end
 end
 
-RSpec.describe ApplicationController, "#add_ignite_agent_bundle?" do
-  let_once(:user) { user_factory(active_all: true) }
-  let_once(:account) { Account.default }
+RSpec.describe ApplicationController, "#render_native_new_quizzes" do
+  let(:course) { course_model }
+  let(:assignment) { assignment_model(context: course) }
+  let(:teacher) { teacher_in_course(course:, active_all: true).user }
+  let(:tool) do
+    course.context_external_tools.create!(
+      name: "New Quizzes",
+      url: "http://example.com/launch",
+      consumer_key: "key",
+      shared_secret: "secret",
+      tool_id: "Quizzes 2"
+    )
+  end
+  let(:request_mock) do
+    double(path: "/courses/3/assignments/9/moderation/1")
+  end
 
   before do
-    controller.instance_variable_set(:@domain_root_account, account)
-    controller.instance_variable_set(:@current_user, user)
-    allow(controller).to receive(:session).and_return({})
+    user_session(teacher)
+    allow(controller).to receive(:add_new_quizzes_bundle)
+    allow(controller).to receive(:add_body_class)
+    allow(controller).to receive(:render)
+    allow(controller).to receive(:js_env).and_call_original
+    controller.instance_variable_set(:@context, course)
+    controller.instance_variable_set(:@assignment, assignment)
+    controller.instance_variable_set(:@tool, tool)
+    controller.instance_variable_set(:@current_user, teacher)
+    controller.instance_variable_set(:@domain_root_account, Account.default)
+    allow(controller).to receive(:request).and_return(request_mock)
   end
 
-  it "returns false when no user is logged in" do
-    controller.instance_variable_set(:@current_user, nil)
-    expect(controller.send(:add_ignite_agent_bundle?)).to be false
+  it "sets basename in js_env when full_path param is present" do
+    allow(controller).to receive(:params).and_return({ full_path: "/moderation/1" })
+    launch_data = { test: "data" }
+    allow_any_instance_of(NewQuizzes::LaunchDataBuilder).to receive(:build_with_signature).and_return(launch_data)
+
+    expect(controller).to receive(:js_env) do |data|
+      expect(data[:NEW_QUIZZES][:basename]).to eq("/courses/3/assignments/9")
+      expect(data[:NEW_QUIZZES][:test]).to eq("data")
+    end
+
+    controller.send(:render_native_new_quizzes)
   end
 
-  it "returns false when ignite_agent_enabled feature is disabled" do
-    account.disable_feature!(:ignite_agent_enabled)
-    expect(controller.send(:add_ignite_agent_bundle?)).to be false
+  it "uses request path as basename when full_path param is not present" do
+    allow(controller).to receive(:params).and_return({})
+    launch_data = { test: "data" }
+    allow_any_instance_of(NewQuizzes::LaunchDataBuilder).to receive(:build_with_signature).and_return(launch_data)
+
+    expect(controller).to receive(:js_env) do |data|
+      expect(data[:NEW_QUIZZES][:basename]).to eq("/courses/3/assignments/9/moderation/1")
+      expect(data[:NEW_QUIZZES][:test]).to eq("data")
+    end
+
+    controller.send(:render_native_new_quizzes)
   end
 
-  it "returns true when user has manage_account_settings permission" do
-    account.enable_feature!(:ignite_agent_enabled)
-    account.role_overrides.create!(
-      permission: :manage_account_settings,
-      role: admin_role,
-      enabled: true
-    )
-    account.account_users.create!(user:, role: admin_role)
+  it "preserves other NEW_QUIZZES data in js_env" do
+    allow(controller).to receive(:params).and_return({ full_path: "/moderation/1" })
+    launch_data = { test: "data", other: "value" }
+    allow_any_instance_of(NewQuizzes::LaunchDataBuilder).to receive(:build_with_signature).and_return(launch_data)
 
-    expect(controller.send(:add_ignite_agent_bundle?)).to be true
-  end
+    expect(controller).to receive(:js_env) do |data|
+      expect(data[:NEW_QUIZZES][:test]).to eq("data")
+      expect(data[:NEW_QUIZZES][:other]).to eq("value")
+      expect(data[:NEW_QUIZZES][:basename]).to eq("/courses/3/assignments/9")
+    end
 
-  it "returns false when user lacks manage_account_settings and ignite_agent_enabled_for_user feature flag" do
-    account.enable_feature!(:ignite_agent_enabled)
-    expect(controller.send(:add_ignite_agent_bundle?)).to be false
-  end
-
-  it "returns true when user has ignite_agent_enabled_for_user feature flag" do
-    account.enable_feature!(:ignite_agent_enabled)
-    user.enable_feature!(:ignite_agent_enabled_for_user)
-
-    expect(controller.send(:add_ignite_agent_bundle?)).to be true
+    controller.send(:render_native_new_quizzes)
   end
 end

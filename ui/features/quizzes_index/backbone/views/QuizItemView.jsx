@@ -25,7 +25,7 @@ import LockIconView from '@canvas/lock-icon'
 import PublishIconView from '@canvas/publish-icon-view'
 import SisButtonView from '@canvas/sis/backbone/views/SisButtonView'
 import $ from 'jquery'
-import {each, extend} from 'lodash'
+import {each, extend} from 'es-toolkit/compat'
 import template from '../../jst/QuizItemView.handlebars'
 import '@canvas/jquery/jquery.disableWhileLoading'
 import ItemAssignToManager from '@canvas/context-modules/differentiated-modules/react/Item/ItemAssignToManager'
@@ -223,7 +223,7 @@ export default class ItemView extends Backbone.View {
   }
 
   canDelete() {
-    return this.model.get('permissions').delete
+    return this.model.get('permissions')?.delete
   }
 
   onDelete(e) {

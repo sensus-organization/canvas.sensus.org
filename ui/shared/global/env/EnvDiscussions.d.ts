@@ -17,10 +17,19 @@
  */
 
 export interface EnvDiscussions {
+  AMOUNT_OF_SIDE_COMMENT_DISCUSSIONS?: string
   discussion_ai_survey_link: string
   DISCUSSION_TOPIC: {
     ATTRIBUTES: Record<string, any>
   }
   discussion_pin_post: string
   ASSIGNMENT_SECURE_PARAMS?: string
+  DISCUSSION_CHECKPOINTS_ENABLED?: boolean
+  /**
+   * Set in DiscussionTopicsController for discussion topic insights
+   * Used by ui/features/discussion_topics_post/react/components/DiscussionSummary/DiscussionSummary.tsx
+   */
+  context_type?: string
+  context_id?: string | number
+  discussion_topic_id?: string | number
 }

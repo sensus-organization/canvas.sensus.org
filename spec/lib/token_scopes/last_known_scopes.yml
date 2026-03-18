@@ -46,6 +46,12 @@
 - verb: POST
   path: '/api/v1/accounts/:account_id/app_center/apps/:app_id/reviews/self'
 - verb: GET
+  path: '/api/v1/accounts/:account_id/asset_processors/tii_migrations'
+- verb: POST
+  path: '/api/v1/accounts/:account_id/asset_processors/tii_migrations'
+- verb: POST
+  path: '/api/v1/accounts/:account_id/asset_processors/tii_migrations/migrate_all'
+- verb: GET
   path: '/api/v1/accounts/:account_id/authentication_providers'
 - verb: POST
   path: '/api/v1/accounts/:account_id/authentication_providers'
@@ -239,6 +245,8 @@
   path: '/api/v1/accounts/:account_id/lti_registrations/:id/overlay_history'
 - verb: PUT
   path: '/api/v1/accounts/:account_id/lti_registrations/:id/reset'
+- verb: GET
+  path: '/api/v1/accounts/:account_id/lti_registrations/:id/update_requests/:update_request_id'
 - verb: PUT
   path: '/api/v1/accounts/:account_id/lti_registrations/:id/update_requests/:update_request_id/apply'
 - verb: GET
@@ -536,6 +544,8 @@
 - verb: POST
   path: '/api/v1/canvadoc_session'
 - verb: GET
+  path: '/api/v1/career/enabled'
+- verb: GET
   path: '/api/v1/career/experience_summary'
 - verb: POST
   path: '/api/v1/career/switch_experience'
@@ -599,6 +609,8 @@
   path: '/api/v1/courses/:course_id/ai_experiences/:ai_experience_id/conversations'
 - verb: DELETE
   path: '/api/v1/courses/:course_id/ai_experiences/:ai_experience_id/conversations/:id'
+- verb: GET
+  path: '/api/v1/courses/:course_id/ai_experiences/:ai_experience_id/conversations/:id'
 - verb: POST
   path: '/api/v1/courses/:course_id/ai_experiences/:ai_experience_id/conversations/:id/messages'
 - verb: DELETE
@@ -607,6 +619,10 @@
   path: '/api/v1/courses/:course_id/ai_experiences/:id'
 - verb: PUT
   path: '/api/v1/courses/:course_id/ai_experiences/:id'
+- verb: GET
+  path: '/api/v1/courses/:course_id/ai_experiences/:id/ai_conversations'
+- verb: GET
+  path: '/api/v1/courses/:course_id/ai_experiences/:id/ai_conversations/:conversation_id'
 - verb: GET
   path: '/api/v1/courses/:course_id/ai_experiences/:id/edit'
 - verb: GET
@@ -641,6 +657,8 @@
   path: '/api/v1/courses/:course_id/assignments'
 - verb: POST
   path: '/api/v1/courses/:course_id/assignments'
+- verb: POST
+  path: '/api/v1/courses/:course_id/assignments/:assignment_id/accessibility/queue_scan'
 - verb: POST
   path: '/api/v1/courses/:course_id/assignments/:assignment_id/accessibility/scan'
 - verb: POST
@@ -929,6 +947,8 @@
   path: '/api/v1/courses/:course_id/discussion_topics/:topic_id'
 - verb: PUT
   path: '/api/v1/courses/:course_id/discussion_topics/:topic_id'
+- verb: POST
+  path: '/api/v1/courses/:course_id/discussion_topics/:topic_id/accessibility/scan'
 - verb: POST
   path: '/api/v1/courses/:course_id/discussion_topics/:topic_id/duplicate'
 - verb: GET
@@ -1282,6 +1302,8 @@
 - verb: GET
   path: '/api/v1/courses/:course_id/outcome_rollups'
 - verb: GET
+  path: '/api/v1/courses/:course_id/outcomes/:outcome_id/contributing_scores'
+- verb: GET
   path: '/api/v1/courses/:course_id/pace_contexts'
 - verb: GET
   path: '/api/v1/courses/:course_id/page_title_availability'
@@ -1295,6 +1317,8 @@
   path: '/api/v1/courses/:course_id/pages/:url_or_id'
 - verb: PUT
   path: '/api/v1/courses/:course_id/pages/:url_or_id'
+- verb: POST
+  path: '/api/v1/courses/:course_id/pages/:url_or_id/accessibility/queue_scan'
 - verb: POST
   path: '/api/v1/courses/:course_id/pages/:url_or_id/accessibility/scan'
 - verb: GET
@@ -1351,6 +1375,8 @@
   path: '/api/v1/courses/:course_id/quizzes/:quiz_id/date_details/convert_tag_overrides'
 - verb: POST
   path: '/api/v1/courses/:course_id/quizzes/:quiz_id/extensions'
+- verb: GET
+  path: '/api/v1/courses/:course_id/quizzes/:quiz_id/groups'
 - verb: POST
   path: '/api/v1/courses/:course_id/quizzes/:quiz_id/groups'
 - verb: DELETE
@@ -1752,6 +1778,8 @@
 - verb: PUT
   path: '/api/v1/groups/:group_id/discussion_topics/:topic_id'
 - verb: POST
+  path: '/api/v1/groups/:group_id/discussion_topics/:topic_id/accessibility/scan'
+- verb: POST
   path: '/api/v1/groups/:group_id/discussion_topics/:topic_id/duplicate'
 - verb: GET
   path: '/api/v1/groups/:group_id/discussion_topics/:topic_id/entries'
@@ -2058,6 +2086,12 @@
 - verb: POST
   path: '/api/v1/progress/:id/cancel'
 - verb: GET
+  path: '/api/v1/question_banks'
+- verb: GET
+  path: '/api/v1/question_banks/:id'
+- verb: GET
+  path: '/api/v1/question_banks/:id/questions'
+- verb: GET
   path: '/api/v1/quiz_submissions/:quiz_submission_id/questions'
 - verb: POST
   path: '/api/v1/quiz_submissions/:quiz_submission_id/questions'
@@ -2109,6 +2143,8 @@
   path: '/api/v1/sections/:id/crosslist'
 - verb: POST
   path: '/api/v1/sections/:id/crosslist/:new_course_id'
+- verb: GET
+  path: '/api/v1/sections/:id/users'
 - verb: GET
   path: '/api/v1/sections/:section_id/assignments/:assignment_id/anonymous_submissions/:anonymous_id'
 - verb: PUT

@@ -22,7 +22,7 @@ import {useScope as createI18nScope} from '@canvas/i18n'
 import numberHelper from '@canvas/i18n/numberHelper'
 import $ from 'jquery'
 import autoBlurActiveInput from './behaviors/autoBlurActiveInput'
-import {isEqual, clone} from 'lodash'
+import {isEqual, clone} from 'es-toolkit/compat'
 import LDBLoginPopup from '../backbone/views/LDBLoginPopup'
 import quizTakingPolice from './quiz_taking_police'
 import QuizLogAuditing from '@canvas/quiz-log-auditing'
@@ -736,7 +736,7 @@ $(document).ready(() => {
         if ($this.hasClass('numerical_question_input')) {
           const val = numberHelper.parse($this.val())
           restoreOriginalMessage($('.numerical-question-holder'))
-          if (Number.isNaN(Number(val))) {
+          if (Number.isNaN(val)) {
             $this.val('')
           } else {
             $this.val(I18n.n(val.toFixed(4), {strip_insignificant_zeros: true}))
@@ -759,7 +759,7 @@ $(document).ready(() => {
           quizSubmission.updateSubmission()
         }
       })
-      .on('keyup', '.numerical_question_input', function (_event) {
+      .on('keyup', '.numerical_question_input, .precision_question_input', function (_event) {
         const $this = $(this)
         const val = $this.val() + ''
         const inputContainer = $this.closest('.numerical-question-holder')

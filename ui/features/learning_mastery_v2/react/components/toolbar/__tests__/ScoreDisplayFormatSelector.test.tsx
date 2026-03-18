@@ -21,12 +21,12 @@ import {
   ScoreDisplayFormatSelector,
   ScoreDisplayFormatSelectorProps,
 } from '../ScoreDisplayFormatSelector'
-import {ScoreDisplayFormat} from '../../../utils/constants'
+import {ScoreDisplayFormat} from '@canvas/outcomes/react/utils/constants'
 
 describe('ScoreDisplayFormatSelector', () => {
   const defaultProps: ScoreDisplayFormatSelectorProps = {
     value: ScoreDisplayFormat.ICON_ONLY,
-    onChange: jest.fn(),
+    onChange: vi.fn(),
   }
 
   it('renders all format options', () => {
@@ -59,7 +59,7 @@ describe('ScoreDisplayFormatSelector', () => {
   })
 
   it('calls onChange when an option is clicked', () => {
-    const onChange = jest.fn()
+    const onChange = vi.fn()
     const {getByLabelText} = render(
       <ScoreDisplayFormatSelector {...defaultProps} onChange={onChange} />,
     )

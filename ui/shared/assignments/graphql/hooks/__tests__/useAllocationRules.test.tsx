@@ -24,12 +24,37 @@ import {MockedQueryClientProvider} from '@canvas/test-utils/query'
 import {useAllocationRules} from '../useAllocationRules'
 import {AllocationRuleType} from '../../teacher/AssignmentTeacherTypes'
 
-jest.mock('@canvas/graphql', () => ({
-  executeQuery: jest.fn(),
+import {executeQuery} from '@canvas/graphql'
+
+vi.mock('@canvas/graphql', () => ({
+  executeQuery: vi.fn(),
 }))
 
-const {executeQuery} = require('@canvas/graphql')
-const mockExecuteQuery = executeQuery as jest.MockedFunction<typeof executeQuery>
+const mockExecuteQuery = vi.mocked(executeQuery)
+
+const createMockResponse = (
+  rules: AllocationRuleType[] = [],
+  count: number | null = null,
+  peerReviewsCount = 2,
+  hasNextPage = false,
+  endCursor: string | null = null,
+) => ({
+  assignment: {
+    peerReviews: {
+      count: peerReviewsCount,
+    },
+    allocationRules: {
+      rulesConnection: {
+        nodes: rules,
+        pageInfo: {
+          hasNextPage,
+          endCursor,
+        },
+      },
+      count: count !== null ? count : rules.length,
+    },
+  },
+})
 
 const mockAllocationRules: AllocationRuleType[] = [
   {
@@ -83,25 +108,12 @@ const createWrapper = () => {
 
 describe('useAllocationRules', () => {
   beforeEach(() => {
-    jest.clearAllMocks()
+    vi.clearAllMocks()
     mockExecuteQuery.mockClear()
   })
 
   it('initializes with loading state and returns rules successfully', async () => {
-    mockExecuteQuery.mockResolvedValueOnce({
-      assignment: {
-        allocationRules: {
-          rulesConnection: {
-            nodes: mockAllocationRules,
-            pageInfo: {
-              hasNextPage: false,
-              endCursor: null,
-            },
-          },
-          count: 2,
-        },
-      },
-    })
+    mockExecuteQuery.mockResolvedValueOnce(createMockResponse(mockAllocationRules, 2))
 
     const {result} = renderHook(() => useAllocationRules('assignment-123', 1, 10), {
       wrapper: createWrapper(),
@@ -110,6 +122,7 @@ describe('useAllocationRules', () => {
     expect(result.current.loading).toBe(true)
     expect(result.current.rules).toEqual([])
     expect(result.current.totalCount).toBe(null)
+    expect(result.current.requiredPeerReviewsCount).toBe(0)
     expect(result.current.error).toBe(null)
 
     await waitFor(() => {
@@ -118,6 +131,7 @@ describe('useAllocationRules', () => {
 
     expect(result.current.rules).toEqual(mockAllocationRules)
     expect(result.current.totalCount).toBe(2)
+    expect(result.current.requiredPeerReviewsCount).toBe(2)
     expect(result.current.error).toBe(null)
   })
 

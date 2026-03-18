@@ -418,6 +418,11 @@ describe AuthenticationMethods do
           context "with feature flag DISABLED (shadow mode)" do
             before do
               Account.site_admin.feature_flags.where(feature: :enforce_service_token_tenant_matching).destroy_all
+              AuthenticationMethods::InstAccessToken.reload
+            end
+
+            after do
+              AuthenticationMethods::InstAccessToken.reload
             end
 
             it "allows authentication" do
@@ -433,6 +438,15 @@ describe AuthenticationMethods do
             end
 
             it "sends an InstStatsd event for monitoring" do
+              allow(DynamicSettings).to receive(:find).and_call_original
+              allow(DynamicSettings).to receive(:find)
+                .with(tree: :private)
+                .and_return(DynamicSettings::FallbackProxy.new({
+                                                                 "inst_access_token.yml" => {
+                                                                   "log_tenant_mismatches" => true
+                                                                 }.to_yaml
+                                                               }))
+
               expect(InstStatsd::Statsd).to receive(:event).with(
                 "Service user authorization tenant mismatch",
                 anything,
@@ -492,6 +506,59 @@ describe AuthenticationMethods do
             expect { controller.send(:load_user) }.to raise_error(AuthenticationMethods::AccessTokenError)
           end
         end
+      end
+    end
+  end
+
+  describe "#load_user with federated_pseudonym_attributes flag" do
+    let(:user) { user_with_pseudonym }
+    let(:test_pseudonym) { @pseudonym }
+
+    before do
+      user
+      @request = double(env: { "encrypted_cookie_store.session_refreshed_at" => 5.minutes.ago },
+                        format: double(json?: false),
+                        host_with_port: "")
+      @controller = mock_controller_class.new(request: @request)
+      allow(@controller).to receive_messages(load_pseudonym_from_access_token: test_pseudonym, api_request?: false)
+      @controller.instance_variable_set(:@current_pseudonym, test_pseudonym)
+      @pseudonym_session = double(record: @pseudonym)
+      allow(PseudonymSession).to receive(:find_with_validation).and_return(@pseudonym_session)
+    end
+
+    context "when feature flag is enabled" do
+      before do
+        Account.site_admin.enable_feature!(:federated_pseudonym_attributes)
+      end
+
+      it "calls FederatedPseudonymAttributes.load_from with session" do
+        expect(AuthenticationMethods::FederatedPseudonymAttributes).to receive(:load_from).with(@controller.session)
+        @controller.send(:load_user)
+      end
+    end
+
+    context "when feature flag is disabled" do
+      before do
+        Account.site_admin.disable_feature!(:federated_pseudonym_attributes)
+      end
+
+      it "does not call FederatedPseudonymAttributes.load_from" do
+        expect(AuthenticationMethods::FederatedPseudonymAttributes).not_to receive(:load_from)
+        @controller.send(:load_user)
+      end
+    end
+
+    context "when current_pseudonym is nil" do
+      before do
+        Account.site_admin.enable_feature!(:federated_pseudonym_attributes)
+        @controller.instance_variable_set(:@current_pseudonym, nil)
+        allow(@controller).to receive(:load_pseudonym_from_access_token).and_return(nil)
+        allow(PseudonymSession).to receive(:find_with_validation).and_return(nil)
+      end
+
+      it "does not call FederatedPseudonymAttributes.load_from" do
+        expect(AuthenticationMethods::FederatedPseudonymAttributes).not_to receive(:load_from)
+        @controller.send(:load_user)
       end
     end
   end

@@ -417,7 +417,9 @@ el:
     report_header_token_dev_key_id: "id κλειδιού dev"
     report_header_token_dev_key_name: "όνομα κλειδιού dev"
     report_header_token_hint: "υπόδειξη για διακριτικό token"
+    report_header_token_id: id
     report_header_token_last_used: "χρησιμοποιήθηκε τελευταία φορά"
+    report_header_token_status: κατάσταση
     report_header_user_id: "id χρήστη"
     report_header_user_name: "όνομα χρήστη"
     report_header_user_sis_id: "id sis χρήστη"
@@ -1739,6 +1741,7 @@ el:
       recipients_required: "Απαιτείται τουλάχιστον ένας παραλήπτης"
       threshold_should_be_numeric: "Πρέπει να είναι θετικό νούμερο"
   alerts_6b871b71: Συναγερμοί
+  aligned_outcomes_d0a0c159: "Αποτελέσματα που Ευθυγραμμίστηκαν"
   all_4321c3a1: Όλα
   all_account_types_e83c1516: "Όλοι οι τύποι των Λογαριασμών"
   all_accounts_3bafc860: "Όλοι οι λογαριασμοί"
@@ -2816,6 +2819,7 @@ el:
   big_blue_button_conference: 
     recording_setting: Εγγράφεται
     recording_setting_enabled_description: "Ενεργοποίηση της εγγραφής για αυτή τη συνεδρία"
+  bio_a519d807: Βιογραφικό
   blackboard: 
     no_manifest: "Το zip αρχείο Blackboard δεν περιέχει αρχείο imsmanifest.xml στον κατάλογο ρίζας."
   blank_38df4238: κενό
@@ -3439,6 +3443,8 @@ el:
   close_and_return_to_canvas_80544344: "Κλείσιμο και επιστροφή στο Canvas"
   close_d634289d: Κλείσιμο
   close_for_comments_37783f56: "Κλεισμένο για Σχόλια"
+  close_rubric_a0fc8166: "Κλείσιμο Ρουμπρίκας"
+  closed_983a96fe: Κλειστό
   closed_for_comments_e395b42f: "Κλεισμένο για Σχόλια"
   collaboration_was_deleted_9cf9934b: "Η συνεργασία διαγράφηκε"
   collaborations: 
@@ -3712,6 +3718,7 @@ el:
   confirmation_code_required_22984955: "Κωδικός επιβεβαίωσης (απαιτείται)"
   confirmation_failed_please_try_again_ae566d37: "<mrk mid=\"5637\" mtype=\"seg\">Απέτυχε η επιβεβαίωση.</mrk>  <mrk mid=\"5638\" mtype=\"seg\">Παρακαλώ δοκιμάστε ξανά.</mrk>"
   confirming_2df4b68f: "Επικύρωση σε λειτουργία..."
+  confirming_course_name_5a509f48: "Επιβεβαίωση %{course_name}..."
   consumer_key_6f94ba11: "Κλειδί Καταναλωτή"
   contact_a6e7f6da: "Τρόποι επικοινωνίας"
   content_exports: 
@@ -4589,6 +4596,7 @@ el:
   course_home_4c4c0107: "Αρχική Σελίδα Μαθήματος"
   course_home_sub_navigation_b1ee6b03: "Υπο-πλοήγηση στην Αρχική Σελίδα του Μαθήματος"
   course_id_8bd2a21c: "ID Μαθήματος"
+  course_id_course_id_2841413a: "ID Μαθήματος «%{course_id}»"
   course_id_f8640bb8: course_id
   course_implemented_apps_fa658f5a: "Εφαρμογές που Εφαρμόστηκαν στο Μάθημα"
   course_list: 
@@ -4667,8 +4675,16 @@ el:
   course_name_45175338: "όνομα μαθήματος"
   course_name_63b973d1: "Όνομα Μαθήματος"
   course_name_is_required_90919349: "Απαιτείται όνομα μαθήματος"
+  course_name_not_authorized_for_cross_listing_353e500f: "Δεν υπάρχει εξουσιοδότηση για την αφαίρεση του μαθήματος %{course_name} από τη λίστα"
   course_name_successfully_added_48116a50: "Το μάθημα %{course_name} προστέθηκε επιτυχώς!"
   course_navigation_dd035109: "Πλοήγηση στο μάθημα"
+  course_navigation_settings: 
+    buttons: 
+      save: Αποθήκευση
+    drag_details: "Η απενεργοποίηση των περισσότερων σελίδων θα έχει ως αποτέλεσμα την ανακατεύθυνση των σπουδαστών που επισκέπτονται αυτές τις σελίδες στην αρχική σελίδα του μαθήματος."
+    drag_to_hide: "Μεταφορά αντικειμένων εδώ, για να τα αποκρύψετε από μαθητές."
+    help: 
+      edit_navigation: "Σύρετε και αποθέστε στοιχεία για να τα επανατοποθετήσετε στην πλοήγηση του μαθήματος."
   course_option_links_a79d263d: "Σύνδεσμοι προς τις επιλογές των μαθημάτων"
   course_outcomes_7dc1cbc7: "Αποτελέσματα Μαθήματος"
   course_pages_449f1dd4: "Σελίδες Μαθήματος"
@@ -4826,6 +4842,13 @@ el:
     master_course_restrictions: 
       labels: 
         due_dates: "Καταληκτικές Ημερομηνίες"
+    navigation_form: 
+      drag_details: "Η απενεργοποίηση των περισσότερων σελίδων θα έχει ως αποτέλεσμα την ανακατεύθυνση των σπουδαστών που επισκέπτονται αυτές τις σελίδες στην αρχική σελίδα του μαθήματος."
+      drag_to_hide: "Μεταφορά αντικειμένων εδώ, για να τα αποκρύψετε από μαθητές."
+      help: 
+        edit_navigation: "Σύρετε και αποθέστε στοιχεία για να τα επανατοποθετήσετε στην πλοήγηση του μαθήματος."
+      titles: 
+        edit_navigation: "Επεξεργασία Πλοήγησης στο Μάθημα"
     notices: 
       concluded: "Το μάθημα ολοκληρώθηκε επιτυχώς"
       deleted: "Το μάθημα διαγράφηκε επιτυχώς"
@@ -5167,6 +5190,9 @@ el:
   creative_commons_license_725584ae: "Άδεια Creative Commons:"
   criteria_9fac648: Κριτήρια
   criterion_ratings_3eed22e2: "Κατάταξη Βάσει Κριτηρίων"
+  cross_list_section_27801ec9: "Αφαίρεση Τομέα από τη λίστα"
+  cross_list_this_section_889f7287: "Αφαίρεση αυτού του Τομέα από τη λίστα"
+  cross_list_this_section_90aea97f: "Αφαίρεση αυτού του Τομέα από τη λίστα"
   crumbs: 
     access_report: "Αναφορά Πρόσβασης"
     announcements: Ανακοινώσεις
@@ -6744,6 +6770,7 @@ el:
   generate_44e33e72: Δημιουργία
   generate_epub_80e89ea4: "Δημιουργία ePub"
   generate_token_393ab5b4: "Δημιουργία Token"
+  generated_e71c6622: Δημιουργήθηκε
   generated_f26ee56b: "Δημιουργήθηκε:"
   generating_5b5e20f8: "Δημιουργία:"
   generating_c2aabc02: Δημιουργία...
@@ -6785,6 +6812,7 @@ el:
       warning: Προειδοποίηση
   grade_distribution_e52c9256: "Κατανομή Βαθμών"
   grade_export_title: "Εξαγωγή Βαθμών"
+  grade_f949a691: "%{grade}%"
   grade_grade_7e52dd1c: "Βαθμός: %{grade}"
   grade_summary: 
     graph_title: "Μέση βαθμολογία %{mean}, Υψηλή βαθμολογία %{high}, Χαμηλή βαθμολογία %{low}"
@@ -7526,6 +7554,7 @@ el:
   hide_correct_answers_at_b1a59408: "Απόκρυψη Σωστών Απαντήσεων Σε"
   hide_courses_without_enrollments_6df4dfad: "Απόκρυψη μαθημάτων στα οποία δεν υπάρχουν εγγραφές"
   hide_e057ff36: Απόκρυψη
+  hide_rubric_27903c8: "Απόκρυψη Ρουμπρίκας"
   hide_score_total_for_assessment_results_d0ef117f: "Απόκρυψη της συνολικής βαθμολογίας των αποτελεσμάτων αξιολόγησης"
   hide_student_names_3e59e862: "Απόκρυψη Ονομάτων των Μαθητών"
   high_contrast_description: |-
@@ -8355,6 +8384,7 @@ el:
   media_has_been_queued_for_conversion_please_try_ag_74343bbd: "Το αρχείο πολυμέσων έχει προστεθεί στην ουρά για μετατροπή, παρακαλώ δοκιμάστε ξανά σε πολύ λίγο."
   media_objects: 
     media_objects_not_configured: "Τα Αντικείμενα Πολυμέσων δεν έχουν ρυθμιστεί"
+    video_player: "Πρόγραμμα Αναπαραγωγής Βίντεο"
   media_recording_77cddc52: "Ηχογράφηση Αρχείου Πολυμέσων"
   media_recording_f53c5ef1: "Ηχογράφηση αρχείου πολυμέσων"
   media_recording_submission_b7fd1491: "Υποβολή Ηχογράφησης Αρχείου Πολυμέσων"
@@ -10248,6 +10278,7 @@ el:
   not_a_number: "πρέπει να είναι θετικός αριθμός"
   not_all_sections_will_be_assigned_this_item_4e2b8eaa: "Αυτό το στοιχείο δεν θα υπάρχει σε όλους τους τομείς."
   not_available_487d3648: "Δεν διατίθεται"
+  not_available_until_14e61f1e: "Μη διαθέσιμο μέχρι"
   not_available_until_next_submission_2175158: "Μη διαθέσιμο έως την επόμενη υποβολή"
   not_completed_d70acea3: "Δεν έχει ολοκληρωθεί"
   not_deleted_2a7f63ef: "(χωρίς διαγραφή)"
@@ -10256,7 +10287,9 @@ el:
   not_installed_37a21a76: "Δεν εγκαταστάθηκε"
   not_published_73f7079: "Μη δημοσιευμένο"
   not_synced_529cbf29: "Δεν έχει συγχρονιστεί"
+  not_yet_available_9aa23a77: "Δεν είναι ακόμα διαθέσιμο"
   not_yet_completed_345a0bca: "Δεν έχει ολοκληρωθεί ακόμη"
+  not_yet_graded_8b655a7: "Δεν έχει βαθμολογηθεί ακόμη"
   note_8b73ce09: Σημείωση
   note_it_may_take_up_to_a_week_for_the_beta_url_to__d695bddc: "<mrk mid=\"6194\" mtype=\"seg\">Σημείωση:</mrk> <mrk mid=\"6195\" mtype=\"seg\">Μπορεί να χρειαστεί έως και μία εβδομάδα για την παροχή του Beta URL, ανάλογα με τον κύκλο ανανέωσης Beta.</mrk>"
   note_length_cannot_exceed_maxlength_characters_82798b1: "Το μέγεθος της σημείωσης δεν μπορεί να υπερβαίνει τους %{maxLength} χαρακτήρες."
@@ -10618,6 +10651,7 @@ el:
     : Ναι
   options_3ab0ea65: Επιλογές
   or_ef4e808: ή
+  or_enter_the_course_s_id_46e0792a: "Ή Εισαγάγετε το ID του Μαθήματος"
   orange_81386a62: Πορτοκαλί
   orbis_report_header_assignment_id: "id αξιολόγισης"
   orbis_report_header_assignment_title: "τίτλος εργασίας"
@@ -11412,6 +11446,7 @@ el:
   primary_color_button_disabled_9081ddff: "Το κουμπί βασικού χρώματος έχει απενεργοποιηθεί"
   priority_dd4381ee: Προτεραιότητα
   privacy_290109ea: Απόρρητο
+  privacy_notice_7eff08fe: "Σημείωση περί Απορρήτου"
   privacy_policy_c68f482a: "Πολιτική Απορρήτου"
   private_copyrighted_3cac9686: "Ιδιωτική (Προστατευόμενη)"
   process_as_ui_changes_8e34ed2a: "Επεξεργασία ως αλλαγές UI"
@@ -13017,6 +13052,7 @@ el:
   ratio_answered_correctly_b0c1e7d: "%{ratio}% απάντησαν σωστά"
   ratio_responded_correctly_6d890107: "%{ratio}% απάντησαν σωστά"
   re_activate_user_f7d77c9a: "Επανενεργοποίηση Χρήστη"
+  re_cross_list_this_section_faf7df4d: "Επαναδιαγραφή αυτού του Τομέα από τη Λίστα"
   re_send_confirmation_bcc66940: "Επαναποστολή Επιβεβαίωσης"
   re_sending_379a8580: Επαναποστολή...
   re_submit_assignment_b3e2bd28: "Υποβάλετε ξανά την Εργασία"
@@ -13587,6 +13623,7 @@ el:
   search_for_a_course_58fdc7a6: "Αναζήτησης Μαθήματος"
   search_for_a_deleted_course_by_id_f553398d: "Εύρευση για ένα μάθημα που έχει αφαιρεθεί με αριθμό ταυτοποίησης/ID"
   search_for_assignment_8149cb1: "Αναζήτηση Εργασίας"
+  search_for_course_e1a1dfc6: "Εύρεση για Μάθημα"
   search_for_files_7541fb28: "Αναζήτηση αρχείων"
   search_for_people_by_id_or_name_36107593: "Εύρευση ατόμων με αριθμό ταυτοποίησης/ID ή όνομα"
   search_groups_or_people_6c15d6ad: "Αναζήτηση Ομάδων ή Ατόμων"
@@ -13630,6 +13667,7 @@ el:
   section_name_is_too_long_9cec2a30: "Το Όνομα του Τμήματος είναι πολύ μακρύ"
   section_sis_id_6f989834: "section sis id"
   section_starts_at_65eaed1: "Ο τομέας ξεκινάει στις"
+  section_successfully_cross_listed_86eb2765: "Ο τομέας αφαιρέθηκε επιτυχώς!"
   section_successfully_de_cross_listed_df3b64e: "Ο τομέας επαναφέρθηκε επιτυχώς!"
   sections: 
     section_created: "Ο τομέας δημιουργήθηκε επιτυχώς!"
@@ -13742,6 +13780,7 @@ el:
   select_the_file_you_want_to_associate_with_this_mo_c88fcd46: "Επιλέξτε το αρχείο που θέλετε να συνδέσετε με αυτή την *ενότητα* ή προσθέστε ένα αρχείο επιλέγοντας «Νέο Αρχείο»."
   select_video_file_35b61d4e: "Επιλογή Αρχείου Βίντεο"
   selected_answer: "Επιλέξατε αυτή την απάντηση."
+  selected_course_9bf57f33: "Επιλεγμένο Μάθημα"
   selected_subtree_a7693937: "Επιλεγμένο %{subtree}"
   self_enrollments: 
     already_enrolled: 
@@ -14565,6 +14604,7 @@ el:
   starred_5a9efa8a: "Με Αστερίσκο"
   start_5a4cfcd6: Έναρξη
   start_a_new_course_57ae2480: "Ξεκινήστε Νέο Μάθημα"
+  start_at_c29f35f1: "Ξεκινά Στις"
   start_date_e937be8a: "Αρχική Ημερομηνία"
   start_date_field_for_styleguide_8a8ab1d6: "Πεδίο Ημερομηνίας έναρξης ισχύος styleguide"
   start_link_validation_dc0ac99c: "Έναρξη Επικύρωσης Συνδέσμου"
@@ -14790,6 +14830,7 @@ el:
       teachers_notified_of_comments: "Οι καθηγητές και ο υποβάλλων θα ειδοποιηθούν για όλα τα σχόλια."
     show_preview: 
       anonymous_username: "Αυτός ο Σπουδαστής"
+      assignment_locked: "Αυτή η εργασία είναι κλειδωμένη προς το παρόν"
       discussion_submission_description: "<mrk mid=\"3135\" mtype=\"seg\">Οι υποβολές για αυτό το μάθημα είναι δημοσιεύσεις στη συζήτηση της εργασίας.</mrk> <mrk mid=\"3136\" mtype=\"seg\">Παρακάτω θα βρείτε τις δημοσιεύσεις στη συζήτηση από τον χρήστη %{user} ή μπορείτε να επιλέξετε *εμφάνιση πλήρους συζήτησης*.</mrk>"
       discussion_submission_description_without_link: "<mrk mid=\"7155\" mtype=\"seg\">Οι υποβολές για αυτό το μάθημα είναι δημοσιεύσεις στη συζήτηση της εργασίας.</mrk> <mrk mid=\"7156\" mtype=\"seg\">Παρακάτω θα βρείτε τις δημοσιεύσεις σε συζητήσεις του χρήστη %{user}.</mrk>"
       entry_no_image: "Έχετε υπόψη ότι αυτή η σελίδα μπορεί να έχει αλλάξει από τότε που έγινε η υποβολή."

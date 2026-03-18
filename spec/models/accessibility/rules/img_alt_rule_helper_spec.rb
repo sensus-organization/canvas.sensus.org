@@ -40,28 +40,6 @@ describe Accessibility::Rules::ImgAltRuleHelper do
     end
   end
 
-  describe ".alt_text_valid?" do
-    it "returns true for valid alt text" do
-      expect(described_class.alt_text_valid?("A beautiful landscape")).to be true
-      expect(described_class.alt_text_valid?("Person smiling at camera")).to be true
-    end
-
-    it "returns false for blank alt text" do
-      expect(described_class.alt_text_valid?("")).to be false
-      expect(described_class.alt_text_valid?(nil)).to be false
-    end
-
-    it "returns false for alt text longer than MAX_LENGTH characters" do
-      long_text = "a" * (Accessibility::Rules::ImgAltRuleHelper::MAX_LENGTH + 1)
-      expect(described_class.alt_text_valid?(long_text)).to be false
-    end
-
-    it "returns true for alt text exactly MAX_LENGTH characters" do
-      text = "a" * Accessibility::Rules::ImgAltRuleHelper::MAX_LENGTH
-      expect(described_class.alt_text_valid?(text)).to be true
-    end
-  end
-
   describe ".adjust_img_style" do
     it "returns styled HTML for an image element" do
       html = '<img src="test.jpg" alt="test">'
@@ -70,7 +48,12 @@ describe Accessibility::Rules::ImgAltRuleHelper do
 
       result = described_class.adjust_img_style(elem)
 
-      expect(result).to include('style="max-width: 100%; max-height: 13rem; object-fit: contain;"')
+      expect(result).to include("display: flex")
+      expect(result).to include("justify-content: center")
+      expect(result).to include("align-items: center")
+      expect(result).to include("max-width: 100%")
+      expect(result).to include("max-height: 100%")
+      expect(result).to include("object-fit: contain")
       expect(result).to include('src="test.jpg"')
       expect(result).to include('alt="test"')
     end
@@ -84,11 +67,16 @@ describe Accessibility::Rules::ImgAltRuleHelper do
 
       result = described_class.fix_alt_text!(elem, nil)
 
-      expect(result).to be_a(Array)
-      expect(result.length).to eq(2)
+      expect(result).to be_a(Hash)
+      expect(result[:changed]).to eq(elem)
       expect(elem["role"]).to eq("presentation")
       expect(elem["alt"]).to eq("")
-      expect(result[1]).to include('style="max-width: 100%; max-height: 13rem; object-fit: contain;"')
+      expect(result[:content_preview]).to include("display: flex")
+      expect(result[:content_preview]).to include("justify-content: center")
+      expect(result[:content_preview]).to include("align-items: center")
+      expect(result[:content_preview]).to include("max-width: 100%")
+      expect(result[:content_preview]).to include("max-height: 100%")
+      expect(result[:content_preview]).to include("object-fit: contain")
     end
 
     it "sets alt text for valid values" do
@@ -98,10 +86,15 @@ describe Accessibility::Rules::ImgAltRuleHelper do
 
       result = described_class.fix_alt_text!(elem, "A beautiful landscape")
 
-      expect(result).to be_a(Array)
-      expect(result.length).to eq(2)
+      expect(result).to be_a(Hash)
+      expect(result[:changed]).to eq(elem)
       expect(elem["alt"]).to eq("A beautiful landscape")
-      expect(result[1]).to include('style="max-width: 100%; max-height: 13rem; object-fit: contain;"')
+      expect(result[:content_preview]).to include("display: flex")
+      expect(result[:content_preview]).to include("justify-content: center")
+      expect(result[:content_preview]).to include("align-items: center")
+      expect(result[:content_preview]).to include("max-width: 100%")
+      expect(result[:content_preview]).to include("max-height: 100%")
+      expect(result[:content_preview]).to include("object-fit: contain")
     end
 
     it "raises error for filename-like values" do

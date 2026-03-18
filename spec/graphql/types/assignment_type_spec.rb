@@ -102,6 +102,20 @@ describe Types::AssignmentType do
 
   describe "hasPlagiarismTool" do
     it "returns true when assignment has a plagiarism tool configured" do
+      assignment.assignment_configuration_tool_lookups.create!(
+        tool_product_code: "product",
+        tool_vendor_code: "vendor",
+        tool_resource_type_code: "resource-type-code",
+        tool_type: "Lti::MessageHandler"
+      )
+      expect(assignment_type.resolve("hasPlagiarismTool")).to be true
+    end
+
+    it "returns false when assignment has no plagiarism tool configured" do
+      expect(assignment_type.resolve("hasPlagiarismTool")).to be false
+    end
+
+    it "returns false when CPF has been migrated" do
       tool = course.context_external_tools.create!(
         name: "Plagiarism Tool",
         url: "http://example.com",
@@ -112,10 +126,10 @@ describe Types::AssignmentType do
         tool:,
         tool_type: "ContextExternalTool"
       )
-      expect(assignment_type.resolve("hasPlagiarismTool")).to be true
-    end
 
-    it "returns false when assignment has no plagiarism tool configured" do
+      # Mock the migrated? method to return true
+      allow_any_instance_of(AssignmentConfigurationToolLookup).to receive(:migrated?).and_return(true)
+
       expect(assignment_type.resolve("hasPlagiarismTool")).to be false
     end
   end
@@ -279,6 +293,130 @@ describe Types::AssignmentType do
     result = GraphQLTypeTester.new(assignment, current_user: student3).resolve("assessmentRequestsForCurrentUser { user { name } }")
     expect(result.count).to eq 1
     expect(result[0]).to eq student.name
+  end
+
+  it "returns assessment requests ordered by id for the current user" do
+    student2 = student_in_course(course:, active_all: true).user
+    student3 = student_in_course(course:, active_all: true).user
+    student4 = student_in_course(course:, active_all: true).user
+
+    assignment.assign_peer_review(student, student2)
+    assignment.assign_peer_review(student, student3)
+    assignment.assign_peer_review(student, student4)
+
+    result = assignment_type.resolve("assessmentRequestsForCurrentUser { _id }")
+    expect(result.count).to eq 3
+
+    ids = result.map(&:to_i)
+    expect(ids).to eq(ids.sort)
+  end
+
+  describe "assessmentRequestsForUser" do
+    let(:student2) { student_in_course(course:, name: "Matthew Lemon", active_all: true).user }
+    let(:student3) { student_in_course(course:, name: "Rob Orton", active_all: true).user }
+
+    before do
+      assignment.assign_peer_review(student, student2)
+      assignment.assign_peer_review(student2, student3)
+      assignment.assign_peer_review(student, student3)
+    end
+
+    context "when current user has grade permission" do
+      it "returns assessment requests for specified user" do
+        result = teacher_assignment_type.resolve("assessmentRequestsForUser(userId: \"#{student.id}\") { user { name } }")
+        expect(result.count).to eq 2
+        expect(result).to contain_exactly(student2.name, student3.name)
+      end
+
+      it "returns empty array when user has no assessment requests" do
+        result = teacher_assignment_type.resolve("assessmentRequestsForUser(userId: \"#{student3.id}\") { user { name } }")
+        expect(result).to eq([])
+      end
+
+      it "accepts relay-style user IDs" do
+        relay_id = GraphQL::Schema::UniqueWithinType.encode("User", student.id)
+        result = teacher_assignment_type.resolve("assessmentRequestsForUser(userId: \"#{relay_id}\") { user { name } }")
+        expect(result.count).to eq 2
+      end
+
+      it "accepts legacy user IDs" do
+        result = teacher_assignment_type.resolve("assessmentRequestsForUser(userId: \"#{student.id}\") { user { name } }")
+        expect(result.count).to eq 2
+      end
+
+      it "returns nil for non-existent user" do
+        result = teacher_assignment_type.resolve("assessmentRequestsForUser(userId: \"999999\") { user { name } }")
+        expect(result).to be_nil
+      end
+    end
+
+    context "when current user lacks grade permission" do
+      it "returns nil" do
+        result = assignment_type.resolve("assessmentRequestsForUser(userId: \"#{student2.id}\") { user { name } }")
+        expect(result).to be_nil
+      end
+    end
+
+    context "with non-participating students" do
+      it "filters out assessment requests for deleted enrollments" do
+        student2.enrollments.where(course:).destroy_all
+        result = teacher_assignment_type.resolve("assessmentRequestsForUser(userId: \"#{student.id}\") { user { name } }")
+        expect(result).not_to include(student2.name)
+      end
+    end
+
+    context "with concluded enrollments" do
+      it "filters out assessment requests for concluded enrollments" do
+        enrollment = student2.enrollments.where(course:).first
+        enrollment.conclude
+        result = teacher_assignment_type.resolve("assessmentRequestsForUser(userId: \"#{student.id}\") { user { name } }")
+        expect(result).to be_an(Array)
+        expect(result).not_to include(student2.name)
+      end
+    end
+  end
+
+  describe "peerReviewSubAssignment" do
+    context "when current user has grade permission" do
+      context "when peer_review_allocation_and_grading feature is enabled" do
+        before do
+          course.enable_feature!(:peer_review_allocation_and_grading)
+          assignment.update!(peer_reviews: true)
+        end
+
+        it "returns the peer review sub assignment" do
+          peer_review_sub_assignment = peer_review_model(parent_assignment: assignment)
+          result = teacher_assignment_type.resolve("peerReviewSubAssignment { _id }")
+          expect(result).to eq peer_review_sub_assignment.id.to_s
+        end
+
+        it "returns nil when no peer review sub assignment exists" do
+          result = teacher_assignment_type.resolve("peerReviewSubAssignment { _id }")
+          expect(result).to be_nil
+        end
+      end
+
+      context "when peer_review_allocation_and_grading feature is disabled" do
+        it "returns nil" do
+          peer_review_model(parent_assignment: assignment)
+          course.disable_feature!(:peer_review_allocation_and_grading)
+          result = teacher_assignment_type.resolve("peerReviewSubAssignment { _id }")
+          expect(result).to be_nil
+        end
+      end
+    end
+
+    context "when current user lacks grade permission" do
+      before do
+        course.enable_feature!(:peer_review_allocation_and_grading)
+      end
+
+      it "returns nil for students" do
+        peer_review_model(parent_assignment: assignment)
+        result = assignment_type.resolve("peerReviewSubAssignment { _id }")
+        expect(result).to be_nil
+      end
+    end
   end
 
   it "works with timezone stuffs" do
@@ -1265,11 +1403,11 @@ describe Types::AssignmentType do
       it "sub_submissions return correct submissions corresponding to the sub assignments" do
         root_entry = @topic.discussion_entries.create!(user: student, message: "my reply to topic")
         2.times { |i| @topic.discussion_entries.create!(user: student, message: "my child reply #{i}", parent_entry: root_entry) }
-        @topic.discussion_entries.create!(user: @other_student, message: "other student reply to topic")
 
         query = GraphQLTypeTester.new(@assignment, current_user: teacher)
 
-        expect(query.resolve("submissionsConnection {nodes {subAssignmentSubmissions {assignmentId}}}")).to match_array [[@c1.id.to_s, @c2.id.to_s]]
+        result = query.resolve("submissionsConnection {nodes {subAssignmentSubmissions {assignmentId}}}")
+        expect(result.flatten).to contain_exactly(@c1.id.to_s, @c2.id.to_s)
       end
     end
   end
@@ -1734,7 +1872,7 @@ describe Types::AssignmentType do
         @student1 = student_in_course(course: @peer_review_course, name: "Student One", active_all: true).user
         @student2 = student_in_course(course: @peer_review_course, name: "Student Two", active_all: true).user
 
-        @peer_review_course.enable_feature!(:peer_review_allocation)
+        @peer_review_course.enable_feature!(:peer_review_allocation_and_grading)
 
         AllocationRule.create!(
           assignment: @peer_review_assignment,
@@ -1780,7 +1918,7 @@ describe Types::AssignmentType do
       end
 
       it "returns nil for peer review status when feature is disabled" do
-        @peer_review_course.disable_feature!(:peer_review_allocation)
+        @peer_review_course.disable_feature!(:peer_review_allocation_and_grading)
 
         result = peer_review_assignment_type.resolve("assignedStudents { nodes { peerReviewStatus { mustReviewCount } } }")
 
@@ -1790,7 +1928,9 @@ describe Types::AssignmentType do
       end
 
       it "returns nil for peer review status when peer reviews are disabled" do
-        @peer_review_assignment.update!(peer_reviews: false)
+        # Skip validation: testing GraphQL response format when peer reviews disabled,
+        # not the business logic that prevents this state from occurring normally
+        @peer_review_assignment.update_attribute(:peer_reviews, false)
 
         result = peer_review_assignment_type.resolve("assignedStudents { nodes { peerReviewStatus { mustReviewCount } } }")
 
@@ -1990,6 +2130,417 @@ describe Types::AssignmentType do
       expect(result).to be_an(Array)
       expect(result.length).to eq(1)
     end
+
+    describe "peerReviewDates" do
+      let(:peer_review_assignment) do
+        course.assignments.create!(
+          title: "Peer Review Assignment",
+          points_possible: 10,
+          peer_reviews: true,
+          peer_review_count: 2
+        )
+      end
+      let(:peer_review_assignment_type) { GraphQLTypeTester.new(peer_review_assignment, current_user: student) }
+      let(:teacher_peer_review_assignment_type) { GraphQLTypeTester.new(peer_review_assignment, current_user: teacher) }
+
+      before do
+        course.enable_feature!(:peer_review_allocation_and_grading)
+      end
+
+      it "returns nil when peer_review_sub_assignment does not exist" do
+        peer_review_assignment_type.extract_result = false
+        result = peer_review_assignment_type.resolve("assignedToDates { dueAt peerReviewDates { dueAt unlockAt lockAt } }")
+        assigned_to_dates = result["assignedToDates"]
+
+        expect(assigned_to_dates).to be_an(Array)
+        expect(assigned_to_dates).not_to be_empty
+        expect(assigned_to_dates.first["peerReviewDates"]).to be_nil
+      end
+
+      context "with peer_review_sub_assignment" do
+        let!(:peer_review_sub) do
+          service = PeerReview::PeerReviewCreatorService.new(
+            parent_assignment: peer_review_assignment,
+            points_possible: 5
+          )
+          service.call
+
+          peer_review_assignment.reload.peer_review_sub_assignment.tap do |sub|
+            sub.update!(
+              due_at: 2.weeks.from_now,
+              unlock_at: 1.week.from_now,
+              lock_at: 3.weeks.from_now
+            )
+          end
+        end
+
+        it "includes peerReviewDates for student" do
+          peer_review_assignment_type.extract_result = false
+          result = peer_review_assignment_type.resolve("assignedToDates { dueAt peerReviewDates { dueAt unlockAt lockAt } }")
+          assigned_to_dates = result["assignedToDates"]
+
+          expect(assigned_to_dates).to be_an(Array)
+          expect(assigned_to_dates).not_to be_empty
+
+          peer_review_dates = assigned_to_dates.first["peerReviewDates"]
+          expect(peer_review_dates).not_to be_nil
+          expect(Time.iso8601(peer_review_dates["dueAt"]).to_i).to eq(peer_review_sub.due_at.to_i)
+          expect(Time.iso8601(peer_review_dates["unlockAt"]).to_i).to eq(peer_review_sub.unlock_at.to_i)
+          expect(Time.iso8601(peer_review_dates["lockAt"]).to_i).to eq(peer_review_sub.lock_at.to_i)
+        end
+
+        it "includes peerReviewDates for teacher" do
+          teacher_peer_review_assignment_type.extract_result = false
+          result = teacher_peer_review_assignment_type.resolve("assignedToDates { dueAt peerReviewDates { dueAt unlockAt lockAt } }")
+          assigned_to_dates = result["assignedToDates"]
+
+          expect(assigned_to_dates).to be_an(Array)
+          expect(assigned_to_dates).not_to be_empty
+
+          peer_review_dates = assigned_to_dates.first["peerReviewDates"]
+          expect(peer_review_dates).not_to be_nil
+          expect(Time.iso8601(peer_review_dates["dueAt"]).to_i).to eq(peer_review_sub.due_at.to_i)
+          expect(Time.iso8601(peer_review_dates["unlockAt"]).to_i).to eq(peer_review_sub.unlock_at.to_i)
+          expect(Time.iso8601(peer_review_dates["lockAt"]).to_i).to eq(peer_review_sub.lock_at.to_i)
+        end
+
+        it "returns null values when peer review dates are not set" do
+          peer_review_sub.update!(due_at: nil, unlock_at: nil, lock_at: nil)
+
+          peer_review_assignment_type.extract_result = false
+          result = peer_review_assignment_type.resolve("assignedToDates { dueAt peerReviewDates { dueAt unlockAt lockAt } }")
+          assigned_to_dates = result["assignedToDates"]
+
+          expect(assigned_to_dates).to be_an(Array)
+          expect(assigned_to_dates).not_to be_empty
+
+          peer_review_dates = assigned_to_dates.first["peerReviewDates"]
+          expect(peer_review_dates).not_to be_nil
+          expect(peer_review_dates["dueAt"]).to be_nil
+          expect(peer_review_dates["unlockAt"]).to be_nil
+          expect(peer_review_dates["lockAt"]).to be_nil
+        end
+
+        it "includes override-specific peerReviewDates using parent_override relationship" do
+          section1 = course.course_sections.create!(name: "Section 1")
+          section2 = course.course_sections.create!(name: "Section 2")
+
+          section1_pr_due = 2.weeks.from_now
+          section1_pr_unlock = 1.5.weeks.from_now
+          section1_pr_lock = 2.5.weeks.from_now
+          section2_pr_due = 12.days.from_now
+          section2_pr_unlock = 11.days.from_now
+          section2_pr_lock = 13.days.from_now
+
+          parent_override1 = peer_review_assignment.assignment_overrides.create!(
+            set: section1,
+            due_at: 1.week.from_now
+          )
+          parent_override2 = peer_review_assignment.assignment_overrides.create!(
+            set: section2,
+            due_at: 10.days.from_now
+          )
+
+          peer_review_sub.assignment_overrides.create!(
+            parent_override: parent_override1,
+            set: section1,
+            due_at: section1_pr_due,
+            unlock_at: section1_pr_unlock,
+            lock_at: section1_pr_lock
+          )
+          peer_review_sub.assignment_overrides.create!(
+            parent_override: parent_override2,
+            set: section2,
+            due_at: section2_pr_due,
+            unlock_at: section2_pr_unlock,
+            lock_at: section2_pr_lock
+          )
+
+          teacher_peer_review_assignment_type.extract_result = false
+          result = teacher_peer_review_assignment_type.resolve("assignedToDates { id dueAt title peerReviewDates { dueAt unlockAt lockAt } }")
+          assigned_to_dates = result["assignedToDates"]
+
+          expect(assigned_to_dates).to be_an(Array)
+          expect(assigned_to_dates.length).to be >= 2
+
+          section1_entry = assigned_to_dates.find { |e| e["id"] == parent_override1.id.to_s }
+          expect(section1_entry).not_to be_nil
+          section1_peer_review_dates = section1_entry["peerReviewDates"]
+          expect(section1_peer_review_dates).not_to be_nil
+          expect(Time.iso8601(section1_peer_review_dates["dueAt"]).to_i).to eq(section1_pr_due.to_i)
+          expect(Time.iso8601(section1_peer_review_dates["unlockAt"]).to_i).to eq(section1_pr_unlock.to_i)
+          expect(Time.iso8601(section1_peer_review_dates["lockAt"]).to_i).to eq(section1_pr_lock.to_i)
+
+          section2_entry = assigned_to_dates.find { |e| e["id"] == parent_override2.id.to_s }
+          expect(section2_entry).not_to be_nil
+          section2_peer_review_dates = section2_entry["peerReviewDates"]
+          expect(section2_peer_review_dates).not_to be_nil
+          expect(Time.iso8601(section2_peer_review_dates["dueAt"]).to_i).to eq(section2_pr_due.to_i)
+          expect(Time.iso8601(section2_peer_review_dates["unlockAt"]).to_i).to eq(section2_pr_unlock.to_i)
+          expect(Time.iso8601(section2_peer_review_dates["lockAt"]).to_i).to eq(section2_pr_lock.to_i)
+        end
+
+        it "falls back to base peer review dates when override has no matching peer review override" do
+          section1 = course.course_sections.create!(name: "Section 1")
+
+          parent_override = peer_review_assignment.assignment_overrides.create!(
+            set: section1,
+            due_at: 1.week.from_now
+          )
+
+          teacher_peer_review_assignment_type.extract_result = false
+          result = teacher_peer_review_assignment_type.resolve("assignedToDates { id dueAt title peerReviewDates { dueAt unlockAt lockAt } }")
+          assigned_to_dates = result["assignedToDates"]
+
+          expect(assigned_to_dates).to be_an(Array)
+          section1_entry = assigned_to_dates.find { |e| e["id"] == parent_override.id.to_s }
+          expect(section1_entry).not_to be_nil
+
+          peer_review_dates = section1_entry["peerReviewDates"]
+          expect(peer_review_dates).not_to be_nil
+          expect(Time.iso8601(peer_review_dates["dueAt"]).to_i).to eq(peer_review_sub.due_at.to_i)
+          expect(Time.iso8601(peer_review_dates["unlockAt"]).to_i).to eq(peer_review_sub.unlock_at.to_i)
+          expect(Time.iso8601(peer_review_dates["lockAt"]).to_i).to eq(peer_review_sub.lock_at.to_i)
+        end
+
+        it "includes base peer review dates for base entries" do
+          teacher_peer_review_assignment_type.extract_result = false
+          result = teacher_peer_review_assignment_type.resolve("assignedToDates { dueAt title base peerReviewDates { dueAt unlockAt lockAt } }")
+          assigned_to_dates = result["assignedToDates"]
+
+          expect(assigned_to_dates).to be_an(Array)
+          base_entry = assigned_to_dates.find { |e| e["base"] == true }
+          expect(base_entry).not_to be_nil
+
+          peer_review_dates = base_entry["peerReviewDates"]
+          expect(peer_review_dates).not_to be_nil
+          expect(Time.iso8601(peer_review_dates["dueAt"]).to_i).to eq(peer_review_sub.due_at.to_i)
+          expect(Time.iso8601(peer_review_dates["unlockAt"]).to_i).to eq(peer_review_sub.unlock_at.to_i)
+          expect(Time.iso8601(peer_review_dates["lockAt"]).to_i).to eq(peer_review_sub.lock_at.to_i)
+        end
+
+        it "students only see their assigned peer review dates" do
+          section1 = course.course_sections.create!(name: "Section 1")
+          section2 = course.course_sections.create!(name: "Section 2")
+
+          student1 = user_factory(active_all: true)
+          student2 = user_factory(active_all: true)
+          course.enroll_student(student1, section: section1, enrollment_state: "active")
+          course.enroll_student(student2, section: section2, enrollment_state: "active")
+
+          section1_pr_due = 2.weeks.from_now
+          section1_pr_unlock = 1.5.weeks.from_now
+          section1_pr_lock = 2.5.weeks.from_now
+          section2_pr_due = 3.weeks.from_now
+          section2_pr_unlock = 2.5.weeks.from_now
+          section2_pr_lock = 3.5.weeks.from_now
+
+          parent_override1 = peer_review_assignment.assignment_overrides.create!(
+            set: section1,
+            due_at: 1.week.from_now
+          )
+          parent_override2 = peer_review_assignment.assignment_overrides.create!(
+            set: section2,
+            due_at: 10.days.from_now
+          )
+
+          peer_review_sub.assignment_overrides.create!(
+            parent_override: parent_override1,
+            set: section1,
+            due_at: section1_pr_due,
+            unlock_at: section1_pr_unlock,
+            lock_at: section1_pr_lock
+          )
+          peer_review_sub.assignment_overrides.create!(
+            parent_override: parent_override2,
+            set: section2,
+            due_at: section2_pr_due,
+            unlock_at: section2_pr_unlock,
+            lock_at: section2_pr_lock
+          )
+
+          student1_type = GraphQLTypeTester.new(peer_review_assignment, current_user: student1)
+          student1_type.extract_result = false
+          result1 = student1_type.resolve("assignedToDates { id dueAt title peerReviewDates { dueAt unlockAt lockAt } }")
+          assigned_to_dates1 = result1["assignedToDates"]
+
+          expect(assigned_to_dates1).to be_an(Array)
+          expect(assigned_to_dates1.length).to eq(1)
+          student1_entry = assigned_to_dates1.first
+          student1_peer_review_dates = student1_entry["peerReviewDates"]
+          expect(student1_peer_review_dates).not_to be_nil
+          expect(Time.iso8601(student1_peer_review_dates["dueAt"]).to_i).to eq(section1_pr_due.to_i)
+          expect(Time.iso8601(student1_peer_review_dates["unlockAt"]).to_i).to eq(section1_pr_unlock.to_i)
+          expect(Time.iso8601(student1_peer_review_dates["lockAt"]).to_i).to eq(section1_pr_lock.to_i)
+
+          student2_type = GraphQLTypeTester.new(peer_review_assignment, current_user: student2)
+          student2_type.extract_result = false
+          result2 = student2_type.resolve("assignedToDates { id dueAt title peerReviewDates { dueAt unlockAt lockAt } }")
+          assigned_to_dates2 = result2["assignedToDates"]
+
+          expect(assigned_to_dates2).to be_an(Array)
+          expect(assigned_to_dates2.length).to eq(1)
+          student2_entry = assigned_to_dates2.first
+          student2_peer_review_dates = student2_entry["peerReviewDates"]
+          expect(student2_peer_review_dates).not_to be_nil
+          expect(Time.iso8601(student2_peer_review_dates["dueAt"]).to_i).to eq(section2_pr_due.to_i)
+          expect(Time.iso8601(student2_peer_review_dates["unlockAt"]).to_i).to eq(section2_pr_unlock.to_i)
+          expect(Time.iso8601(student2_peer_review_dates["lockAt"]).to_i).to eq(section2_pr_lock.to_i)
+        end
+
+        it "returns distinct peer review dates for both section and ADHOC overrides when student has both" do
+          section1 = course.course_sections.create!(name: "Section 1")
+          student1 = user_factory(active_all: true)
+          course.enroll_student(student1, section: section1, enrollment_state: "active")
+
+          section1_pr_due = 2.weeks.from_now
+          section1_pr_unlock = 1.5.weeks.from_now
+          section1_pr_lock = 2.5.weeks.from_now
+          adhoc_pr_due = 3.weeks.from_now
+          adhoc_pr_unlock = 2.5.weeks.from_now
+          adhoc_pr_lock = 3.5.weeks.from_now
+
+          parent_section_override = peer_review_assignment.assignment_overrides.create!(
+            set: section1,
+            due_at: 1.week.from_now
+          )
+
+          parent_adhoc_override = peer_review_assignment.assignment_overrides.create!(
+            due_at: 10.days.from_now
+          )
+          parent_adhoc_override.assignment_override_students.create!(user: student1)
+
+          peer_review_sub.assignment_overrides.create!(
+            parent_override: parent_section_override,
+            set: section1,
+            due_at: section1_pr_due,
+            unlock_at: section1_pr_unlock,
+            lock_at: section1_pr_lock
+          )
+          peer_review_sub.assignment_overrides.create!(
+            parent_override: parent_adhoc_override,
+            due_at: adhoc_pr_due,
+            unlock_at: adhoc_pr_unlock,
+            lock_at: adhoc_pr_lock
+          )
+
+          student1_type = GraphQLTypeTester.new(peer_review_assignment, current_user: student1)
+          student1_type.extract_result = false
+          result = student1_type.resolve("assignedToDates { id dueAt title peerReviewDates { dueAt unlockAt lockAt } }")
+          assigned_to_dates = result["assignedToDates"]
+
+          expect(assigned_to_dates).to be_an(Array)
+          expect(assigned_to_dates.length).to eq(2)
+
+          # Verify section override and its peer review dates
+          section_entry = assigned_to_dates.find { |e| e["id"] == parent_section_override.id.to_s }
+          expect(section_entry).not_to be_nil
+          section_peer_review_dates = section_entry["peerReviewDates"]
+          expect(section_peer_review_dates).not_to be_nil
+          expect(Time.iso8601(section_peer_review_dates["dueAt"]).to_i).to eq(section1_pr_due.to_i)
+
+          # Verify ADHOC override and its peer review dates
+          adhoc_entry = assigned_to_dates.find { |e| e["id"] == parent_adhoc_override.id.to_s }
+          expect(adhoc_entry).not_to be_nil
+          adhoc_peer_review_dates = adhoc_entry["peerReviewDates"]
+          expect(adhoc_peer_review_dates).not_to be_nil
+          expect(Time.iso8601(adhoc_peer_review_dates["dueAt"]).to_i).to eq(adhoc_pr_due.to_i)
+          expect(Time.iso8601(adhoc_peer_review_dates["unlockAt"]).to_i).to eq(adhoc_pr_unlock.to_i)
+          expect(Time.iso8601(adhoc_peer_review_dates["lockAt"]).to_i).to eq(adhoc_pr_lock.to_i)
+
+          # Verify both overrides maintain their own distinct peer review dates
+          expect(adhoc_peer_review_dates["dueAt"]).not_to eq(section_peer_review_dates["dueAt"])
+        end
+
+        it "returns nil when feature flag is disabled" do
+          course.disable_feature!(:peer_review_allocation_and_grading)
+
+          peer_review_assignment_type.extract_result = false
+          result = peer_review_assignment_type.resolve("assignedToDates { dueAt peerReviewDates { dueAt unlockAt lockAt } }")
+          assigned_to_dates = result["assignedToDates"]
+
+          expect(assigned_to_dates).to be_an(Array)
+          expect(assigned_to_dates).not_to be_empty
+          expect(assigned_to_dates.first["peerReviewDates"]).to be_nil
+        end
+
+        it "returns nil when peer_review_sub_assignment is deleted" do
+          peer_review_sub.update!(workflow_state: "deleted")
+
+          peer_review_assignment_type.extract_result = false
+          result = peer_review_assignment_type.resolve("assignedToDates { dueAt peerReviewDates { dueAt unlockAt lockAt } }")
+          assigned_to_dates = result["assignedToDates"]
+
+          expect(assigned_to_dates).to be_an(Array)
+          expect(assigned_to_dates).not_to be_empty
+          expect(assigned_to_dates.first["peerReviewDates"]).to be_nil
+        end
+      end
+    end
+
+    describe "peerReviews pointsPossible field" do
+      let(:peer_review_assignment) do
+        course.assignments.create!(
+          title: "Peer Review Assignment",
+          points_possible: 10,
+          peer_reviews: true,
+          peer_review_count: 2
+        )
+      end
+      let(:peer_review_assignment_type) { GraphQLTypeTester.new(peer_review_assignment, current_user: student) }
+      let(:teacher_peer_review_assignment_type) { GraphQLTypeTester.new(peer_review_assignment, current_user: teacher) }
+
+      before do
+        course.enable_feature!(:peer_review_allocation_and_grading)
+      end
+
+      context "with peer_review_sub_assignment" do
+        let!(:peer_review_sub) do
+          service = PeerReview::PeerReviewCreatorService.new(
+            parent_assignment: peer_review_assignment,
+            points_possible: 5
+          )
+          service.call
+
+          peer_review_assignment.reload.peer_review_sub_assignment.tap do |sub|
+            sub.update!(
+              due_at: 2.weeks.from_now,
+              unlock_at: 1.week.from_now,
+              lock_at: 3.weeks.from_now
+            )
+          end
+        end
+
+        it "returns points from peer review sub-assignment" do
+          expect(peer_review_assignment_type.resolve("peerReviews { pointsPossible }")).to eq 5
+          expect(teacher_peer_review_assignment_type.resolve("peerReviews { pointsPossible }")).to eq 5
+        end
+
+        it "handles zero points" do
+          peer_review_sub.update!(points_possible: 0)
+          expect(peer_review_assignment_type.resolve("peerReviews { pointsPossible }")).to eq 0
+          expect(teacher_peer_review_assignment_type.resolve("peerReviews { pointsPossible }")).to eq 0
+        end
+
+        it "returns nil when peer_reviews is disabled" do
+          peer_review_assignment.update!(peer_reviews: false)
+          expect(peer_review_assignment_type.resolve("peerReviews { pointsPossible }")).to be_nil
+          expect(teacher_peer_review_assignment_type.resolve("peerReviews { pointsPossible }")).to be_nil
+        end
+
+        it "returns nil when no peer review sub-assignment exists" do
+          peer_review_sub.update!(workflow_state: "deleted")
+          expect(peer_review_assignment_type.resolve("peerReviews { pointsPossible }")).to be_nil
+          expect(teacher_peer_review_assignment_type.resolve("peerReviews { pointsPossible }")).to be_nil
+        end
+
+        it "returns nil when feature flag is disabled" do
+          course.disable_feature!(:peer_review_allocation_and_grading)
+          expect(peer_review_assignment_type.resolve("peerReviews { pointsPossible }")).to be_nil
+          expect(teacher_peer_review_assignment_type.resolve("peerReviews { pointsPossible }")).to be_nil
+        end
+      end
+    end
   end
 
   describe "N+1 query prevention" do
@@ -2143,7 +2694,7 @@ describe Types::AssignmentType do
     let(:observer) { observer_in_course(course:, active_all: true).user }
 
     before do
-      course.enable_feature!(:peer_review_allocation)
+      course.enable_feature!(:peer_review_allocation_and_grading)
 
       @allocation_rule_1 = AllocationRule.create!(
         course:,
@@ -2229,7 +2780,7 @@ describe Types::AssignmentType do
 
     context "when feature flag is disabled" do
       before do
-        course.disable_feature!(:peer_review_allocation)
+        course.disable_feature!(:peer_review_allocation_and_grading)
       end
 
       it "returns nil even for teachers" do
@@ -2838,6 +3389,281 @@ describe Types::AssignmentType do
         adhoc_override.assignment_override_students.create!(user: student2)
         run_jobs
       end.to change { hideable_count_query }.from(1).to(0)
+    end
+  end
+
+  context "when object is a PeerReviewSubAssignment" do
+    before(:once) do
+      @prsa_course = Course.create!(name: "PRSA Test Course")
+      @prsa_course.offer!
+      @prsa_teacher = teacher_in_course(course: @prsa_course, active_all: true).user
+      @prsa_student = student_in_course(course: @prsa_course, active_all: true).user
+      @prsa_reviewer = student_in_course(course: @prsa_course, active_all: true).user
+      @prsa_course.enable_feature!(:peer_review_allocation_and_grading)
+
+      @prsa_parent_assignment = @prsa_course.assignments.create!(
+        title: "Parent Assignment",
+        peer_reviews: true,
+        peer_review_count: 2,
+        submission_types: "online_text_entry"
+      )
+      @peer_review_sub_assignment = peer_review_model(parent_assignment: @prsa_parent_assignment)
+      @prsa_parent_assignment.submit_homework(@prsa_student, body: "My submission")
+    end
+
+    def execute_query(query_string, user, variables = {})
+      CanvasSchema.execute(
+        query_string,
+        variables:,
+        context: { current_user: user, request: ActionDispatch::TestRequest.create }
+      )
+    end
+
+    describe "Assignment-only fields return nil for PRSA" do
+      it "returns nil for peerReviewSubAssignment field when object is PRSA" do
+        query = <<~GQL
+          query($id: ID!, $includeTypes: [AssignmentTypeEnum!]) {
+            assignment(id: $id, includeTypes: $includeTypes) {
+              _id
+              assignmentType
+              peerReviewSubAssignment {
+                _id
+              }
+            }
+          }
+        GQL
+
+        result = execute_query(
+          query,
+          @prsa_teacher,
+          { id: @peer_review_sub_assignment.id.to_s, includeTypes: ["PEER_REVIEW_SUB_ASSIGNMENT"] }
+        )
+
+        assignment = result.dig("data", "assignment")
+        expect(assignment["assignmentType"]).to eq "PEER_REVIEW_SUB_ASSIGNMENT"
+        expect(assignment["peerReviewSubAssignment"]).to be_nil
+      end
+
+      it "returns nil for allocationRules field when object is PRSA" do
+        query = <<~GQL
+          query($id: ID!, $includeTypes: [AssignmentTypeEnum!]) {
+            assignment(id: $id, includeTypes: $includeTypes) {
+              _id
+              assignmentType
+              allocationRules {
+                count
+              }
+            }
+          }
+        GQL
+
+        result = execute_query(
+          query,
+          @prsa_teacher,
+          { id: @peer_review_sub_assignment.id.to_s, includeTypes: ["PEER_REVIEW_SUB_ASSIGNMENT"] }
+        )
+
+        assignment = result.dig("data", "assignment")
+        expect(assignment["assignmentType"]).to eq "PEER_REVIEW_SUB_ASSIGNMENT"
+        expect(assignment["allocationRules"]).to be_nil
+      end
+
+      it "returns nil for mySubAssignmentSubmissionsConnection field when object is PRSA" do
+        query = <<~GQL
+          query($id: ID!, $includeTypes: [AssignmentTypeEnum!]) {
+            assignment(id: $id, includeTypes: $includeTypes) {
+              _id
+              assignmentType
+              mySubAssignmentSubmissionsConnection {
+                nodes {
+                  _id
+                }
+              }
+            }
+          }
+        GQL
+
+        result = execute_query(
+          query,
+          @prsa_student,
+          { id: @peer_review_sub_assignment.id.to_s, includeTypes: ["PEER_REVIEW_SUB_ASSIGNMENT"] }
+        )
+
+        assignment = result.dig("data", "assignment")
+        expect(assignment["assignmentType"]).to eq "PEER_REVIEW_SUB_ASSIGNMENT"
+        expect(assignment["mySubAssignmentSubmissionsConnection"]).to be_nil
+      end
+    end
+
+    describe "assessmentRequestsForCurrentUser" do
+      before(:once) do
+        @prsa_parent_assignment.assign_peer_review(@prsa_reviewer, @prsa_student)
+      end
+
+      it "returns assessment requests when querying via parent Assignment" do
+        query = <<~GQL
+          query($id: ID!) {
+            assignment(id: $id) {
+              _id
+              assessmentRequestsForCurrentUser {
+                _id
+                user {
+                  _id
+                }
+              }
+            }
+          }
+        GQL
+
+        result = execute_query(query, @prsa_reviewer, { id: @prsa_parent_assignment.id.to_s })
+
+        assignment = result.dig("data", "assignment")
+        requests = assignment["assessmentRequestsForCurrentUser"]
+        expect(requests).not_to be_empty
+        expect(requests.first.dig("user", "_id")).to eq @prsa_student.id.to_s
+      end
+
+      it "returns empty when querying via PRSA (use parent Assignment instead)" do
+        query = <<~GQL
+          query($id: ID!, $includeTypes: [AssignmentTypeEnum!]) {
+            assignment(id: $id, includeTypes: $includeTypes) {
+              _id
+              assignmentType
+              assessmentRequestsForCurrentUser {
+                _id
+              }
+            }
+          }
+        GQL
+
+        result = execute_query(
+          query,
+          @prsa_reviewer,
+          { id: @peer_review_sub_assignment.id.to_s, includeTypes: ["PEER_REVIEW_SUB_ASSIGNMENT"] }
+        )
+
+        assignment = result.dig("data", "assignment")
+        expect(assignment["assignmentType"]).to eq "PEER_REVIEW_SUB_ASSIGNMENT"
+        expect(assignment["assessmentRequestsForCurrentUser"]).to be_empty
+      end
+    end
+
+    describe "parentAssignment field" do
+      it "loads parent assignment with all expected fields" do
+        query = <<~GQL
+          query($id: ID!, $includeTypes: [AssignmentTypeEnum!]) {
+            assignment(id: $id, includeTypes: $includeTypes) {
+              _id
+              assignmentType
+              parentAssignment {
+                _id
+                name
+                pointsPossible
+                state
+                courseId
+              }
+            }
+          }
+        GQL
+
+        result = execute_query(
+          query,
+          @prsa_teacher,
+          { id: @peer_review_sub_assignment.id.to_s, includeTypes: ["PEER_REVIEW_SUB_ASSIGNMENT"] }
+        )
+
+        assignment = result.dig("data", "assignment")
+        parent = assignment["parentAssignment"]
+        expect(parent["_id"]).to eq @prsa_parent_assignment.id.to_s
+        expect(parent["name"]).to eq @prsa_parent_assignment.name
+        expect(parent["pointsPossible"]).to eq @prsa_parent_assignment.points_possible
+        expect(parent["state"]).to eq @prsa_parent_assignment.workflow_state
+        expect(parent["courseId"]).to eq @prsa_course.id.to_s
+      end
+
+      it "returns nil for parentAssignment when object is Assignment" do
+        query = <<~GQL
+          query($id: ID!) {
+            assignment(id: $id) {
+              _id
+              assignmentType
+              parentAssignment {
+                _id
+              }
+            }
+          }
+        GQL
+
+        result = execute_query(query, @prsa_teacher, { id: @prsa_parent_assignment.id.to_s })
+
+        assignment = result.dig("data", "assignment")
+        expect(assignment["assignmentType"]).to eq "ASSIGNMENT"
+        expect(assignment["parentAssignment"]).to be_nil
+      end
+    end
+
+    describe "groupSubmissionsConnection" do
+      before(:once) do
+        @group_category = @prsa_course.group_categories.create!(name: "Project Groups")
+        @group = @group_category.groups.create!(context: @prsa_course, name: "Group 1")
+        @group.add_user(@prsa_student)
+
+        @group_assignment = @prsa_course.assignments.create!(
+          title: "Group Assignment",
+          peer_reviews: true,
+          peer_review_count: 1,
+          submission_types: "online_text_entry",
+          group_category: @group_category
+        )
+        @group_prsa = peer_review_model(parent_assignment: @group_assignment)
+        @group_assignment.submit_homework(@prsa_student, body: "Group submission")
+      end
+
+      it "returns group submissions for parent Assignment" do
+        query = <<~GQL
+          query($id: ID!) {
+            assignment(id: $id) {
+              _id
+              groupSubmissionsConnection {
+                nodes {
+                  _id
+                }
+              }
+            }
+          }
+        GQL
+
+        result = execute_query(query, @prsa_teacher, { id: @group_assignment.id.to_s })
+
+        assignment = result.dig("data", "assignment")
+        expect(assignment["groupSubmissionsConnection"]["nodes"]).not_to be_empty
+      end
+
+      it "is accessible for PRSA (inherits group_category from parent)" do
+        query = <<~GQL
+          query($id: ID!, $includeTypes: [AssignmentTypeEnum!]) {
+            assignment(id: $id, includeTypes: $includeTypes) {
+              _id
+              assignmentType
+              groupSubmissionsConnection {
+                nodes {
+                  _id
+                }
+              }
+            }
+          }
+        GQL
+
+        result = execute_query(
+          query,
+          @prsa_teacher,
+          { id: @group_prsa.id.to_s, includeTypes: ["PEER_REVIEW_SUB_ASSIGNMENT"] }
+        )
+
+        assignment = result.dig("data", "assignment")
+        expect(assignment["assignmentType"]).to eq "PEER_REVIEW_SUB_ASSIGNMENT"
+        expect(assignment["groupSubmissionsConnection"]).not_to be_nil
+      end
     end
   end
 end

@@ -123,7 +123,9 @@ class Quizzes::QuizzesController < ApplicationController
                               permissions: quiz_options,
                               master_course_status: mc_status,
                               skip_date_overrides: true,
-                              skip_lock_tests: true
+                              skip_lock_tests: true,
+                              skip_description: true,
+                              skip_permissions: @context.user_is_student?(@current_user)
                             }]
       max_name_length = AssignmentUtil.assignment_max_name_length(@context)
       sis_name = AssignmentUtil.post_to_sis_friendly_name(@context)
@@ -383,7 +385,7 @@ class Quizzes::QuizzesController < ApplicationController
       assign_to_tags = @context.account.allow_assign_to_differentiation_tags?
 
       hash = {
-        ASSIGNMENT_ID: @assignment.present? ? @assignment.id : nil,
+        ASSIGNMENT_ID: @assignment.presence&.id,
         ASSIGNMENT_OVERRIDES: assignment_overrides_json(@quiz.overrides_for(@current_user,
                                                                             ensure_set_not_empty: true),
                                                         @current_user,
@@ -1053,7 +1055,7 @@ class Quizzes::QuizzesController < ApplicationController
                                                      quiz: @quiz,
                                                      user: @current_user,
                                                      session:,
-                                                     remote_ip: request.remote_ip,
+                                                     remote_ip: quiz_client_ip,
                                                      access_code: params[:access_code])
 
     if params[:take]
@@ -1162,7 +1164,7 @@ class Quizzes::QuizzesController < ApplicationController
 
   def render_ams_service
     js_env(
-      context_url: context_url(@context, :context_quizzes_url),
+      context_url: named_context_url(@context, :context_quizzes_url),
       PERMISSIONS: { manage_rubrics: @context.grants_right?(@current_user, session, :manage_rubrics) }
     )
     enhanced_rubrics_context_js_env
@@ -1173,6 +1175,7 @@ class Quizzes::QuizzesController < ApplicationController
       })
 
     css_bundle :enhanced_rubrics
+    @body_classes << "full-width padless-content"
     render html: '<div id="ams_container"></div>'.html_safe, layout: true
   end
 

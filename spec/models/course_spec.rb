@@ -52,6 +52,17 @@ describe Course do
       it_behaves_like "a learning outcome context"
     end
 
+    describe "accessibility_course_statistic association" do
+      it "has one accessibility course statistic" do
+        @course.save!
+        stat = AccessibilityCourseStatistic.create!(
+          course: @course,
+          active_issue_count: 5
+        )
+        expect(@course.accessibility_course_statistic).to eq(stat)
+      end
+    end
+
     it "re-runs SubmissionLifecycleManager if enrollment term changes" do
       @course.save!
       @course.enrollment_term = EnrollmentTerm.create!(root_account: Account.default, workflow_state: :active)
@@ -2805,6 +2816,18 @@ describe Course do
         @course.root_account.disable_feature!(:a11y_checker)
       end
 
+      it "returns Accessibility tab if a11y_checker_ga1 feature flag is enabled for teachers" do
+        @course.root_account.enable_feature!(:a11y_checker_ga1)
+        tabs = @course.tabs_available(@user)
+
+        # Checks that Accessibility tab is at the end of the tabs (except for Settings tab)
+        settings_tab_index = tabs.pluck(:id).index(Course::TAB_SETTINGS)
+        accessibility_tab_index = tabs.pluck(:id).index(Course::TAB_ACCESSIBILITY)
+        expect(accessibility_tab_index).to eq(settings_tab_index - 1)
+      ensure
+        @course.root_account.disable_feature!(:a11y_checker_ga1)
+      end
+
       describe "TAB_YOUTUBE_MIGRATION" do
         before do
           @course.enable_feature!(:youtube_migration)
@@ -2933,14 +2956,17 @@ describe Course do
           expect(ai_tab).to be_nil
         end
 
-        it "does not include AI Experiences tab when user lacks permissions" do
+        it "includes AI Experiences tab for students when feature flag is enabled" do
           student = user_factory(active_all: true)
           @course.enroll_student(student, enrollment_state: "active")
 
           tabs = @course.tabs_available(student)
           ai_tab = tabs.find { |t| t[:id] == Course::TAB_AI_EXPERIENCES }
 
-          expect(ai_tab).to be_nil
+          # Tab is visible to all users when feature flag is enabled
+          # Permission checks happen at controller level for what content they can see
+          expect(ai_tab).not_to be_nil
+          expect(ai_tab[:label]).to eq("AI Experiences")
         end
 
         it "includes AI Experiences tab for users with manage_course_content permissions" do
@@ -3131,10 +3157,17 @@ describe Course do
         expect(dtab[:hidden_unused]).to be_falsey
       end
 
-      it "does not hide tabs for completed teacher enrollments" do
-        @user.enrollments.where(course_id: @course).first.complete!
-        tab_ids = @course.tabs_available(@user).pluck(:id)
-        expect(tab_ids).to eql(default_tab_ids)
+      # TODO: Remove this context when ai_experiences hits GA
+      context "without ai_experiences feature" do
+        before do
+          @course.root_account.disable_feature!(:ai_experiences)
+        end
+
+        it "does not hide tabs for completed teacher enrollments" do
+          @user.enrollments.where(course_id: @course).first.complete!
+          tab_ids = @course.tabs_available(@user).pluck(:id)
+          expect(tab_ids).to eql(default_tab_ids)
+        end
       end
 
       it "does not include Announcements without read_announcements rights" do
@@ -3510,12 +3543,19 @@ describe Course do
         end
       end
 
-      it "returns K-6 tabs if feature flag is enabled for students" do
-        @course.enable_feature!(:canvas_k6_theme)
-        tab_ids = @course.tabs_available(@user).pluck(:id)
-        expect(tab_ids).to eq [Course::TAB_HOME, Course::TAB_GRADES]
-      ensure
-        @course.disable_feature!(:canvas_k6_theme)
+      # TODO: Remove this context when ai_experiences hits GA
+      context "without ai_experiences feature" do
+        before do
+          @course.root_account.disable_feature!(:ai_experiences)
+        end
+
+        it "returns K-6 tabs if feature flag is enabled for students" do
+          @course.enable_feature!(:canvas_k6_theme)
+          tab_ids = @course.tabs_available(@user).pluck(:id)
+          expect(tab_ids).to eq [Course::TAB_HOME, Course::TAB_GRADES]
+        ensure
+          @course.disable_feature!(:canvas_k6_theme)
+        end
       end
 
       it "hides unused tabs if not an admin" do
@@ -4542,8 +4582,8 @@ describe Course do
 
         it "generates valid csv without a grading standard" do
           @course.recompute_student_scores_without_send_later
-          expect(@course.generate_grade_publishing_csv_output(@ase, @user, @pseudonym)).to eq [
-            [@ase.map(&:id), <<~CSV, "text/csv"]]
+          expect(@course.generate_grade_publishing_csv_output(@ase, @user, @pseudonym)).to eq(
+            [[@ase.map(&:id), <<~CSV, "text/csv"]])
               publisher_id,publisher_sis_id,course_id,course_sis_id,section_id,section_sis_id,student_id,student_sis_id,enrollment_id,enrollment_status,score
               #{@user.id},U1,#{@course.id},,#{@ase[0].course_section_id},,#{@ase[0].user.id},,#{@ase[0].id},active,95.0
               #{@user.id},U1,#{@course.id},,#{@ase[1].course_section_id},,#{@ase[1].user.id},,#{@ase[1].id},active,65.0
@@ -4560,8 +4600,8 @@ describe Course do
 
         it "generates valid csv without a publishing pseudonym" do
           @course.recompute_student_scores_without_send_later
-          expect(@course.generate_grade_publishing_csv_output(@ase, @user, nil)).to eq [
-            [@ase.map(&:id), <<~CSV, "text/csv"]]
+          expect(@course.generate_grade_publishing_csv_output(@ase, @user, nil)).to eq(
+            [[@ase.map(&:id), <<~CSV, "text/csv"]])
               publisher_id,publisher_sis_id,course_id,course_sis_id,section_id,section_sis_id,student_id,student_sis_id,enrollment_id,enrollment_status,score
               #{@user.id},,#{@course.id},,#{@ase[0].course_section_id},,#{@ase[0].user.id},,#{@ase[0].id},active,95.0
               #{@user.id},,#{@course.id},,#{@ase[1].course_section_id},,#{@ase[1].user.id},,#{@ase[1].id},active,65.0
@@ -4580,8 +4620,8 @@ describe Course do
           @course_section.sis_source_id = "section1"
           @course_section.save!
           @course.recompute_student_scores_without_send_later
-          expect(@course.generate_grade_publishing_csv_output(@ase, @user, @pseudonym)).to eq [
-            [@ase.map(&:id), <<~CSV, "text/csv"]]
+          expect(@course.generate_grade_publishing_csv_output(@ase, @user, @pseudonym)).to eq(
+            [[@ase.map(&:id), <<~CSV, "text/csv"]])
               publisher_id,publisher_sis_id,course_id,course_sis_id,section_id,section_sis_id,student_id,student_sis_id,enrollment_id,enrollment_status,score
               #{@user.id},U1,#{@course.id},,#{@ase[0].course_section_id},section1,#{@ase[0].user.id},,#{@ase[0].id},active,95.0
               #{@user.id},U1,#{@course.id},,#{@ase[1].course_section_id},section1,#{@ase[1].user.id},,#{@ase[1].id},active,65.0
@@ -4600,8 +4640,8 @@ describe Course do
           @course.grading_standard_id = 0
           @course.save!
           @course.recompute_student_scores_without_send_later
-          expect(@course.generate_grade_publishing_csv_output(@ase, @user, @pseudonym)).to eq [
-            [@ase.map(&:id), <<~CSV, "text/csv"]]
+          expect(@course.generate_grade_publishing_csv_output(@ase, @user, @pseudonym)).to eq(
+            [[@ase.map(&:id), <<~CSV, "text/csv"]])
               publisher_id,publisher_sis_id,course_id,course_sis_id,section_id,section_sis_id,student_id,student_sis_id,enrollment_id,enrollment_status,score,grade
               #{@user.id},U1,#{@course.id},,#{@ase[0].course_section_id},,#{@ase[0].user.id},,#{@ase[0].id},active,95.0,A
               #{@user.id},U1,#{@course.id},,#{@ase[1].course_section_id},,#{@ase[1].user.id},,#{@ase[1].id},active,65.0,D
@@ -4626,8 +4666,8 @@ describe Course do
           @ase[3].scores.update_all(final_score: nil)
           @ase[4].scores.update_all(final_score: nil)
 
-          expect(@course.generate_grade_publishing_csv_output(@ase, @user, @pseudonym)).to eq [
-            [@ase.map(&:id) - [@ase[1].id, @ase[3].id, @ase[4].id], <<~CSV, "text/csv"]]
+          expect(@course.generate_grade_publishing_csv_output(@ase, @user, @pseudonym)).to eq(
+            [[@ase.map(&:id) - [@ase[1].id, @ase[3].id, @ase[4].id], <<~CSV, "text/csv"]])
               publisher_id,publisher_sis_id,course_id,course_sis_id,section_id,section_sis_id,student_id,student_sis_id,enrollment_id,enrollment_status,score,grade
               #{@user.id},U1,#{@course.id},,#{@ase[0].course_section_id},,#{@ase[0].user.id},,#{@ase[0].id},active,95.0,A
               #{@user.id},U1,#{@course.id},,#{@ase[2].course_section_id},,#{@ase[2].user.id},,#{@ase[2].id},active,0.0,F
@@ -9298,12 +9338,15 @@ describe Course do
     describe "#exceeds_accessibility_scan_limit?" do
       before do
         allow(course.wiki_pages).to receive(:not_deleted).and_return(double(count: wiki_count))
-        allow(course.assignments).to receive(:active).and_return(double(count: assignment_count))
+        active_assignments = double(not_excluded_from_accessibility_scan: double(count: assignment_count))
+        allow(course.assignments).to receive(:active).and_return(active_assignments)
+        allow(course).to receive(:discussion_topics).and_return(double(count: discussion_topic_count))
       end
 
       context "when total resources exceed limit" do
         let(:wiki_count) { 500 }
-        let(:assignment_count) { 600 }
+        let(:assignment_count) { 300 }
+        let(:discussion_topic_count) { 300 }
 
         it "returns true" do
           expect(course.exceeds_accessibility_scan_limit?).to be true
@@ -9312,7 +9355,8 @@ describe Course do
 
       context "when total resources are within limit" do
         let(:wiki_count) { 500 }
-        let(:assignment_count) { 400 }
+        let(:assignment_count) { 200 }
+        let(:discussion_topic_count) { 200 }
 
         it "returns false" do
           expect(course.exceeds_accessibility_scan_limit?).to be false
@@ -9321,7 +9365,8 @@ describe Course do
 
       context "when total resources equal limit" do
         let(:wiki_count) { 500 }
-        let(:assignment_count) { 500 }
+        let(:assignment_count) { 200 }
+        let(:discussion_topic_count) { 300 }
 
         it "returns false" do
           expect(course.exceeds_accessibility_scan_limit?).to be false
@@ -9528,6 +9573,82 @@ describe Course do
     end
   end
 
+  describe "#a11y_checker_enabled?" do
+    let(:course) { Course.new(account: Account.default) }
+
+    context "when both a11y_checker and a11y_checker_eap features are enabled" do
+      before do
+        allow(course.account).to receive(:feature_enabled?).with(:a11y_checker).and_return(true)
+        allow(course).to receive(:feature_enabled?).with(:a11y_checker_eap).and_return(true)
+        allow(course.account).to receive(:feature_enabled?).with(:a11y_checker_ga1).and_return(false)
+      end
+
+      it "returns true" do
+        expect(course.a11y_checker_enabled?).to be true
+      end
+    end
+
+    context "when only a11y_checker_ga1 is enabled" do
+      before do
+        allow(course.account).to receive(:feature_enabled?).with(:a11y_checker).and_return(false)
+        allow(course).to receive(:feature_enabled?).with(:a11y_checker_eap).and_return(false)
+        allow(course.account).to receive(:feature_enabled?).with(:a11y_checker_ga1).and_return(true)
+      end
+
+      it "returns true" do
+        expect(course.a11y_checker_enabled?).to be true
+      end
+    end
+
+    context "when both EAP path and GA1 are enabled" do
+      before do
+        allow(course.account).to receive(:feature_enabled?).with(:a11y_checker).and_return(true)
+        allow(course).to receive(:feature_enabled?).with(:a11y_checker_eap).and_return(true)
+        allow(course.account).to receive(:feature_enabled?).with(:a11y_checker_ga1).and_return(true)
+      end
+
+      it "returns true" do
+        expect(course.a11y_checker_enabled?).to be true
+      end
+    end
+
+    context "when account a11y_checker is enabled but course a11y_checker_eap is disabled and ga1 is disabled" do
+      before do
+        allow(course.account).to receive(:feature_enabled?).with(:a11y_checker).and_return(true)
+        allow(course).to receive(:feature_enabled?).with(:a11y_checker_eap).and_return(false)
+        allow(course.account).to receive(:feature_enabled?).with(:a11y_checker_ga1).and_return(false)
+      end
+
+      it "returns false" do
+        expect(course.a11y_checker_enabled?).to be false
+      end
+    end
+
+    context "when account a11y_checker is disabled but course a11y_checker_eap is enabled and ga1 is disabled" do
+      before do
+        allow(course.account).to receive(:feature_enabled?).with(:a11y_checker).and_return(false)
+        allow(course).to receive(:feature_enabled?).with(:a11y_checker_eap).and_return(true)
+        allow(course.account).to receive(:feature_enabled?).with(:a11y_checker_ga1).and_return(false)
+      end
+
+      it "returns false" do
+        expect(course.a11y_checker_enabled?).to be false
+      end
+    end
+
+    context "when all features are disabled" do
+      before do
+        allow(course.account).to receive(:feature_enabled?).with(:a11y_checker).and_return(false)
+        allow(course).to receive(:feature_enabled?).with(:a11y_checker_eap).and_return(false)
+        allow(course.account).to receive(:feature_enabled?).with(:a11y_checker_ga1).and_return(false)
+      end
+
+      it "returns false" do
+        expect(course.a11y_checker_enabled?).to be false
+      end
+    end
+  end
+
   describe "syllabus versioning" do
     let(:course) { Course.create!(name: "Test Course") }
 
@@ -9547,6 +9668,58 @@ describe Course do
         Course::SIMPLY_VERSIONED_EXCLUDE_FIELDS.each do |excluded_field|
           expect(versioned_data).not_to have_key(excluded_field)
         end
+      end
+
+      it "saves original version when editing existing syllabus for the first time" do
+        Account.site_admin.disable_feature!(:syllabus_versioning)
+        course.update!(syllabus_body: "Original syllabus content")
+        course.reload
+        expect(course.versions.count).to eq(0)
+
+        Account.site_admin.enable_feature!(:syllabus_versioning)
+        expect do
+          course.update!(syllabus_body: "Updated syllabus content")
+        end.to change { course.versions.count }.by(2)
+
+        first_version = course.versions.where(number: 1).first
+        first_version_data = YAML.safe_load(first_version.yaml, permitted_classes: [Time, Date, Symbol, ActiveSupport::TimeWithZone, ActiveSupport::TimeZone])
+        expect(first_version_data["syllabus_body"]).to eq("Original syllabus content")
+
+        second_version = course.versions.where(number: 2).first
+        second_version_data = YAML.safe_load(second_version.yaml, permitted_classes: [Time, Date, Symbol, ActiveSupport::TimeWithZone, ActiveSupport::TimeZone])
+        expect(second_version_data["syllabus_body"]).to eq("Updated syllabus content")
+      end
+
+      it "does not save original version if syllabus was blank" do
+        Account.site_admin.disable_feature!(:syllabus_versioning)
+        course.update!(syllabus_body: nil)
+        expect(course.versions.count).to eq(0)
+
+        Account.site_admin.enable_feature!(:syllabus_versioning)
+        expect do
+          course.update!(syllabus_body: "New syllabus content")
+        end.to change { course.versions.count }.by(1)
+
+        version = course.versions.last
+        versioned_data = YAML.safe_load(version.yaml, permitted_classes: [Time, Date, Symbol, ActiveSupport::TimeWithZone, ActiveSupport::TimeZone])
+        expect(versioned_data["syllabus_body"]).to eq("New syllabus content")
+      end
+
+      it "does not save duplicate original version on subsequent edits" do
+        Account.site_admin.disable_feature!(:syllabus_versioning)
+        course.update!(syllabus_body: "Original syllabus content")
+        course.reload
+        expect(course.versions.count).to eq(0)
+
+        Account.site_admin.enable_feature!(:syllabus_versioning)
+        course.update!(syllabus_body: "First edit")
+        expect(course.versions.count).to eq(2)
+
+        expect do
+          course.update!(syllabus_body: "Second edit")
+        end.to change { course.versions.count }.by(1)
+
+        expect(course.versions.count).to eq(3)
       end
     end
 

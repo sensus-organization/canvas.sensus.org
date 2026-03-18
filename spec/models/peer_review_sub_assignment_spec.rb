@@ -144,6 +144,194 @@ RSpec.describe PeerReviewSubAssignment do
         expect(peer_review_sub_assignment).to be_valid
       end
     end
+
+    describe "#points_possible_changes_ok?" do
+      let(:peer_review_sub_assignment) do
+        PeerReviewSubAssignment.create!(
+          parent_assignment:,
+          points_possible: 10
+        )
+      end
+      let(:student) { user_model }
+      let(:assessor) { user_model }
+      let(:student_submission) { submission_model(assignment: parent_assignment, user: student) }
+      let(:assessor_submission) { submission_model(assignment: parent_assignment, user: assessor) }
+
+      before do
+        parent_assignment.update!(peer_reviews: true)
+        course.enable_feature!(:peer_review_allocation_and_grading)
+      end
+
+      it "allows changes when peer_review_allocation_and_grading feature is disabled" do
+        course.disable_feature!(:peer_review_allocation_and_grading)
+        AssessmentRequest.create!(
+          user: student,
+          asset: student_submission,
+          assessor_asset: assessor_submission,
+          assessor:,
+          workflow_state: "completed"
+        )
+
+        peer_review_sub_assignment.points_possible = 20
+        expect(peer_review_sub_assignment).to be_valid
+      end
+
+      it "allows changes when peer_reviews is disabled" do
+        parent_assignment.update!(peer_reviews: false)
+        AssessmentRequest.create!(
+          user: student,
+          asset: student_submission,
+          assessor_asset: assessor_submission,
+          assessor:,
+          workflow_state: "completed"
+        )
+
+        peer_review_sub_assignment.points_possible = 20
+        expect(peer_review_sub_assignment).to be_valid
+      end
+
+      it "allows changes when no peer review submissions exist" do
+        peer_review_sub_assignment.points_possible = 20
+        expect(peer_review_sub_assignment).to be_valid
+      end
+
+      it "prevents changes when peer review submissions exist" do
+        AssessmentRequest.create!(
+          user: student,
+          asset: student_submission,
+          assessor_asset: assessor_submission,
+          assessor:,
+          workflow_state: "completed"
+        )
+
+        peer_review_sub_assignment.points_possible = 20
+        expect(peer_review_sub_assignment).not_to be_valid
+        expect(peer_review_sub_assignment.errors[:points_possible]).to include(
+          I18n.t("Students have already submitted peer reviews, so reviews required and points cannot be changed.")
+        )
+      end
+
+      it "allows creating a new record with points_possible set" do
+        AssessmentRequest.create!(
+          user: student,
+          asset: student_submission,
+          assessor_asset: assessor_submission,
+          assessor:,
+          workflow_state: "completed"
+        )
+
+        new_peer_review_sub = PeerReviewSubAssignment.new(
+          parent_assignment:,
+          points_possible: 100
+        )
+        expect(new_peer_review_sub).to be_valid
+      end
+
+      it "allows deletion even when peer review submissions exist" do
+        AssessmentRequest.create!(
+          user: student,
+          asset: student_submission,
+          assessor_asset: assessor_submission,
+          assessor:,
+          workflow_state: "completed"
+        )
+
+        peer_review_sub_assignment.destroy
+        expect(peer_review_sub_assignment.workflow_state).to eq("deleted")
+      end
+    end
+
+    describe "#sync_submission_types_with_grading_type" do
+      it "sets submission_types to 'peer_review' when grading_type is 'points'" do
+        peer_review_sub_assignment = PeerReviewSubAssignment.new(
+          parent_assignment:,
+          grading_type: "points"
+        )
+        # .valid? triggers the before_validation callback without persisting to database
+        peer_review_sub_assignment.valid?
+        expect(peer_review_sub_assignment.submission_types).to eq(PeerReviewSubAssignment::PEER_REVIEW_SUBMISSION_TYPE)
+      end
+
+      it "sets submission_types to 'not_graded' when grading_type is 'not_graded'" do
+        peer_review_sub_assignment = PeerReviewSubAssignment.new(
+          parent_assignment:,
+          grading_type: "not_graded"
+        )
+        peer_review_sub_assignment.valid?
+        expect(peer_review_sub_assignment.submission_types).to eq("not_graded")
+      end
+
+      it "auto-corrects invalid submission_types to 'peer_review' based on grading_type" do
+        peer_review_sub_assignment = PeerReviewSubAssignment.new(
+          parent_assignment:,
+          submission_types: "online_text_entry",
+          grading_type: "points"
+        )
+        peer_review_sub_assignment.valid?
+        expect(peer_review_sub_assignment.submission_types).to eq(PeerReviewSubAssignment::PEER_REVIEW_SUBMISSION_TYPE)
+      end
+
+      it "auto-corrects invalid submission_types to 'not_graded' based on grading_type" do
+        peer_review_sub_assignment = PeerReviewSubAssignment.new(
+          parent_assignment:,
+          submission_types: "online_upload",
+          grading_type: "not_graded"
+        )
+        peer_review_sub_assignment.valid?
+        expect(peer_review_sub_assignment.submission_types).to eq("not_graded")
+      end
+
+      it "updates submission_types when grading_type changes to 'not_graded'" do
+        peer_review_sub_assignment = PeerReviewSubAssignment.create!(
+          parent_assignment:,
+          grading_type: "points"
+        )
+        expect(peer_review_sub_assignment.submission_types).to eq(PeerReviewSubAssignment::PEER_REVIEW_SUBMISSION_TYPE)
+
+        peer_review_sub_assignment.grading_type = "not_graded"
+        peer_review_sub_assignment.valid?
+        expect(peer_review_sub_assignment.submission_types).to eq("not_graded")
+      end
+
+      it "updates submission_types when grading_type changes from 'not_graded' to 'points'" do
+        peer_review_sub_assignment = PeerReviewSubAssignment.create!(
+          parent_assignment:,
+          grading_type: "not_graded"
+        )
+        expect(peer_review_sub_assignment.submission_types).to eq("not_graded")
+
+        peer_review_sub_assignment.grading_type = "points"
+        peer_review_sub_assignment.valid?
+        expect(peer_review_sub_assignment.submission_types).to eq(PeerReviewSubAssignment::PEER_REVIEW_SUBMISSION_TYPE)
+      end
+
+      it "defaults to 'peer_review' when grading_type is not specified" do
+        peer_review_sub_assignment = PeerReviewSubAssignment.new(parent_assignment:)
+        peer_review_sub_assignment.valid?
+        expect(peer_review_sub_assignment.submission_types).to eq(PeerReviewSubAssignment::PEER_REVIEW_SUBMISSION_TYPE)
+      end
+
+      it "overrides manually set submission_types with value based on grading_type" do
+        peer_review_sub_assignment = PeerReviewSubAssignment.new(
+          parent_assignment:,
+          submission_types: "external_tool",
+          grading_type: "points"
+        )
+        peer_review_sub_assignment.valid?
+        expect(peer_review_sub_assignment.submission_types).to eq(PeerReviewSubAssignment::PEER_REVIEW_SUBMISSION_TYPE)
+      end
+
+      it "handles all grading types correctly" do
+        %w[points percent letter_grade gpa_scale pass_fail].each do |grading_type|
+          peer_review_sub_assignment = PeerReviewSubAssignment.new(
+            parent_assignment:,
+            grading_type:
+          )
+          peer_review_sub_assignment.valid?
+          expect(peer_review_sub_assignment.submission_types).to eq(PeerReviewSubAssignment::PEER_REVIEW_SUBMISSION_TYPE)
+        end
+      end
+    end
   end
 
   describe "#checkpoint?" do

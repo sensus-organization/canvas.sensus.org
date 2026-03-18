@@ -17,7 +17,7 @@
  */
 
 import React, {useReducer, useMemo, useState, useEffect, useCallback, useRef} from 'react'
-import _ from 'lodash'
+import {cloneDeep, isEqual} from 'es-toolkit/compat'
 import {View} from '@instructure/ui-view'
 import {Flex} from '@instructure/ui-flex'
 import {TextInput} from '@instructure/ui-text-input'
@@ -78,9 +78,8 @@ const doRequest = (
     method,
     body: convertModuleSettingsForApi(data),
   })
-    // @ts-expect-error
-    .then((response: {json: Record<string, any>}) => {
-      onSuccess(response.json)
+    .then(response => {
+      onSuccess(response.json as Record<string, unknown>)
       // add the alert in the next event cycle so that the alert is added to the DOM's aria-live
       // region after focus changes, thus preventing the focus change from interrupting the alert
       setTimeout(() => {
@@ -181,7 +180,7 @@ export default function SettingsPanel({
     requireSequentialProgress: requireSequentialProgress ?? false,
     publishFinalGrade: publishFinalGrade ?? false,
   })
-  const initialState = useRef(_.cloneDeep(state))
+  const initialState = useRef(cloneDeep(state))
   const nameInputRef = useRef<HTMLInputElement | null>(null)
   const dateInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -393,7 +392,7 @@ export default function SettingsPanel({
 
   // Sends data to parent when unmounting
   useEffect(
-    () => () => updateParentData?.(state, !_.isEqual(initialState.current, state)),
+    () => () => updateParentData?.(state, !isEqual(initialState.current, state)),
     [state, updateParentData],
   )
 

@@ -116,6 +116,7 @@ new_quizzes_ai_quiz_generation:
   display_name: IgniteAI Question Authoring for Quizzes
   description: Enable IgniteAI Question Authoring for Quizzes feature
   state: allowed
+  root_opt_in: true
   applies_to: Course
   beta: true
   environments:
@@ -137,4 +138,10 @@ new_quizzes_native_experience:
   description: When enabled, New Quizzes opens directly within Canvas for a smoother experience.
   state: hidden
   shadow: true
-  applies_to: RootAccount
+  applies_to: Course
+new_quizzes_native_experience_respondus:
+  display_name: New Quizzes Native Experience Respondus
+  description: When enabled, New Quizzes in Respondus is rendered as a Federated Module, for better 3rd party integration (i.e., ReadSpeaker)
+  state: hidden
+  shadow: true
+  applies_to: Course

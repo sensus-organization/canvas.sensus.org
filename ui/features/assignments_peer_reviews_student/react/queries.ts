@@ -19,12 +19,153 @@
 import {gql} from '@apollo/client'
 
 export const PEER_REVIEW_ASSIGNMENT_QUERY = gql`
-  query GetPeerReviewAssignment($assignmentId: ID!) {
+  query GetPeerReviewAssignment($assignmentId: ID!, $userId: ID!) {
     assignment(id: $assignmentId) {
       _id
       name
       dueAt
       description
+      expectsSubmission
+      nonDigitalSubmission
+      pointsPossible
+      courseId
+      peerReviews {
+        count
+        submissionRequired
+        pointsPossible
+        anonymousReviews
+      }
+      submissionsConnection(filter: {userId: $userId}) {
+        nodes {
+          _id
+          submittedAt
+        }
+      }
+      assignedToDates {
+        dueAt
+        peerReviewDates {
+          dueAt
+          unlockAt
+          lockAt
+        }
+      }
+      assessmentRequestsForCurrentUser {
+        _id
+        available
+        workflowState
+        createdAt
+        rubricAssessment {
+          _id
+          assessmentRatings {
+            _id
+            criterion {
+              _id
+            }
+            comments
+            commentsHtml
+            description
+            points
+          }
+        }
+        anonymousId
+        anonymizedUser {
+          _id
+          displayName: shortName
+        }
+        submission {
+          _id
+          id
+          attempt
+          body
+          submissionType
+          url
+          submittedAt
+          mediaObject {
+            _id
+            mediaType
+            title
+          }
+          attachments {
+            _id
+            displayName
+            mimeClass
+            size
+            thumbnailUrl
+            submissionPreviewUrl
+            url
+          }
+          user {
+            _id
+          }
+          anonymousId
+        }
+      }
+      rubric {
+        _id
+        title
+        criteria {
+          _id
+          description
+          longDescription
+          points
+          criterionUseRange
+          ratings {
+            _id
+            description
+            longDescription
+            points
+          }
+          ignoreForScoring
+          masteryPoints
+          learningOutcomeId
+        }
+        freeFormCriterionComments
+        hideScoreTotal
+        pointsPossible
+        ratingOrder
+        buttonDisplay
+      }
+      rubricAssociation {
+        _id
+        hidePoints
+        hideScoreTotal
+        useForGrading
+      }
+    }
+  }
+`
+
+export const REVIEWER_SUBMISSION_QUERY = gql`
+  query GetReviewerSubmission($assignmentId: ID!, $userId: ID!) {
+    submission(assignmentId: $assignmentId, userId: $userId) {
+      _id
+      id
+      attempt
+      assignedAssessments {
+        assetId
+        workflowState
+        assetSubmissionType
+      }
+      rubricAssessmentsConnection(filter: {forAttempt: 0}) {
+        nodes {
+          _id
+          assessmentType
+          score
+          assessor {
+            _id
+          }
+          assessmentRatings {
+            _id
+            criterion {
+              _id
+            }
+            comments
+            commentsHtml
+            description
+            points
+          }
+        }
+      }
     }
   }
 `

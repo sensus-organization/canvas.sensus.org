@@ -23,8 +23,8 @@ admin_manage_access_tokens:
 login_registration_ui_identity:
   state: hidden
   applies_to: RootAccount
-  display_name: New Login/Registration UI for Identity
-  description: Rework the Login/Registration UI to support Identity changes, ensuring a uniform login experience and transparent auth migration.
+  display_name: New Canvas Login UI
+  description: Enable the new Login/Registration UI.  This change is part of our ongoing transition to Instructure Identity Services and represents an important step in modernizing our authentication infrastructure.
   environments:
     development:
       state: allowed
@@ -45,6 +45,28 @@ enforce_service_token_tenant_matching:
   display_name: Enforce Service Token Tenant Matching
   description: |-
     Enforce that service tokens can only be used within the tenant they were issued for.
+  environments:
+    development:
+      state: allowed
+    beta:
+      state: hidden
+    production:
+      state: hidden
+federated_pseudonym_attributes:
+  state: hidden
+  applies_to: SiteAdmin
+  display_name: Federated Pseudonym Attributes
+  description: Enable to use federated pseudonym attributes (username, SIS user ID) from authentication providers in live events and other Canvas features. When disabled, Canvas will use local pseudonym attributes as fallback.
+  environments:
+    development:
+      state: allowed
+    ci:
+      state: allowed
+saml_enforce_one_time_use:
+  state: hidden
+  applies_to: RootAccount
+  display_name: Enforce SAML OneTimeUse Condition
+  description: Enforce the OneTimeUse condition in SAML assertions to prevent replay attacks. You can check if any violations have been seen on the authentication providers page.
   environments:
     development:
       state: allowed

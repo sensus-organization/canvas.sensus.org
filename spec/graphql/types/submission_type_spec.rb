@@ -559,10 +559,23 @@ describe Types::SubmissionType do
         ).to eq [@comment2.id.to_s]
       end
 
-      it "does not return draft comments for other users when expecting drafts" do
+      it "does not return draft comments from other users by default when expecting drafts" do
         other_teacher = teacher_in_course(course: @course).user
         expect(
           submission_type.resolve("commentsConnection(includeDraftComments: true) { nodes { _id }}", current_user: other_teacher)
+        ).to eq [@comment2.id.to_s]
+      end
+
+      it "returns draft comments from other teachers when includeDraftsFromOthers is true" do
+        other_teacher = teacher_in_course(course: @course).user
+        expect(
+          submission_type.resolve("commentsConnection(includeDraftComments: true, includeDraftsFromOthers: true) { nodes { _id }}", current_user: other_teacher)
+        ).to eq [@comment2.id.to_s, @draft_comment.id.to_s]
+      end
+
+      it "does not return draft comments from other teachers for students even with includeDraftsFromOthers" do
+        expect(
+          submission_type.resolve("commentsConnection(includeDraftComments: true, includeDraftsFromOthers: true) { nodes { _id }}", current_user: @student)
         ).to eq [@comment2.id.to_s]
       end
     end
@@ -1246,6 +1259,28 @@ describe Types::SubmissionType do
         )
         expect(query_params[:url]).not_to include "grade_by_question_enabled"
       end
+
+      it "includes resource_link_lookup_uuid when present" do
+        uuid = SecureRandom.uuid
+        @assignment.submit_homework(
+          @student,
+          submission_type: "basic_lti_launch",
+          url: "http://anexternaltoolsubmission.com",
+          resource_link_lookup_uuid: uuid
+        )
+        expect(query_params[:resource_link_lookup_uuid]).to eq uuid
+        expect(preview_url).to include "resource_link_lookup_uuid=#{uuid}"
+      end
+
+      it "excludes resource_link_lookup_uuid when not present" do
+        @assignment.submit_homework(
+          @student,
+          submission_type: "basic_lti_launch",
+          url: "http://anexternaltoolsubmission.com"
+        )
+        expect(query_params[:resource_link_lookup_uuid]).to be_nil
+        expect(preview_url).not_to include "resource_link_lookup_uuid"
+      end
     end
 
     it "includes a 'version' query param that corresponds to the attempt number - 1 (and NOT the associated submission version number)" do
@@ -1397,6 +1432,18 @@ describe Types::SubmissionType do
         expect(loader).to have_received(:load).with(submission.id)
         expect(result).to eq [lti_asset_report.id.to_s]
       end
+
+      it "uses for_student=false loader for teacher" do
+        loader = instance_double(Loaders::SubmissionLtiAssetReportsLoader)
+        allow(Loaders::SubmissionLtiAssetReportsLoader).to receive(:for)
+          .with(for_student: false, latest: true)
+          .and_return(loader)
+        allow(loader).to receive(:load).with(submission.id).and_return(Promise.resolve([lti_asset_report]))
+
+        submission_type.resolve("ltiAssetReportsConnection(latest: true) { nodes { _id } }")
+
+        expect(Loaders::SubmissionLtiAssetReportsLoader).to have_received(:for).with(for_student: false, latest: true)
+      end
     end
 
     context "when the current user is a student" do
@@ -1413,10 +1460,28 @@ describe Types::SubmissionType do
         expect(result).to eq []
       end
 
-      it "returns nil when student cannot read their own grade" do
-        allow_any_instance_of(Submission).to receive(:user_can_read_grade?).with(@student, for_plagiarism: true).and_return(false)
-        result = submission_type.resolve("ltiAssetReportsConnection { nodes { _id } }")
-        expect(result).to be_nil
+      it "uses for_student=true loader for students viewing their own submission" do
+        loader = instance_double(Loaders::SubmissionLtiAssetReportsLoader)
+        allow(Loaders::SubmissionLtiAssetReportsLoader).to receive(:for)
+          .with(for_student: true, latest: true)
+          .and_return(loader)
+        allow(loader).to receive(:load).with(submission.id).and_return(Promise.resolve([]))
+
+        submission_type.resolve("ltiAssetReportsConnection { nodes { _id } }")
+
+        expect(Loaders::SubmissionLtiAssetReportsLoader).to have_received(:for).with(for_student: true, latest: true)
+      end
+
+      it "always uses latest=true for students" do
+        loader = instance_double(Loaders::SubmissionLtiAssetReportsLoader)
+        allow(Loaders::SubmissionLtiAssetReportsLoader).to receive(:for)
+          .with(for_student: true, latest: true)
+          .and_return(loader)
+        allow(loader).to receive(:load).with(submission.id).and_return(Promise.resolve([]))
+
+        submission_type.resolve("ltiAssetReportsConnection(latest: false) { nodes { _id } }")
+
+        expect(Loaders::SubmissionLtiAssetReportsLoader).to have_received(:for).with(for_student: true, latest: true)
       end
     end
 

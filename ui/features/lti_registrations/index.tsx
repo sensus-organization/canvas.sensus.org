@@ -18,14 +18,19 @@
 import ProductDetail from '@canvas/lti-apps/components/ProductDetail/ProductDetail'
 import {getBasename} from '@canvas/lti-apps/utils/basename'
 import {QueryClientProvider} from '@tanstack/react-query'
-import {createRoot} from 'react-dom/client'
+import {render} from '@canvas/react'
 import {Navigate, RouterProvider, createBrowserRouter} from 'react-router-dom'
 import {DiscoverRoute} from './discover'
 import {ProductConfigureButton} from './discover/ProductConfigureButton'
 import {isLtiRegistrationsDiscoverEnabled} from './discover/utils'
 import {LtiAppsLayout} from './layout/LtiAppsLayout'
 import {ManageRoutes} from './manage'
-import {fetchRegistrationToken, getLtiRegistrationByUUID} from './manage/api/ltiImsRegistration'
+import {
+  applyLtiRegistrationUpdateRequest,
+  fetchRegistrationToken,
+  getLtiRegistrationByUUID,
+  getLtiRegistrationUpdateRequestByUUID,
+} from './manage/api/ltiImsRegistration'
 import {
   bindGlobalLtiRegistration,
   createRegistration,
@@ -59,6 +64,7 @@ import {deleteDeployment} from './manage/api/deployments'
 import {queryClient} from '@canvas/query'
 import {getAccountId} from './common/lib/getAccountId'
 import {LtiBreadcrumbsLayout} from './layout/LtiBreadcrumbsLayout'
+import {RegistrationUpdateWizardModal} from './manage/registration_update_wizard/RegistrationUpdateWizardModal'
 
 const accountId = getAccountId()
 
@@ -160,9 +166,11 @@ const router = createBrowserRouter(
 const dynamicRegistrationWizardService: DynamicRegistrationWizardService = {
   fetchRegistrationToken,
   getRegistrationByUUID: getLtiRegistrationByUUID,
-  fetchLtiRegistration: fetchLtiRegistration,
-  updateRegistration: updateRegistration,
-  deleteRegistration: deleteRegistration,
+  getLtiRegistrationUpdateRequestByUUID,
+  fetchLtiRegistration,
+  updateRegistration,
+  applyLtiRegistrationUpdateRequest,
+  deleteRegistration,
 }
 
 const jsonUrlWizardService: JsonUrlWizardService = {
@@ -180,9 +188,7 @@ const inheritedKeyService: InheritedKeyService = {
   fetchRegistrationByClientId,
 }
 
-const root = createRoot(document.getElementById('reactContent')!)
-
-root.render(
+render(
   <QueryClientProvider client={queryClient}>
     <RegistrationWizardModal
       accountId={accountId}
@@ -190,7 +196,9 @@ root.render(
       lti1p3RegistrationWizardService={lti1p3RegistrationWizardService}
       jsonUrlWizardService={jsonUrlWizardService}
     />
+    <RegistrationUpdateWizardModal accountId={accountId} />
     <InheritedKeyRegistrationWizard accountId={accountId} service={inheritedKeyService} />
     <RouterProvider router={router} />
   </QueryClientProvider>,
+  document.getElementById('reactContent'),
 )

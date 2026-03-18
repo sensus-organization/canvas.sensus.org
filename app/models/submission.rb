@@ -294,7 +294,7 @@ class Submission < ActiveRecord::Base
             /* we expect a digital submission */
             AND NOT (
               cached_quiz_lti IS NOT TRUE AND
-              assignments.submission_types IN ('', 'none', 'not_graded', 'on_paper', 'wiki_page', 'external_tool')
+              assignments.submission_types IN ('', 'none', 'not_graded', 'on_paper', 'wiki_page', 'external_tool', 'ams')
             )
             AND assignments.submission_types IS NOT NULL
             AND NOT (
@@ -413,7 +413,7 @@ class Submission < ActiveRecord::Base
     Submission.active.having_submission.where(user_id:)
               .where(assignment_id: SubAssignment.active.select(:id).where(parent_assignment_id: assignment_id))
               .find_each do |sub_assignment_submission|
-      return true if sub_assignment_submission.needs_grading?
+                return true if sub_assignment_submission.needs_grading?
     end
     false
   end
@@ -596,7 +596,7 @@ class Submission < ActiveRecord::Base
       assignment.published? &&
         assignment.context.grants_right?(user, session, :manage_grades)
     end
-    can :read and can :comment and can :make_group_comment and can :read_grade and can :read_comments
+    can :read and can :comment and can :make_group_comment and can :read_grade and can :read_comments and can :download
 
     given do |user, _session|
       can_grade?(user)
@@ -634,7 +634,13 @@ class Submission < ActiveRecord::Base
     end
     can :read_grade
 
-    given { |user| peer_reviewer?(user) && !!assignment&.submitted?(user:) }
+    given do |user|
+      peer_reviewer?(user) && if assignment&.context&.feature_enabled?(:peer_review_allocation_and_grading)
+                                !assignment.peer_review_submission_required || !!assignment.submitted?(user:)
+                              else
+                                !!assignment&.submitted?(user:)
+                              end
+    end
     can :read and can :comment and can :make_group_comment
 
     given { |user, session| can_view_plagiarism_report("turnitin", user, session) }
@@ -713,6 +719,7 @@ class Submission < ActiveRecord::Base
 
   def user_can_read_grade?(user, session = nil, for_plagiarism: false)
     # improves performance by checking permissions on the assignment before the submission
+    # for asset reports permissions, see also app/graphql/types/submission_type.rb#lti_asset_reports_connection
     return true if assignment.user_can_read_grades?(user, session)
     return false if hide_grade_from_student?(for_plagiarism:)
     return true if user && user.id == user_id # this is fast, so skip the policy cache check if possible
@@ -929,6 +936,8 @@ class Submission < ActiveRecord::Base
   # This method pulls data from the OriginalityReport table
   # Preload OriginalityReport before using this method in a collection of submissions
   def originality_data
+    return {} if assignment.cpf_migrated?
+
     data = originality_reports_for_display.each_with_object({}) do |originality_report, hash|
       hash[originality_report.asset_key] = {
         similarity_score: originality_report.originality_score&.round(2),
@@ -1140,11 +1149,17 @@ class Submission < ActiveRecord::Base
         check_vericite_status(0)
       end
     end
-    unless self.vericite_data_hash.empty?
+
+    # Return a copy with the provider flag set, without mutating the original hash
+    # This prevents the vericite provider from being added to turnitin_data when
+    # both turnitinData and vericiteData GraphQL fields are queried together.
+    # Mutating the shared hash causes turnitin permission checks to fail.
+    result = self.vericite_data_hash.dup
+    unless result.empty?
       # only set vericite provider flag if the hash isn't empty
-      self.vericite_data_hash[:provider] = :vericite
+      result[:provider] = :vericite
     end
-    self.vericite_data_hash
+    result
   end
 
   def vericite_data_hash
@@ -1671,6 +1686,9 @@ class Submission < ActiveRecord::Base
     if media_comment_id && (media_comment_id_changed? || !media_object_id)
       mo = MediaObject.by_media_id(media_comment_id).first
       self.media_object_id = mo && mo.id
+      if mo && submission_type == "media_recording" && mo.attachment_id
+        self.attachment_id = mo.attachment_id
+      end
     end
     self.media_comment_type = nil unless media_comment_id
     if self.submitted_at
@@ -2667,7 +2685,7 @@ class Submission < ActiveRecord::Base
     res.user_id = user_id
     res.workflow_state = "assigned" if res.new_record?
 
-    if res.new_record? && assignment.context.feature_enabled?(:peer_review_grading) &&
+    if res.new_record? && assignment.context.feature_enabled?(:peer_review_allocation_and_grading) &&
        assignment.peer_reviews? &&
        assignment.peer_review_sub_assignment.present?
       res.peer_review_sub_assignment_id = assignment.peer_review_sub_assignment.id
@@ -2898,15 +2916,23 @@ class Submission < ActiveRecord::Base
       provisional_comments = provisional_comments.reject { |comment| comment.author_id == current_grader_id }
     end
 
-    # Return appropriate comments based on user role and permissions
     if current_user.id == user_id
-      # Students can't see provisional comments
       []
     elsif !can_moderate && !comments_visible_to_graders
-      # Regular graders can only see their own comments when comments aren't visible to graders
-      provisional_comments.select { |comment| comment.author_id == current_user.id }
+      if grades_published
+        author_ids = provisional_comments.map(&:author_id).uniq
+        authors = User.where(id: author_ids).index_by(&:id)
+        moderator_ids = author_ids.select do |author_id|
+          assignment.permits_moderation?(authors[author_id])
+        end
+
+        provisional_comments.select do |comment|
+          comment.author_id == current_user.id || moderator_ids.include?(comment.author_id)
+        end
+      else
+        provisional_comments.select { |comment| comment.author_id == current_user.id }
+      end
     else
-      # Moderators and graders (when comments are visible) can see all provisional comments
       provisional_comments
     end
   end
@@ -3135,6 +3161,15 @@ class Submission < ActiveRecord::Base
 
   def visible_rubric_assessments_for(viewing_user, attempt: nil, include_provisional: false, provisional_assessments: nil)
     return [] unless assignment.active_rubric_association?
+
+    # When grades are published in moderated grading, only show the selected rubric assessment
+    if assignment.moderated_grading? && assignment.grades_published?
+      selected_assessment = rubric_assessments_for_attempt(attempt:).find do |a|
+        a.assessment_type == "grading" &&
+          a.rubric_association == assignment.rubric_association
+      end
+      return selected_assessment ? [selected_assessment] : []
+    end
 
     unless posted? || grants_right?(viewing_user, :read_grade)
       assessments = rubric_assessments_for_attempt(attempt:)
@@ -3474,6 +3509,19 @@ class Submission < ActiveRecord::Base
     end
 
     false
+  end
+
+  # Incomplete submissions for discussions with checkpoints have null
+  # submission_type, but they can still have Asset Reports (LTI Asset Processor
+  # spec), so we need to pretend these are of type "discussion_topic"
+  def submission_type_for_asset_reports
+    return submission_type if submission_type
+
+    if assignment.submission_types == "discussion_topic" && assignment.has_sub_assignments?
+      "discussion_topic"
+    else
+      nil
+    end
   end
 
   # For large body text, this can be SLOW. Call this method in a delayed job.

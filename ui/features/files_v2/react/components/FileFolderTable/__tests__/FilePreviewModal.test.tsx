@@ -18,26 +18,24 @@
 
 import React from 'react'
 import {fireEvent, render, screen} from '@testing-library/react'
-import '@testing-library/jest-dom/extend-expect'
 import {MockedQueryClientProvider} from '@canvas/test-utils/query'
 import {queryClient} from '@canvas/query'
 import {FilePreviewModal, FilePreviewModalProps} from '../FilePreviewModal'
 import {FAKE_FILES} from '../../../../fixtures/fakeData'
-import fetchMock from 'fetch-mock'
+import {setupServer} from 'msw/node'
+import {http, HttpResponse} from 'msw'
 import userEvent from '@testing-library/user-event'
 import {destroyContainer} from '@canvas/alerts/react/FlashAlert'
 
-jest.mock('@canvas/canvas-studio-player', () => {
-  const mockDefault = jest.fn(() => <div data-testid="media-player">Media Player</div>)
-  return {
-    __esModule: true,
-    default: mockDefault,
-  }
-})
+const server = setupServer()
+
+vi.mock('@canvas/canvas-studio-player', () => ({
+  default: () => <div data-testid="media-player">Media Player</div>,
+}))
 
 const defaultProps: FilePreviewModalProps = {
   isOpen: true,
-  onClose: jest.fn(),
+  onClose: vi.fn(),
   item: FAKE_FILES[0],
   collection: FAKE_FILES,
 }
@@ -51,20 +49,22 @@ const renderComponent = (props?: Partial<FilePreviewModalProps>) => {
 }
 
 describe('FilePreviewModal', () => {
+  beforeAll(() => server.listen())
+  afterAll(() => server.close())
+
   beforeEach(() => {
-    jest.clearAllMocks()
-    fetchMock.get(/\/media_attachments\/\d+\/info/, {
-      body: [],
-      headers: {},
-      status: 200,
-      overwriteRoutes: true,
-    })
-    window.history.replaceState = jest.fn()
+    vi.clearAllMocks()
+    server.use(
+      http.get(/\/media_attachments\/\d+\/info/, () => {
+        return HttpResponse.json([])
+      }),
+    )
+    window.history.replaceState = vi.fn()
   })
 
   afterEach(() => {
-    fetchMock.reset()
-    jest.restoreAllMocks()
+    server.resetHandlers()
+    vi.restoreAllMocks()
     destroyContainer()
   })
 

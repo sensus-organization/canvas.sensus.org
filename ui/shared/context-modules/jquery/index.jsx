@@ -34,7 +34,7 @@ import Publishable from '../backbone/models/Publishable'
 import PublishButtonView from '@canvas/publish-button-view'
 // eslint-disable-next-line import/no-named-as-default
 import htmlEscape from '@instructure/html-escape'
-import get from 'lodash/get'
+import {get} from 'es-toolkit/compat'
 import axios from '@canvas/axios'
 import {showFlashError, showFlashAlert} from '@canvas/alerts/react/FlashAlert'
 import '@canvas/jquery/jquery.ajaxJSON'
@@ -42,7 +42,6 @@ import {dateString, datetimeString} from '@canvas/datetime/date-functions'
 import {renderDatetimeField} from '@canvas/datetime/jquery/DatetimeField'
 import '@canvas/jquery/jquery.instructure_forms' /* formSubmit, fillFormData, formErrors, errorBox */
 import 'jqueryui/dialog'
-import '@canvas/util/jquery/fixDialogButtons'
 import '@canvas/jquery/jquery.instructure_misc_helpers' /* /\$\.underscore/ */
 import '@canvas/jquery/jquery.instructure_misc_plugins' /* .dim, confirmDelete, fragmentChange, showIf */
 import '@canvas/jquery/jquery.simulate'
@@ -1693,9 +1692,10 @@ modules.initModuleManagement = async function (duplicate) {
     const midSizeModal = window.matchMedia('(min-width: 500px)').matches
     const fullSizeModal = window.matchMedia('(min-width: 770px)').matches
     const responsiveWidth = fullSizeModal ? 770 : midSizeModal ? 500 : 320
+    const responsiveHeight = fullSizeModal ? 550 : Math.min(window.innerHeight * 0.9, 600)
     options.select_button_text = I18n.t('buttons.add_item', 'Add Item')
     options.holder_name = name
-    options.height = 550
+    options.height = responsiveHeight
     options.width = responsiveWidth
     options.dialog_title = I18n.t('titles.add_item', 'Add Item to %{module}', {module: name})
     options.close = function () {
@@ -2184,6 +2184,25 @@ function initContextModuleItems(moduleId) {
     initNewItemMoveHandler($(this))
   })
 
+  const seamlessRedirectEnabled = window.ENV?.MODULE_FEATURES?.SEAMLESS_EXTERNAL_URL_REDIRECT
+
+  $module.find('.external_url_link').each(function () {
+    const $link = $(this)
+    const isNewTab = $link.attr('target') === '_blank'
+
+    if (seamlessRedirectEnabled && isNewTab) {
+      let url = $link.attr('data-item-href')
+      if (url) {
+        url += url.includes('?') ? '&follow_redirect=1' : '?follow_redirect=1'
+        $link.attr('href', url)
+      }
+    } else {
+      $link.click(function (event) {
+        Helper.externalUrlLinkClick(event, $(this))
+      })
+    }
+  })
+
   if (ENV.FEATURE_MODULES_PERF) {
     addShowAllOrLess(moduleId)
   }
@@ -2317,8 +2336,23 @@ function initContextModules() {
   // I cannot find anywhere that these classname is added to the modules dom
   // Skipping this when lazy loading items
   if (!ENV.FEATURE_MODULES_PERF) {
-    $('.external_url_link').click(function (event) {
-      Helper.externalUrlLinkClick(event, $(this))
+    const seamlessRedirectEnabled = window.ENV?.MODULE_FEATURES?.SEAMLESS_EXTERNAL_URL_REDIRECT
+
+    $('.external_url_link').each(function () {
+      const $link = $(this)
+      const isNewTab = $link.attr('target') === '_blank'
+
+      if (seamlessRedirectEnabled && isNewTab) {
+        let url = $link.attr('data-item-href')
+        if (url) {
+          url += url.includes('?') ? '&follow_redirect=1' : '?follow_redirect=1'
+          $link.attr('href', url)
+        }
+      } else {
+        $link.click(function (event) {
+          Helper.externalUrlLinkClick(event, $(this))
+        })
+      }
     })
 
     renderDatetimeField($('.datetime_field'))
@@ -2544,7 +2578,7 @@ function initContextModules() {
     if (expanding && ENV.FEATURE_MODULES_PERF && collapsedModuleIds?.length > 0) {
       await modules.lazyLoadItems(collapsedModuleIds)
     }
-    $('#expand_collapse_all').prop('disabled', false)
+    $('#expand_collapse_all').attr('aria-disabled', 'false')
   }
 
   // This is the onClick handler for the expand/collapse all button

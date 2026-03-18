@@ -409,12 +409,14 @@ export const RubricForm = ({
           <CriteriaBuilderHeader
             hidePoints={rubricForm.hidePoints}
             hideScoreTotal={rubricForm.hideScoreTotal}
+            isAIRubricsAvailable={isAIRubricsAvailable}
             rubricId={rubricForm.id}
             pointsPossible={rubricForm.pointsPossible}
           />
 
           {showGenerateCriteriaForm && (
             <GeneratedCriteriaForm
+              totalPoints={assignmentPointsPossible}
               criterionUseRangeEnabled={criterionUseRangeEnabled}
               criteriaBeingGenerated={!!criteriaBeingGenerated}
               generateCriteriaMutation={generateCriteriaMutation}

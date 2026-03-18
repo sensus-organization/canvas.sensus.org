@@ -29,6 +29,9 @@ import {PERMISSIONS, ROLES} from './examples'
 // This is needed for $.screenReaderFlashMessageExclusive to work.
 import '@canvas/rails-flash-notifications'
 
+// Mock FlashAlert to prevent UI transitions/timers from running after test teardown
+vi.mock('@canvas/alerts/react/FlashAlert')
+
 beforeEach(() => {
   fakeENV.setup()
 })
@@ -37,9 +40,9 @@ afterEach(() => {
   fakeENV.teardown()
 })
 
-it('searchPermissions dispatches updatePermissionsSearch', done => {
+it('searchPermissions dispatches updatePermissionsSearch', () => {
   const state = {contextId: 1, permissions: PERMISSIONS, roles: []}
-  const dispatchMock = jest.fn()
+  const dispatchMock = vi.fn()
   actions.searchPermissions({permissionSearchString: 'add', contextType: COURSE})(
     dispatchMock,
     () => state,
@@ -55,13 +58,12 @@ it('searchPermissions dispatches updatePermissionsSearch', done => {
 
   expect(dispatchMock).toHaveBeenCalledTimes(1)
   expect(dispatchMock).toHaveBeenCalledWith(expectedDispatch)
-  done()
 })
 
 it('searchPermissions announces when search is complete', () => {
   const state = {contextId: 1, permissions: PERMISSIONS, roles: []}
-  const dispatchMock = jest.fn()
-  const flashMock = jest.spyOn($, 'screenReaderFlashMessageExclusive')
+  const dispatchMock = vi.fn()
+  const flashMock = vi.spyOn($, 'screenReaderFlashMessageExclusive')
   actions.searchPermissions({permissionSearchString: 'add', contextType: COURSE})(
     dispatchMock,
     () => state,
@@ -72,7 +74,7 @@ it('searchPermissions announces when search is complete', () => {
 })
 
 it('setAndOpenRoleTray dispatches hideAllTrays and dispalyRoleTray', () => {
-  const dispatchMock = jest.fn()
+  const dispatchMock = vi.fn()
   actions.setAndOpenRoleTray('banana')(dispatchMock, () => {})
 
   const expectedHideDispatch = {
@@ -91,7 +93,7 @@ it('setAndOpenRoleTray dispatches hideAllTrays and dispalyRoleTray', () => {
 })
 
 it('setAndOpenAddTray dispatches hideAllTrays and displayAddTray', () => {
-  const dispatchMock = jest.fn()
+  const dispatchMock = vi.fn()
   actions.setAndOpenAddTray()(dispatchMock, () => {})
   const expectedHideDispatch = {
     type: 'HIDE_ALL_TRAYS',
@@ -106,7 +108,7 @@ it('setAndOpenAddTray dispatches hideAllTrays and displayAddTray', () => {
 })
 
 it('setAndOpenPermissionTray dispatches hideAllTrays and dispalyPermissionTray', () => {
-  const dispatchMock = jest.fn()
+  const dispatchMock = vi.fn()
   actions.setAndOpenPermissionTray('banana')(dispatchMock, () => {})
   const expectedHideDispatch = {
     type: 'HIDE_ALL_TRAYS',
@@ -130,7 +132,7 @@ it('filterRoles dispatches updateRoleFilters', () => {
     roles: ROLES,
     selectedRoles: [{id: '104', label: 'kitty', children: 'kitty', value: '104'}],
   }
-  const dispatchMock = jest.fn()
+  const dispatchMock = vi.fn()
   actions.filterRoles({selectedRoles: [ROLES[0]], contextType: COURSE})(dispatchMock, () => state)
   const expectedFirstDispatch = {
     type: 'UPDATE_SELECTED_ROLES',
@@ -156,7 +158,7 @@ it('filterRemovedRole dispatches updateRoleFilters and filterDeletedRole', () =>
       {id: '108', label: 'meow', children: 'meow', value: '108'},
     ],
   }
-  const dispatchMock = jest.fn()
+  const dispatchMock = vi.fn()
   actions.filterRemovedRole('Course')(dispatchMock, () => state)
   const expectedUpdateRoleDispatch = {
     type: 'UPDATE_ROLE_FILTERS',
@@ -175,7 +177,7 @@ it('filterRemovedRole dispatches updateRoleFilters and filterDeletedRole', () =>
 
 it('tabChanged dispatches permissionsTabChanged', () => {
   const state = {contextId: 1, permissions: PERMISSIONS, roles: ROLES}
-  const dispatchMock = jest.fn()
+  const dispatchMock = vi.fn()
   actions.tabChanged(ACCOUNT)(dispatchMock, () => state)
   expect(dispatchMock).toHaveBeenCalledTimes(1)
   const expectedDispatch = {
@@ -193,13 +195,13 @@ describe('api actions', () => {
   beforeEach(() => {
     fakeENV.setup()
     window.ENV.flashAlertTimeout = 5
-    jest.useRealTimers()
+    vi.useRealTimers()
   })
   afterEach(() => {
     server.resetHandlers()
-    jest.clearAllMocks()
-    jest.clearAllTimers()
-    jest.useFakeTimers()
+    vi.clearAllMocks()
+    vi.clearAllTimers()
+    vi.useFakeTimers()
     fakeENV.teardown()
   })
   afterAll(() => server.close())
@@ -219,7 +221,7 @@ describe('api actions', () => {
       }),
     )
 
-    const mockDispatch = jest.fn()
+    const mockDispatch = vi.fn()
     const state = {contextId: 1, permissions: PERMISSIONS, roles: []}
     const getState = () => state
     actions.updateRoleName('1', 'steven', 'StudentRoll')(mockDispatch, getState)
@@ -259,7 +261,7 @@ describe('api actions', () => {
       }),
     )
 
-    const mockDispatch = jest.fn()
+    const mockDispatch = vi.fn()
     const state = {contextId: 1, permissions: PERMISSIONS, roles: [], selectedRoles: []}
     const getState = () => state
     actions.createNewRole('steven', 'StudentRoll')(mockDispatch, getState)
@@ -326,7 +328,7 @@ describe('api actions', () => {
       }),
     )
 
-    const mockDispatch = jest.fn()
+    const mockDispatch = vi.fn()
     const state = {contextId: 1, permissions: PERMISSIONS, roles: [], selectedRoles: []}
     const getState = () => state
     actions.createNewRole('steven', 'StudentRoll')(mockDispatch, getState)
@@ -355,7 +357,7 @@ describe('api actions', () => {
         {id: '3', permissions: {delete_course: {enabled: true, locked: true, explicit: true}}},
       ],
     }
-    const dispatchMock = jest.fn()
+    const dispatchMock = vi.fn()
 
     const expectedUpdatePermsDispatch = {
       type: 'UPDATE_PERMISSIONS',
@@ -421,9 +423,9 @@ describe('api actions', () => {
     )
 
     const state = {contextId: 1, permissions: PERMISSIONS, roles: ROLES}
-    const successCallbackMock = jest.fn()
-    const failCallbackMock = jest.fn()
-    const mockDispatch = jest.fn()
+    const successCallbackMock = vi.fn()
+    const failCallbackMock = vi.fn()
+    const mockDispatch = vi.fn()
     actions.deleteRole(ROLES[1], successCallbackMock, failCallbackMock)(mockDispatch, () => state)
 
     await waitFor(() => {
@@ -446,9 +448,9 @@ describe('api actions', () => {
     )
 
     const state = {contextId: 1, permissions: PERMISSIONS, roles: ROLES}
-    const successCallbackMock = jest.fn()
-    const failCallbackMock = jest.fn()
-    const mockDispatch = jest.fn()
+    const successCallbackMock = vi.fn()
+    const failCallbackMock = vi.fn()
+    const mockDispatch = vi.fn()
     actions.deleteRole(ROLES[1], successCallbackMock, failCallbackMock)(mockDispatch, () => state)
 
     await waitFor(() => {

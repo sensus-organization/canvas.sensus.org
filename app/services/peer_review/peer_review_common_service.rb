@@ -20,13 +20,18 @@
 class PeerReview::PeerReviewCommonService < ApplicationService
   include PeerReview::Validations
 
+  # Sentinel value to distinguish "not provided" from "explicitly nil"
+  # This allows us to preserve existing values when params are omitted
+  # and support explicit nil to clear values
+  NOT_PROVIDED = Object.new.freeze
+
   def initialize(
     parent_assignment: nil,
-    points_possible: nil,
-    grading_type: nil,
-    due_at: nil,
-    unlock_at: nil,
-    lock_at: nil
+    points_possible: NOT_PROVIDED,
+    grading_type: NOT_PROVIDED,
+    due_at: NOT_PROVIDED,
+    unlock_at: NOT_PROVIDED,
+    lock_at: NOT_PROVIDED
   )
     super()
     @parent_assignment = parent_assignment
@@ -55,15 +60,15 @@ class PeerReview::PeerReviewCommonService < ApplicationService
     attrs = {
       title: generate_peer_review_title,
       parent_assignment_id: @parent_assignment.id,
-      has_sub_assignments: false,
-      submission_types: expected_submission_types
+      has_sub_assignments: false
     }
 
-    attrs[:points_possible] = @points_possible if @points_possible
-    attrs[:grading_type] = @grading_type if @grading_type
-    attrs[:due_at] = @due_at if @due_at
-    attrs[:unlock_at] = @unlock_at if @unlock_at
-    attrs[:lock_at] = @lock_at if @lock_at
+    # Only include attributes that were explicitly provided
+    attrs[:points_possible] = @points_possible if @points_possible != NOT_PROVIDED
+    attrs[:grading_type] = @grading_type if @grading_type != NOT_PROVIDED
+    attrs[:due_at] = @due_at if @due_at != NOT_PROVIDED
+    attrs[:unlock_at] = @unlock_at if @unlock_at != NOT_PROVIDED
+    attrs[:lock_at] = @lock_at if @lock_at != NOT_PROVIDED
 
     attrs
   end
@@ -81,21 +86,17 @@ class PeerReview::PeerReviewCommonService < ApplicationService
       attrs[attr_sym] = parent_value if parent_value != sub_value
     end
 
-    # Peer review specific attributes that have changed
-    attrs[:points_possible] = @points_possible if @points_possible != peer_review_sub.points_possible
-    attrs[:grading_type] = @grading_type if @grading_type != peer_review_sub.grading_type
-    attrs[:due_at] = @due_at if @due_at != peer_review_sub.due_at
-    attrs[:unlock_at] = @unlock_at if @unlock_at != peer_review_sub.unlock_at
-    attrs[:lock_at] = @lock_at if @lock_at != peer_review_sub.lock_at
+    # Peer review specific attributes that have changed - only update if explicitly provided
+    attrs[:points_possible] = @points_possible if @points_possible != NOT_PROVIDED && @points_possible != peer_review_sub.points_possible
+    attrs[:grading_type] = @grading_type if @grading_type != NOT_PROVIDED && @grading_type != peer_review_sub.grading_type
+    attrs[:due_at] = @due_at if @due_at != NOT_PROVIDED && @due_at != peer_review_sub.due_at
+    attrs[:unlock_at] = @unlock_at if @unlock_at != NOT_PROVIDED && @unlock_at != peer_review_sub.unlock_at
+    attrs[:lock_at] = @lock_at if @lock_at != NOT_PROVIDED && @lock_at != peer_review_sub.lock_at
 
     # Title requires special handling
     expected_title = generate_peer_review_title
     if expected_title != peer_review_sub.title
       attrs[:title] = expected_title
-    end
-
-    if expected_submission_types != peer_review_sub.submission_types
-      attrs[:submission_types] = expected_submission_types
     end
 
     attrs
@@ -115,12 +116,18 @@ class PeerReview::PeerReviewCommonService < ApplicationService
     end
   end
 
-  def expected_submission_types
-    if @grading_type == "not_graded"
-      "not_graded"
-    else
-      # for compatibility with assignment grading workflows
-      "online_text_entry"
+  def validate_dates
+    # Only validate if at least one date was explicitly provided
+    has_dates = [@due_at, @unlock_at, @lock_at].any? { |date| date != NOT_PROVIDED }
+
+    if has_dates
+      # Build hash with only explicitly provided dates
+      peer_review_dates = {}
+      peer_review_dates[:due_at] = @due_at if @due_at != NOT_PROVIDED
+      peer_review_dates[:unlock_at] = @unlock_at if @unlock_at != NOT_PROVIDED
+      peer_review_dates[:lock_at] = @lock_at if @lock_at != NOT_PROVIDED
+
+      validate_peer_review_dates_against_parent_assignment(peer_review_dates, @parent_assignment)
     end
   end
 end

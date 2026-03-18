@@ -67,8 +67,9 @@ describe Accessibility::Rules::ImgAltRule do
 
       result = rule.fix!(img_element, nil)
 
-      expect(result).to be_a(Array)
-      expect(result.length).to eq(2)
+      expect(result).to be_a(Hash)
+      expect(result[:changed]).to eq(img_element)
+      expect(result[:content_preview]).to be_a(String)
       expect(img_element["role"]).to eq("presentation")
       expect(img_element["alt"]).to eq("")
     end
@@ -82,10 +83,15 @@ describe Accessibility::Rules::ImgAltRule do
 
       result = rule.fix!(img_element, "Descriptive alt text")
 
-      expect(result).to be_a(Array)
-      expect(result.length).to eq(2)
-      expect(result[1]).to include('style="max-width: 100%; max-height: 13rem; object-fit: contain;"')
-      expect(result[1]).to include('alt="Descriptive alt text"')
+      expect(result).to be_a(Hash)
+      expect(result[:changed]).to eq(img_element)
+      expect(result[:content_preview]).to include("display: flex")
+      expect(result[:content_preview]).to include("justify-content: center")
+      expect(result[:content_preview]).to include("align-items: center")
+      expect(result[:content_preview]).to include("max-width: 100%")
+      expect(result[:content_preview]).to include("max-height: 100%")
+      expect(result[:content_preview]).to include("object-fit: contain")
+      expect(result[:content_preview]).to include('alt="Descriptive alt text"')
     end
 
     it "raises an error when alt text is a generic filename" do
@@ -136,29 +142,6 @@ describe Accessibility::Rules::ImgAltRule do
     end
   end
 
-  context "when generating alt text automatically" do
-    it "calls ImgAltRuleHelper and returns generated text" do
-      # Create HTML with an image that has a source
-      input_html = '<figure><img src="https://example.com/image.jpg" class="hero-image" width="500" height="300"><figcaption>Beautiful scenery</figcaption></figure>'
-      document = Nokogiri::HTML.fragment(input_html)
-      extend_nokogiri_with_dom_adapter(document) # Using method from RuleTestHelper
-      img_element = document.at_css("img")
-
-      # Mock ImgAltRuleHelper to verify the call but still use a controlled return value
-      helper_class = Accessibility::Rules::ImgAltRuleHelper
-      generated_alt = "A beautiful landscape with mountains"
-      expect(helper_class).to receive(:generate_alt_text)
-        .with("https://example.com/image.jpg")
-        .and_return(generated_alt)
-
-      # Call the method with our image element
-      result = Accessibility::Rules::ImgAltRule.new.generate_fix(img_element)
-
-      # Verify the result is what our mock returned
-      expect(result).to eq(generated_alt)
-    end
-  end
-
   context "when generating issue preview" do
     it "returns styled HTML for img elements" do
       input_html = '<div><img id="test-img" src="image.jpg" alt=""></div>'
@@ -170,7 +153,12 @@ describe Accessibility::Rules::ImgAltRule do
       result = rule.issue_preview(img_element)
 
       expect(result).not_to be_nil
-      expect(result).to include('style="max-width: 100%; max-height: 13rem; object-fit: contain;"')
+      expect(result).to include("display: flex")
+      expect(result).to include("justify-content: center")
+      expect(result).to include("align-items: center")
+      expect(result).to include("max-width: 100%")
+      expect(result).to include("max-height: 100%")
+      expect(result).to include("object-fit: contain")
       expect(result).to include('id="test-img"')
       expect(result).to include('src="image.jpg"')
     end

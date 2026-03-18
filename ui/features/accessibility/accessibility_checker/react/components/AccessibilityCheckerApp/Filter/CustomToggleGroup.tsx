@@ -103,6 +103,7 @@ class CustomToggleGroup extends Component<ToggleGroupProps> {
     return (
       <IconButton
         {...props}
+        data-testid="filter-resources-toggle"
         withBackground={false}
         withBorder={false}
         size={size === 'large' ? 'medium' : 'small'}
@@ -120,8 +121,10 @@ class CustomToggleGroup extends Component<ToggleGroupProps> {
       <View
         {...detailsProps}
         display="block"
-        borderWidth={this.props.border ? 'small none none none' : 'none'}
+        borderWidth="small none none none"
         borderColor={styles?.borderColor}
+        padding="medium 0 0 0"
+        margin="x-small 0 0 0"
       >
         {this.props.transition && this._shouldTransition ? (
           <Transition transitionOnMount in type="fade">
@@ -151,12 +154,19 @@ class CustomToggleGroup extends Component<ToggleGroupProps> {
               background="primary"
               borderColor={styles?.borderColor}
             >
-              <Flex padding={this.props.size === 'small' ? 'x-small' : 'small x-small small small'}>
-                <Flex.Item shouldGrow shouldShrink padding="0 x-small 0 0">
-                  {this.props.summary}
-                </Flex.Item>
-                <Flex.Item>{this.renderToggle(getToggleProps(), expanded)}</Flex.Item>
-              </Flex>
+              <View
+                as="div"
+                padding={this.props.size === 'small' ? 'x-small' : 'small x-small small small'}
+              >
+                <Flex alignItems="start">
+                  <Flex.Item shouldGrow shouldShrink padding="0 x-small 0 0">
+                    {this.props.summary}
+                  </Flex.Item>
+                  <Flex.Item margin="x-small 0">
+                    {this.renderToggle(getToggleProps(), expanded)}
+                  </Flex.Item>
+                </Flex>
+              </View>
               {expanded ? this.renderDetails(getDetailsProps()) : <span {...getDetailsProps()} />}
             </View>
           )

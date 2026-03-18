@@ -1564,6 +1564,25 @@ describe Attachment do
       expect(tag2).to be_deleted
     end
 
+    it "updates AttachmentAssociations when overwriting" do
+      discussion_topic = @course.discussion_topics.create!(title: "Test Topic")
+      association1 = @a1.attachment_associations.create!(context: discussion_topic)
+      association2 = @a2.attachment_associations.create!(context: discussion_topic)
+
+      expect(association1.attachment_id).to eq @a1.id
+      expect(association2.attachment_id).to eq @a2.id
+
+      @a.display_name = "a1"
+      @a.handle_duplicates(:overwrite)
+
+      association1.reload
+      expect(association1.attachment_id).to eq @a.id
+      expect(association1.context).to eq discussion_topic
+
+      association2.reload
+      expect(association2.attachment_id).to eq @a2.id
+    end
+
     it "destroys all associated submission_draft_attachments when overwriting" do
       @a1.update_attribute(:display_name, "a2")
       submission = submission_model
@@ -3297,6 +3316,17 @@ describe Attachment do
         expect(@attachment.word_count).to eq 5
       end
 
+      it "updates the word count for a text file with charset parameter" do
+        attachment_model(filename: "test.txt", uploaded_data: fixture_file_upload("amazing_file.txt", "text/plain; charset=UTF-8"))
+        @attachment.update_word_count
+        expect(@attachment.word_count).to eq 5
+      end
+
+      it "recognizes text files with charset as word count supported" do
+        attachment_model(filename: "test.txt", content_type: "text/plain; charset=UTF-8")
+        expect(@attachment.word_count_supported?).to be true
+      end
+
       it "sets 0 if the file is not supported" do
         attachment_model(filename: "test.png", uploaded_data: fixture_file_upload("instructure.png", "image/png"))
         @attachment.update_word_count
@@ -3358,6 +3388,36 @@ describe Attachment do
     it "handles specifically enumerated types" do
       attachment_model content_type: "application/vnd.ms-powerpoint"
       expect(@attachment.mime_class).to eq "ppt"
+    end
+
+    it "strips charset parameter from text/plain" do
+      attachment_model content_type: "text/plain; charset=UTF-8"
+      expect(@attachment.mime_class).to eq "text"
+    end
+
+    it "strips charset parameter from text/html" do
+      attachment_model content_type: "text/html; charset=iso-8859-1"
+      expect(@attachment.mime_class).to eq "html"
+    end
+
+    it "strips multiple parameters" do
+      attachment_model content_type: "text/plain; charset=UTF-8; boundary=something"
+      expect(@attachment.mime_class).to eq "text"
+    end
+
+    it "handles content type with parameter but no space after semicolon" do
+      attachment_model content_type: "text/plain;charset=UTF-8"
+      expect(@attachment.mime_class).to eq "text"
+    end
+
+    it "handles content type with spaces around semicolon" do
+      attachment_model content_type: "text/plain ; charset=UTF-8"
+      expect(@attachment.mime_class).to eq "text"
+    end
+
+    it "still works for content types without parameters" do
+      attachment_model content_type: "text/plain"
+      expect(@attachment.mime_class).to eq "text"
     end
   end
 

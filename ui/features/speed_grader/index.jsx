@@ -67,6 +67,7 @@ ready(() => {
           heroIcon: `/courses/${window.ENV.course_id}/gradebook`,
         },
         emojisDenyList: window.ENV.EMOJI_DENY_LIST ? window.ENV.EMOJI_DENY_LIST.split(',') : [],
+        fixedWarnings: window.ENV.fixed_warnings || [],
         mediaSettings: window.INST.kalturaSettings,
         lang: ENV.LOCALE || ENV.BIGEASY_LOCALE || window.navigator.language,
         currentUserIsAdmin: ENV.current_user_is_admin ?? false,
@@ -91,6 +92,7 @@ ready(() => {
           window.ENV.CONTEXT_TIMEZONE ||
           'UTC',
         masquerade: window.ENV.masquerade ?? null,
+        isPeerReviewSubAssignment: window.ENV.IS_PEER_REVIEW_SUB_ASSIGNMENT ?? false,
         rceTrayProps: getRCSProps(),
       },
       features: {
@@ -113,6 +115,8 @@ ready(() => {
         multiselectFiltersEnabled: window.ENV.MULTISELECT_FILTERS_ENABLED ?? false,
         ltiAssetProcessor: window.ENV.FEATURES.lti_asset_processor ?? false,
         commentBankPerAssignmentEnabled: window.ENV.COMMENT_BANK_PER_ASSIGNMENT_ENABLED ?? false,
+        peerReviewAllocationAndGrading:
+          window.ENV.PEER_REVIEW_ALLOCATION_AND_GRADING_ENABLED ?? false,
       },
     }
   }

@@ -175,7 +175,6 @@ class User < ActiveRecord::Base
   has_many :active_assignments, -> { where("assignments.workflow_state<>'deleted'") }, as: :context, inverse_of: :context, class_name: "Assignment"
   has_many :mentions, inverse_of: :user
   has_many :discussion_entries
-  has_many :discussion_entry_drafts, inverse_of: :user
   has_many :discussion_entry_versions, inverse_of: :user
   has_many :discussion_topic_participants, dependent: :destroy
   has_many :all_attachments, as: "context", class_name: "Attachment"
@@ -211,6 +210,7 @@ class User < ActiveRecord::Base
   has_many :stream_item_instances, dependent: :delete_all
   has_many :all_conversations, -> { preload(:conversation) }, class_name: "ConversationParticipant"
   has_many :conversation_batches, -> { preload(:root_conversation_message) }
+  has_many :authored_conversation_messages, foreign_key: :author_id, class_name: "ConversationMessage", inverse_of: :author
   has_many :favorites
   has_many :messages
   has_many :sis_batches
@@ -233,6 +233,7 @@ class User < ActiveRecord::Base
   has_many :submission_comments, foreign_key: "author_id", inverse_of: :author
 
   has_one :profile, class_name: "UserProfile"
+  has_many :profile_links, through: :profile, source: :links
 
   has_many :progresses, as: :context, inverse_of: :context
   has_many :one_time_passwords, -> { order(:id) }, inverse_of: :user
@@ -1395,15 +1396,26 @@ class User < ActiveRecord::Base
   end
 
   def check_accounts_right?(user, sought_right)
-    # check if the user we are given is an admin in one of this user's accounts
     return false unless user && sought_right
-    return account.grants_right?(user, sought_right) if fake_student? # doesn't have account association
+
+    check_accounts(user) { |account| account.grants_right?(user, sought_right) }
+  end
+
+  def check_accounts_any_right?(user, *sought_rights)
+    return false unless user && sought_rights.any?
+
+    check_accounts(user) { |account| account.grants_any_right?(user, *sought_rights) }
+  end
+
+  def check_accounts(user, &)
+    # check if the user we are given is an admin in one of this user's accounts
+    return yield(account) if fake_student? # doesn't have account association
 
     # Intentionally include deleted pseudonyms when checking deleted users (important for diagnosing deleted users)
     accounts_to_search =
       if associated_accounts.empty?
         if merged_into_user && active_merged_into_user
-          return active_merged_into_user.check_accounts_right?(user, sought_right)
+          return active_merged_into_user.check_accounts(user, &)
         elsif Account.joins(:pseudonyms).where(pseudonyms: { user_id: id }).exists?
           Account.joins(:pseudonyms).where(pseudonyms: { user_id: id })
         else
@@ -1417,9 +1429,9 @@ class User < ActiveRecord::Base
     search_method = lambda do |shard|
       # new users with creation pending enrollments don't have account associations
       if accounts_to_search.shard(shard).empty? && common_shards.length == 1 && !unavailable?
-        account.grants_right?(user, sought_right)
+        yield(account)
       else
-        accounts_to_search.shard(shard).any? { |a| a.grants_right?(user, sought_right) }
+        accounts_to_search.shard(shard).any?(&)
       end
     end
     # search shards the two users have in common first, since they're most likely
@@ -2119,19 +2131,13 @@ class User < ActiveRecord::Base
     true
   end
 
-  def prefers_widget_dashboard?(domain_root_account, flag = nil)
+  def prefers_widget_dashboard?(_domain_root_account, _flag = nil)
     # Explicit preference takes priority
     return preferences[:widget_dashboard_user_preference] unless preferences[:widget_dashboard_user_preference].nil?
 
-    # Default based on feature flag state on the domain root account:
-    # - "allowed" state: default to FALSE (opt-in required)
-    # - "allowed_on" state: default to TRUE (opt-out available)
-    # - "on" state: enabled for everyone
-    return false unless domain_root_account
-
-    # Use provided flag to avoid redundant lookups, or fetch if not provided
-    flag ||= domain_root_account.lookup_feature_flag(:widget_dashboard)
-    flag&.enabled? || false
+    # Require explicit opt-in for both "allowed" and "allowed_on" states
+    # When preference is nil, return false
+    false
   end
 
   def auto_show_cc?
@@ -2519,6 +2525,15 @@ class User < ActiveRecord::Base
     end
   end
 
+  def active_non_student_enrollment?
+    return @_active_non_student_enrollment if defined?(@_active_non_student_enrollment)
+
+    @_active_non_student_enrollment = Rails.cache.fetch_with_batched_keys(["has_active_non_student_enrollment", ApplicationController.region].cache_key, batch_object: self, batched_keys: :enrollments) do
+      enrollments.shard(in_region_associated_shards).where.not(type: %w[StudentEnrollment StudentViewEnrollment ObserverEnrollment])
+                 .where.not(workflow_state: %w[rejected inactive deleted completed]).exists?
+    end
+  end
+
   def account_membership?
     return @_account_membership if defined?(@_account_membership)
 
@@ -2847,9 +2862,15 @@ class User < ActiveRecord::Base
       )
     end
 
-    if course_ids_with_checkpoints_enabled.any?
+    # Filter context_codes to only checkpoint-enabled courses (consistent with regular assignment filtering)
+    checkpoint_context_codes = context_codes.select do |code|
+      type, id = ActiveRecord::Base.parse_asset_string(code)
+      type == "Course" && course_ids_with_checkpoints_enabled.include?(id)
+    end
+
+    if checkpoint_context_codes.any?
       sub_assignments = SubAssignment.published
-                                     .for_course(course_ids_with_checkpoints_enabled)
+                                     .for_context_codes(checkpoint_context_codes)
                                      .due_between_with_overrides(now, opts[:end_at])
                                      .include_submitted_count.to_a
 
@@ -2953,25 +2974,28 @@ class User < ActiveRecord::Base
   # given user, i.e. courses and sections
   def appointment_context_codes(include_observers: false)
     @appointment_context_codes ||= {}
-    @appointment_context_codes[include_observers] ||= Rails.cache.fetch([self, "cached_appointment_codes", ApplicationController.region, include_observers].cache_key, expires_in: 1.day) do
+    @appointment_context_codes[[Shard.current, include_observers]] ||= Rails.cache.fetch([self, "cached_appointment_codes", ApplicationController.region, Shard.current, include_observers].cache_key, expires_in: 1.day) do
       ret = { primary: [], secondary: [] }
       cached_currentish_enrollments(preload_dates: true).each do |e|
         next unless (e.student? || (include_observers && e.observer?)) && e.active?
+        next unless e.shard == Shard.current
 
         ret[:primary] << "course_#{e.course_id}"
         ret[:secondary] << "course_section_#{e.course_section_id}"
       end
-      ret[:secondary].concat(groups.map { |g| "group_category_#{g.group_category_id}" })
+      ret[:secondary].concat(groups.shard(Shard.current).map { |g| "group_category_#{g.group_category_id}" })
       ret
     end
   end
 
   def manageable_appointment_context_codes
-    cache_key = [self, "cached_manageable_appointment_codes", ApplicationController.region].cache_key
-    @manageable_appointment_context_codes ||= Rails.cache.fetch(cache_key, expires_in: 1.day) do
+    @manageable_appointment_context_codes ||= {}
+    cache_key = [self, "cached_manageable_appointment_codes", ApplicationController.region, Shard.current].cache_key
+    @manageable_appointment_context_codes[Shard.current] ||= Rails.cache.fetch(cache_key, expires_in: 1.day) do
       ret = { full: [], limited: [], secondary: [] }
       limited_sections = {}
       manageable_enrollments_by_permission(:manage_calendar, cached_currentish_enrollments).each do |e|
+        next unless e.shard == Shard.current
         next if ret[:full].include?("course_#{e.course_id}")
 
         if e.limit_privileges_to_course_section
@@ -3304,25 +3328,55 @@ class User < ActiveRecord::Base
     end
   end
 
-  def user_can_edit_name?
+  # creates a hash of booleans determining what profile fields the user can edit
+  def details_editable_by_user
     accounts = pseudonyms.shard(self).active.map(&:account)
-    return true if accounts.empty?
 
-    accounts.any?(&:users_can_edit_name?)
+    {
+      can_edit_name: user_can_edit_name?(accounts),
+      can_edit_bio: user_can_edit_bio?(accounts),
+      can_edit_title: user_can_edit_title?(accounts),
+      can_edit_profile_links: user_can_edit_profile_links?(accounts),
+      can_edit: user_can_edit_profile?(accounts),
+      can_edit_channels: user_can_edit_comm_channels?(accounts)
+    }
   end
 
-  def user_can_edit_profile?
-    accounts = pseudonyms.shard(self).active.map(&:account)
+  def check_account_user_can_edit_permissions?(accounts = nil, &)
+    accounts ||= pseudonyms.shard(self).active.map(&:account)
     return true if accounts.empty?
 
-    accounts.any?(&:users_can_edit_profile?)
+    accounts.any?(&)
   end
 
-  def user_can_edit_comm_channels?
-    accounts = pseudonyms.shard(self).active.map(&:account)
-    return true if accounts.empty?
+  def user_can_edit_name?(accounts = nil)
+    check_account_user_can_edit_permissions?(accounts, &:users_can_edit_name?)
+  end
 
-    accounts.any?(&:users_can_edit_comm_channels?)
+  def user_can_edit_bio?(accounts = nil)
+    check_account_user_can_edit_permissions?(accounts) do |account|
+      account.users_can_edit_bio? && account.users_can_edit_profile?
+    end
+  end
+
+  def user_can_edit_title?(accounts = nil)
+    check_account_user_can_edit_permissions?(accounts) do |account|
+      account.users_can_edit_title? && account.users_can_edit_profile?
+    end
+  end
+
+  def user_can_edit_profile_links?(accounts = nil)
+    check_account_user_can_edit_permissions?(accounts) do |account|
+      account.users_can_edit_profile_links? && account.users_can_edit_profile?
+    end
+  end
+
+  def user_can_edit_profile?(accounts = nil)
+    check_account_user_can_edit_permissions?(accounts, &:users_can_edit_profile?)
+  end
+
+  def user_can_edit_comm_channels?(accounts = nil)
+    check_account_user_can_edit_permissions?(accounts, &:users_can_edit_comm_channels?)
   end
 
   def suspended?
@@ -3932,5 +3986,13 @@ class User < ActiveRecord::Base
 
   def pseudonym_for_restoration_in(account)
     account.pseudonyms.where(user_id: self).order(deleted_at: :desc).first!
+  end
+
+  def all_attachments_frd
+    Attachment.where(user: self).or(Attachment.where(context: self))
+  end
+
+  def all_calendar_events
+    CalendarEvent.where(user: self).or(CalendarEvent.where(context: self))
   end
 end

@@ -31,6 +31,10 @@ module CourseTabPage
     "span[data-testid='tab-courses']"
   end
 
+  def course_card_selector(course_name)
+    "div.ic-DashboardCard[aria-label='#{course_name}']"
+  end
+
   def course_card_title_link_selector(course_name)
     "div[aria-label='#{course_name}'] a.ic-DashboardCard__link"
   end
@@ -50,6 +54,10 @@ module CourseTabPage
 
   def course_tab
     f(course_tab_selector)
+  end
+
+  def course_card(course_name)
+    f(course_card_selector(course_name))
   end
 
   def all_course_cards
@@ -80,6 +88,7 @@ module CourseTabPage
     dashboard_course_assignment_setup
     course_with_files_setup
     set_widget_dashboard_flag(feature_status: true)
+    enable_widget_dashboard_for(@student)
   end
 
   def course_with_files_setup

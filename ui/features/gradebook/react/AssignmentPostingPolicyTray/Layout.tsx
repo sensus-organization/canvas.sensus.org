@@ -16,8 +16,6 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import React, {useEffect} from 'react'
-import _ from 'lodash'
 import {bool, func} from 'prop-types'
 import {Button, type ButtonProps} from '@instructure/ui-buttons'
 import {View} from '@instructure/ui-view'
@@ -30,8 +28,7 @@ import {
   ScheduledRelease,
   ScheduledReleasePolicy,
 } from './ScheduledReleasePolicy/ScheduledReleasePolicy'
-import {useGetAssignmentScheduledPost} from './queries/useGetAssignmentScheduledPost'
-import {FormMessage} from 'features/account_admin_tools/react/CommMessages/types'
+import {useScheduledRelease} from './ScheduledReleasePolicy/hooks/useScheduledRelease'
 
 const I18n = createI18nScope('assignment_posting_policy_tray')
 
@@ -52,33 +49,17 @@ export interface LayoutProps {
 
 export default function Layout(props: LayoutProps) {
   const {scheduled_feedback_releases: scheduledFeedbackReleasesEnabled} = ENV.FEATURES
-  const [updatedScheduledPost, setUpdatedScheduledPost] = React.useState<ScheduledRelease | null>(
-    null,
-  )
-  const [scheduledReleaseErrorMessages, setScheduledReleaseErrorMessages] = React.useState<{
-    [key in 'grades' | 'comments']: FormMessage[]
-  }>({
-    grades: [],
-    comments: [],
+
+  const {
+    scheduledPost,
+    scheduledReleaseErrorMessages,
+    hasScheduledReleaseChanged,
+    handleScheduledReleaseChange,
+    validateScheduledRelease,
+  } = useScheduledRelease({
+    assignmentId: props.assignmentId,
+    onScheduledReleaseChange: props.onScheduledReleaseChange,
   })
-
-  const {data: scheduledPost} = useGetAssignmentScheduledPost(props.assignmentId)
-
-  useEffect(() => {
-    const scheduledPostMode = !scheduledPost
-      ? undefined
-      : scheduledPost.postCommentsAt === scheduledPost.postGradesAt
-        ? 'shared'
-        : 'separate'
-
-    setUpdatedScheduledPost({
-      postCommentsAt: scheduledPost?.postCommentsAt || null,
-      postGradesAt: scheduledPost?.postGradesAt || null,
-      scheduledPostMode,
-    })
-
-    setScheduledReleaseErrorMessages({grades: [], comments: []})
-  }, [scheduledPost])
 
   const automaticallyPostLabel = (
     <View as="div">
@@ -131,33 +112,21 @@ export default function Layout(props: LayoutProps) {
     </View>
   )
 
-  // @ts-expect-error
-  const handlePostPolicyChanged = event => {
+  const handlePostPolicyChanged = (event: React.ChangeEvent<HTMLInputElement>) => {
     props.onPostPolicyChanged({postManually: event.target.value === MANUAL_POST})
   }
 
-  const handleScheduledReleaseChange = (changes: Partial<ScheduledRelease>) => {
-    const newScheduledRelease = {...updatedScheduledPost, ...changes}
-    setUpdatedScheduledPost(newScheduledRelease)
-    props.onScheduledReleaseChange(newScheduledRelease)
+  const handleSave: ButtonProps['onClick'] = event => {
+    if (!validateScheduledRelease()) {
+      return
+    }
+    props.onSave?.(event)
   }
 
-  const scheduledReleaseErrors =
-    updatedScheduledPost?.scheduledPostMode === 'shared'
-      ? scheduledReleaseErrorMessages.grades
-      : [...scheduledReleaseErrorMessages.grades, ...scheduledReleaseErrorMessages.comments]
-
-  const hasScheduledReleaseChanged =
-    !_.isEqual(
-      {
-        postCommentsAt: updatedScheduledPost?.postCommentsAt ?? undefined,
-        postGradesAt: updatedScheduledPost?.postGradesAt ?? undefined,
-      },
-      {
-        postCommentsAt: scheduledPost?.postCommentsAt ?? undefined,
-        postGradesAt: scheduledPost?.postGradesAt ?? undefined,
-      },
-    ) && !scheduledReleaseErrors.length
+  const canSaveScheduledRelease =
+    hasScheduledReleaseChanged &&
+    scheduledReleaseErrorMessages.grades.length < 1 &&
+    scheduledReleaseErrorMessages.comments.length < 1
 
   return (
     <>
@@ -193,13 +162,10 @@ export default function Layout(props: LayoutProps) {
         {scheduledFeedbackReleasesEnabled && props.selectedPostManually && (
           <ScheduledReleasePolicy
             errorMessages={scheduledReleaseErrorMessages}
-            postCommentsAt={updatedScheduledPost?.postCommentsAt}
-            postGradesAt={updatedScheduledPost?.postGradesAt}
-            scheduledPostMode={updatedScheduledPost?.scheduledPostMode}
+            postCommentsAt={scheduledPost?.postCommentsAt}
+            postGradesAt={scheduledPost?.postGradesAt}
+            scheduledPostMode={scheduledPost?.scheduledPostMode}
             handleChange={handleScheduledReleaseChange}
-            handleErrorMessages={(grades, comments) =>
-              setScheduledReleaseErrorMessages({grades, comments})
-            }
           />
         )}
       </View>
@@ -214,7 +180,11 @@ export default function Layout(props: LayoutProps) {
       >
         <Flex justifyItems="end">
           <Flex.Item margin="0 small 0 0">
-            <Button data-testid="assignment-posting-policy-cancel-button" onClick={props.onDismiss} disabled={!props.allowCanceling}>
+            <Button
+              data-testid="assignment-posting-policy-cancel-button"
+              onClick={props.onDismiss}
+              disabled={!props.allowCanceling}
+            >
               {I18n.t('Cancel')}
             </Button>
           </Flex.Item>
@@ -222,8 +192,8 @@ export default function Layout(props: LayoutProps) {
           <Flex.Item>
             <Button
               data-testid="assignment-posting-policy-save-button"
-              onClick={props.onSave}
-              disabled={!props.allowSaving && !hasScheduledReleaseChanged}
+              onClick={handleSave}
+              disabled={!props.allowSaving && !canSaveScheduledRelease}
               color="primary"
             >
               {I18n.t('Save')}

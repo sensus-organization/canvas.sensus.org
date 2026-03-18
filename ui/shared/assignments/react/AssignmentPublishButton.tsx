@@ -100,8 +100,7 @@ const AssignmentPublishButton = ({
       })
       .catch(() => handleUpdatePublishFailure(isPublishing))
   }
-  const getButtonLabel = (): React.ReactFragment => {
-    // @ts-expect-error
+  const getButtonLabel = (): React.ReactNode => {
     return (
       <>
         {assignmentPublished ? I18n.t('Published') : I18n.t('Unpublished')}
@@ -147,15 +146,14 @@ const AssignmentPublishButton = ({
       }
       withArrow={false}
       trigger={
-        // @ts-expect-error
         <Button
-          elementRef={buttonRefCallback}
-          renderIcon={assignmentPublished ? IconPublishSolid : IconNoLine}
+          elementRef={(el: Element | null) => buttonRefCallback(el as HTMLButtonElement | null)}
+          renderIcon={assignmentPublished ? <IconPublishSolid /> : <IconNoLine />}
           color="primary-inverse"
           themeOverride={buttonThemeOverride}
           data-testid="assignment-publish-menu"
-          display={breakpoints.mobileOnly && 'block'}
-          margin={breakpoints.mobileOnly && 'none none small none'}
+          display={breakpoints.mobileOnly ? 'block' : undefined}
+          margin={breakpoints.mobileOnly ? 'none none small none' : undefined}
         >
           {getButtonLabel()}
         </Button>

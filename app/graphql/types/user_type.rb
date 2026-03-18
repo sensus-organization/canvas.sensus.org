@@ -19,6 +19,13 @@
 #
 
 module Types
+  class CourseWorkSubmissionsOrderField < BaseEnum
+    graphql_name "CourseWorkSubmissionsOrderField"
+    description "Fields to order course work submissions by"
+    value "graded_at", value: :graded_at, description: "Order by graded date"
+    value "due_at", value: :due_at, description: "Order by due date"
+  end
+
   class DashboardObserveeFilterInputType < BaseInputObject
     graphql_name "DashboardObserveeFilter"
     argument :observed_user_id,
@@ -78,15 +85,15 @@ module Types
 
     global_id_field :id
 
-    field :first_name, HtmlEncodedStringType, null: true
-    field :last_name, HtmlEncodedStringType, null: true
-    field :name, HtmlEncodedStringType, null: true
+    field :first_name, String, null: true
+    field :last_name, String, null: true
+    field :name, String, null: true
     field :short_name,
-          HtmlEncodedStringType,
+          String,
           "A short name the user has selected, for use in conversations or other less formal places through the site.",
           null: true
     field :sortable_name,
-          HtmlEncodedStringType,
+          String,
           "The name of the user that is should be used for sorting groups of users, such as in the gradebook.",
           null: true
 
@@ -141,22 +148,8 @@ module Types
     field :email, String, null: true
 
     def email
-      # IMPORTANT: The order of permission checks here is critical for performance.
-      # We check higher-level permissions (account/course) BEFORE user-level permissions
-      # to avoid N+1 queries. Checking object.grants_right? on the user requires loading
-      # all of the user's courses to verify permissions, which causes N+1s when
-      # resolving email for multiple users (e.g., in a course roster).
-      #
-      # By checking domain_root_account and course permissions first, we leverage context
-      # objects that are already loaded. Only when these context-level checks fail do we
-      # fall back to the expensive user-level permission check.
-      #
-      # When a course context is present, we skip the object-level permission check entirely
-      # and only check account/course level permissions for better performance.
-      #
-      # This optimization prevents timeouts on initial requests and matches the pattern
-      # used in the REST API for similar permission checks.
-
+      # Check account/course permissions before user-level to avoid N+1 queries.
+      # In course context, skip expensive object.grants_right? that loads all user enrollments.
       domain_root_account = context[:domain_root_account]
       unless domain_root_account.grants_right?(context[:current_user], :read_email_addresses)
         course = context[:course]
@@ -180,37 +173,55 @@ module Types
 
     field :sis_id, String, null: true
     def sis_id
+      # Check account/course permissions before user-level to avoid N+1 queries.
+      # In course context, skip expensive object.grants_any_right? that loads all user enrollments.
       domain_root_account = context[:domain_root_account]
-      if domain_root_account.grants_any_right?(context[:current_user], :read_sis, :manage_sis) ||
-         context[:course]&.grants_any_right?(context[:current_user], :read_sis, :manage_sis) ||
-         object.grants_any_right?(context[:current_user], :read_sis, :manage_sis)
-        load_association(:pseudonyms).then do
-          pseudonym = SisPseudonym.for(object,
-                                       domain_root_account,
-                                       type: :implicit,
-                                       require_sis: false,
-                                       root_account: domain_root_account,
-                                       in_region: true)
-          pseudonym&.sis_user_id
-        end
+      unless domain_root_account.grants_any_right?(context[:current_user], :read_sis, :manage_sis)
+        course = context[:course]
+        has_permission = if course
+                           course.grants_any_right?(context[:current_user], :read_sis, :manage_sis)
+                         else
+                           object.grants_any_right?(context[:current_user], :read_sis, :manage_sis)
+                         end
+
+        return unless has_permission
+      end
+
+      load_association(:pseudonyms).then do
+        pseudonym = SisPseudonym.for(object,
+                                     domain_root_account,
+                                     type: :implicit,
+                                     require_sis: false,
+                                     root_account: domain_root_account,
+                                     in_region: true)
+        pseudonym&.sis_user_id
       end
     end
 
     field :integration_id, String, null: true
     def integration_id
+      # Check account/course permissions before user-level to avoid N+1 queries.
+      # In course context, skip expensive object.grants_any_right? that loads all user enrollments.
       domain_root_account = context[:domain_root_account]
-      if domain_root_account.grants_any_right?(context[:current_user], :read_sis, :manage_sis) ||
-         context[:course]&.grants_any_right?(context[:current_user], :read_sis, :manage_sis) ||
-         object.grants_any_right?(context[:current_user], :read_sis, :manage_sis)
-        load_association(:pseudonyms).then do
-          pseudonym = SisPseudonym.for(object,
-                                       domain_root_account,
-                                       type: :implicit,
-                                       require_sis: false,
-                                       root_account: domain_root_account,
-                                       in_region: true)
-          pseudonym&.integration_id
-        end
+      unless domain_root_account.grants_any_right?(context[:current_user], :read_sis, :manage_sis)
+        course = context[:course]
+        has_permission = if course
+                           course.grants_any_right?(context[:current_user], :read_sis, :manage_sis)
+                         else
+                           object.grants_any_right?(context[:current_user], :read_sis, :manage_sis)
+                         end
+
+        return unless has_permission
+      end
+
+      load_association(:pseudonyms).then do
+        pseudonym = SisPseudonym.for(object,
+                                     domain_root_account,
+                                     type: :implicit,
+                                     require_sis: false,
+                                     root_account: domain_root_account,
+                                     in_region: true)
+        pseudonym&.integration_id
       end
     end
 
@@ -682,9 +693,10 @@ module Types
       argument :include_overdue, Boolean, required: false, description: "Include overdue assignments"
       argument :observed_user_id, ID, required: false, description: "ID of the observed user"
       argument :only_submitted, Boolean, required: false, description: "Show only submitted assignments"
+      argument :order_by, CourseWorkSubmissionsOrderField, required: false, description: "Field to order results by"
       argument :start_date, GraphQL::Types::ISO8601DateTime, required: false, description: "Start date for due date range filter"
     end
-    def course_work_submissions_connection(course_filter: nil, start_date: nil, end_date: nil, include_overdue: false, include_no_due_date: false, only_submitted: false, observed_user_id: nil)
+    def course_work_submissions_connection(course_filter: nil, start_date: nil, end_date: nil, include_overdue: false, include_no_due_date: false, only_submitted: false, observed_user_id: nil, order_by: nil)
       return [] unless object == current_user
 
       # Get active course enrollments using the same filtering as dashboard
@@ -779,8 +791,13 @@ module Types
         end
       end
 
-      # Order by cached_due_date first (nulls last), then by assignment due_at (nulls last)
-      submissions_query = submissions_query.order(:cached_due_date, assignments: { due_at: :asc })
+      # Order submissions based on order_by parameter
+      submissions_query = case order_by
+                          when :graded_at
+                            submissions_query.order(graded_at: :desc)
+                          when :due_at, nil
+                            submissions_query.order(:cached_due_date, assignments: { due_at: :asc })
+                          end
 
       # Use eager_load for essential associations to avoid N+1 queries
       submissions_query.eager_load(assignment: :course)
@@ -843,32 +860,14 @@ module Types
       MD
       argument :assignment_id, ID, required: false
       argument :course_id, ID, required: false
-      argument :limit, Integer, required: false, deprecation_reason: <<~MD.strip
-        The `limit` argument is deprecated and will be removed in a future version.
-        Please use the standard GraphQL connection argument `first` instead, which provides
-        identical functionality and ensures a consistent API experience across all connection fields.
-      MD
     end
-    def comment_bank_items_connection(query: nil, course_id: nil, assignment_id: nil, limit: nil)
+    def comment_bank_items_connection(query: nil, course_id: nil, assignment_id: nil)
       return unless object == current_user
 
       comments = current_user.comment_bank_items
       comments = comments.where(ActiveRecord::Base.wildcard("comment", query.strip)) if query&.strip.present?
       comments = comments.where(course_id:) if course_id.present?
       comments = comments.where(assignment_id:) if assignment_id.present?
-
-      # Limit to be removed with the 2026-01-17 release
-      # .to_a gets around the .shard() bug documented in FOO-1989 so that it can be properly limited.
-      # After that bug is fixed and Switchman is upgraded in Canvas, we can remove the block below
-      # and use the 'first' argument on the connection instead of 'limit'.
-      if limit.present?
-        comments = comments.limit(limit).to_a.first(limit)
-        if Account.site_admin.feature_enabled?(:send_metrics_for_comment_bank_items_connection_limit_used)
-          InstStatsd::Statsd.distributed_increment("graphql.user_type.comment_bank_items_connection.limit_used", tags: {
-                                                     cluster: Shard.current.database_server&.id || "unknown"
-                                                   })
-        end
-      end
 
       comments
     end
@@ -957,18 +956,6 @@ module Types
       end
     end
 
-    field :comment_bank_items_count, Integer, null: true, deprecation_reason: <<~MD.strip
-      Use `commentBankItems.pageInfo.totalCount` instead. This field will be removed in a future version.
-    MD
-    def comment_bank_items_count
-      if Account.site_admin.feature_enabled?(:send_metrics_for_comment_bank_items_count_used)
-        InstStatsd::Statsd.distributed_increment("graphql.user_type.comment_bank_items_count_used", tags: {
-                                                   cluster: Shard.current.database_server&.id || "unknown"
-                                                 })
-      end
-      Loaders::CommentBankItemCountLoader.load(object)
-    end
-
     field :course_roles, [String], null: true do
       argument :built_in_only, Boolean, "Only return default/built_in roles", required: false
       argument :course_id, String, required: false
@@ -1019,7 +1006,7 @@ module Types
       return nil unless assignment
 
       return nil unless assignment.grants_right?(current_user, :grade) &&
-                        assignment.context.feature_enabled?(:peer_review_allocation) &&
+                        assignment.context.feature_enabled?(:peer_review_allocation_and_grading) &&
                         assignment.peer_reviews
 
       Loaders::PeerReviewStatusLoader.for(assignment_id).load(object.id)
@@ -1041,34 +1028,80 @@ end
 module Loaders
   class UserCourseEnrollmentLoader < Loaders::ForeignKeyLoader
     def initialize(course_ids:, order_by: [], current_only: false, exclude_concluded: false, exclude_pending_enrollments: true, horizon_courses: nil, sort: {})
-      scope = if horizon_courses
+      @course_ids = course_ids
+      @order_by = order_by
+      @current_only = current_only
+      @exclude_concluded = exclude_concluded
+      @exclude_pending_enrollments = exclude_pending_enrollments
+      @horizon_courses = horizon_courses
+      @sort = sort
+
+      scope = build_scope
+
+      super(scope, :user_id)
+    end
+
+    def perform(user_ids)
+      users = User.where(id: user_ids).index_by { |u| Shard.global_id_for(u.id) }
+
+      users_by_shard = users.each_value.with_object({}) do |user, hash|
+        user.in_region_associated_shards.each do |shard|
+          hash[shard] ||= []
+          hash[shard] << user
+        end
+      end
+
+      all_enrollments = []
+      users_by_shard.each do |shard, shard_users|
+        shard.activate do
+          scope = build_scope
+          local_user_ids = shard_users.map(&:id)
+          all_enrollments.concat(scope.where(user_id: local_user_ids).to_a)
+        end
+      end
+
+      enrollments_by_user = all_enrollments.group_by { |e| Shard.global_id_for(e.user_id) }
+
+      user_ids.each do |id|
+        if users[id]
+          fulfill(id, enrollments_by_user[id] || [])
+        else
+          fulfill(id, nil)
+        end
+      end
+    end
+
+    private
+
+    def build_scope
+      scope = if @horizon_courses
                 Enrollment.horizon
-              elsif horizon_courses == false
+              elsif @horizon_courses == false
                 Enrollment.not_horizon
               else
                 Enrollment.joins(:course)
               end
 
-      scope = if current_only
+      scope = if @current_only
                 scope.current.active_by_date
               else
                 scope.where.not(enrollments: { workflow_state: "deleted" })
                      .where.not(courses: { workflow_state: "deleted" })
               end
 
-      scope = scope.where(course_id: course_ids) if course_ids.present?
+      scope = scope.where(course_id: @course_ids) if @course_ids.present?
 
-      scope = scope.where.not(enrollments: { workflow_state: "completed" }) if exclude_concluded
+      scope = scope.where.not(enrollments: { workflow_state: "completed" }) if @exclude_concluded
 
-      scope = scope.excluding_pending if exclude_pending_enrollments
+      scope = scope.excluding_pending if @exclude_pending_enrollments
 
-      order_by.each { |o| scope = scope.order(o) }
+      @order_by.each { |o| scope = scope.order(o) }
 
-      if sort.present?
-        sort_direction = (sort[:direction] == "desc") ? "DESC" : "ASC"
-        reversed_sort_direction = (sort[:direction] == "desc") ? "ASC" : "DESC"
+      if @sort.present?
+        sort_direction = (@sort[:direction] == "desc") ? "DESC" : "ASC"
+        reversed_sort_direction = (@sort[:direction] == "desc") ? "ASC" : "DESC"
 
-        case sort[:field]
+        case @sort[:field]
         when "last_activity_at"
           # The order for last_activity_at is intentionally reversed because last activity is
           # a timestamp and we want the most recent activity to appear first in ascending order
@@ -1095,7 +1128,7 @@ module Loaders
         end
       end
 
-      super(scope, :user_id)
+      scope
     end
   end
 end

@@ -36,8 +36,7 @@ const listUrl = () => ENV.GRADING_PERIOD_SETS_URL
 
 const createUrl = () => ENV.GRADING_PERIOD_SETS_URL
 
-// @ts-expect-error
-const updateUrl = id => replaceTags(ENV.GRADING_PERIOD_SET_UPDATE_URL, 'id', id)
+const updateUrl = (id: string) => replaceTags(ENV.GRADING_PERIOD_SET_UPDATE_URL ?? '', 'id', id)
 
 const serializeSet = (set: CamelizedGradingPeriodSet) => {
   const gradingPeriodSetAttrs = {
@@ -56,15 +55,15 @@ const baseDeserializeSet = (set: GradingPeriodSet): CamelizedGradingPeriodSet =>
   title: gradingPeriodSetTitle(set),
   weighted: !!set.weighted,
   displayTotalsForAllGradingPeriods: set.display_totals_for_all_grading_periods,
-  // @ts-expect-error
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore - gradingPeriodsApi.deserializePeriods type mismatch
   gradingPeriods: gradingPeriodsApi.deserializePeriods(set.grading_periods),
   permissions: set.permissions,
   createdAt: new Date(set.created_at),
   enrollmentTermIDs: undefined,
 })
 
-// @ts-expect-error
-const gradingPeriodSetTitle = set => {
+const gradingPeriodSetTitle = (set: GradingPeriodSet): string => {
   if (set.title && set.title.trim()) {
     return set.title.trim()
   } else {
@@ -90,23 +89,25 @@ export default {
       const dispatch = new NaiveRequestDispatch()
 
       dispatch
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore - NaiveRequestDispatch.getDepaginated returns untyped Promise
         .getDepaginated(listUrl())
-        // @ts-expect-error
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore - NaiveRequestDispatch Promise chain untyped
         .then(response => resolve(deserializeSets(response)))
-        // @ts-expect-error
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore - NaiveRequestDispatch Promise chain untyped
         .fail(error => reject(error))
     })
   },
 
-  // @ts-expect-error
-  create(set) {
+  create(set: CamelizedGradingPeriodSet) {
     return axios
       .post(createUrl(), serializeSet(set))
       .then(response => deserializeSet(response.data.grading_period_set))
   },
 
-  // @ts-expect-error
-  update(set) {
+  update(set: CamelizedGradingPeriodSet) {
     return axios.patch(updateUrl(set.id), serializeSet(set)).then(_response => set)
   },
 }

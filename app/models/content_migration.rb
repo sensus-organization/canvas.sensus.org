@@ -634,7 +634,7 @@ class ContentMigration < ActiveRecord::Base
         end
         # sync the existing folders first in case someone did something weird like deleted and replaced a folder in the same sync
         MasterCourses::FolderHelper.update_folder_names_and_states(context, source_export)
-        copy_attachments_from_course(source_export)
+        copy_attachments_for_migration(source_export)
         MasterCourses::FolderHelper.recalculate_locked_folders(context)
       elsif for_course_template?
         data = JSON.parse(exported_attachment.open, max_nesting: 50)
@@ -789,6 +789,10 @@ class ContentMigration < ActiveRecord::Base
 
   def process_master_deletions(deletions)
     deletions.each_key do |klass|
+      if MasterCourses::SUB_TYPES_FOR_DELETIONS.include?(klass)
+        process_master_deletion_for_subtypes(deletions[klass], klass) if deletions[klass].present?
+        next
+      end
       next unless MasterCourses::CONTENT_TYPES_FOR_DELETIONS.include?(klass)
 
       mig_ids = deletions[klass]
@@ -850,6 +854,33 @@ class ContentMigration < ActiveRecord::Base
     end
   end
 
+  def process_master_deletion_for_subtypes(migration_ids, klass)
+    return unless context.is_a?(Course) # blueprint syncs works only for courses
+    return if klass == "Lti::AssetProcessor" && !root_account.feature_enabled?(:lti_asset_processor)
+
+    item_scope = case klass
+                 when "Lti::AssetProcessor"
+                   Lti::AssetProcessor.active.where(migration_id: migration_ids, assignment: context.assignments)
+                 end
+    item_scope.each do |subcontent|
+      content = case klass
+                when "Lti::AssetProcessor"
+                  subcontent.assignment.discussion_topic? ? subcontent.assignment.discussion_topic : subcontent.assignment
+                end
+      if skip_blueprint_sync_deletion?(content)
+        Rails.logger.debug { "skipping deletion sync for #{klass} #{subcontent.migration_id} due to downstream changes" }
+        add_skipped_item(subcontent.migration_id)
+        next
+      end
+      subcontent.destroy
+    end
+  end
+
+  def skip_blueprint_sync_deletion?(content)
+    child_tag = master_course_subscription.content_tag_for(content)
+    child_tag&.downstream_changes&.any? && !content.editing_restricted?(:any)
+  end
+
   def map_merge(old_item, new_item)
     @merge_mappings ||= {}
     @merge_mappings[old_item.asset_string] = new_item && new_item.id
@@ -861,6 +892,19 @@ class ContentMigration < ActiveRecord::Base
     return @merge_mappings[old_item] if old_item.is_a?(String)
 
     @merge_mappings[old_item.asset_string]
+  end
+
+  def copy_attachments_for_migration(source_export)
+    copy_attachments_from_course(source_export)
+
+    destination_media_folder = Folder.media_folder(context)
+    bp_user_files = Attachment.where(id: source_export.settings["referenced_user_file_ids"]) if source_export.settings["referenced_user_file_ids"].present?
+    (source_export.referenced_files.values + bp_user_files.to_a).each do |att|
+      next unless att.context_type == "User"
+
+      export_path = "#{destination_media_folder.name}/#{att.display_name}"
+      copy_attachment_to_destination_course(source_export, att, export_path, destination_media_folder.id)
+    end
   end
 
   def copy_attachments_from_course(source_export)
@@ -1146,6 +1190,35 @@ class ContentMigration < ActiveRecord::Base
     elsif block["type"]["resolvedName"] == "RCETextBlock" && (html = block["props"]["text"])
       block["props"]["text"] = convert_html(html, context, migration_id, :block_editor_text)
     end
+  end
+
+  def user_file_link_matches_uuid?(html, attachment)
+    # TODO: We changed how user files are exported into export packages in
+    # 600e3abd10eb6f4e2746d866dd8f757659ff884a and 21e87b373408165938e73e2bf7aad097e7d0f582
+    # This whole method should be removed in a few years once content migrations are less
+    # likely to have user files directly linked in them.
+    return false if html.blank? || attachment.context_type != "User"
+
+    Nokogiri::HTML5.fragment(html, max_tree_depth: 10_000).search("*").each do |node|
+      CanvasLinkMigrator::LinkParser::LINK_ATTRS.each do |attr|
+        next unless node[attr]&.include?(attachment.id.to_s)
+
+        url = begin
+          Rails.application.routes.recognize_path(node[attr])
+        rescue ActionController::RoutingError
+          next
+        end
+        next if Shard.integral_id_for(url[:attachment_id] || url[:file_id] || url[:id]) != attachment.id
+
+        query_values = Addressable::URI.parse(node[attr]).query_values || {}
+        return true if query_values["verifier"] == attachment.uuid
+      end
+    end
+    false
+  end
+
+  def add_association_for_migration?(html, attachment)
+    context == attachment.context || user_file_link_matches_uuid?(html, attachment)
   end
 
   def convert_block_editor_blocks(blocks_json, migration_id, context)
@@ -1455,16 +1528,16 @@ class ContentMigration < ActiveRecord::Base
                          .joins(association_name)
                          .pluck(*src_fields)
                          .each do |src_results|
-            src = src_fields.zip(src_results).to_h
-            src[:id] = src[:content_id]
-            mig_id = src[:migration_id]
-            next unless mig_id_to_dest_id[mig_id]
+                           src = src_fields.zip(src_results).to_h
+                           src[:id] = src[:content_id]
+                           mig_id = src[:migration_id]
+                           next unless mig_id_to_dest_id[mig_id]
 
-            add_asset_pair_to_mapping(mapping, key, mig_id, src, mig_id_to_dest_id[mig_id]) if mig_id_to_dest_id[mig_id][:id]
-            src_assignment_id = mig_id_to_dest_id[mig_id][:shell_id] && src[:assignment_id]
-            next unless src_assignment_id
+                           add_asset_pair_to_mapping(mapping, key, mig_id, src, mig_id_to_dest_id[mig_id]) if mig_id_to_dest_id[mig_id][:id]
+                           src_assignment_id = mig_id_to_dest_id[mig_id][:shell_id] && src[:assignment_id]
+                           next unless src_assignment_id
 
-            add_asset_pair_to_mapping(mapping, "assignments", mig_id, { id: src_assignment_id }, { id: mig_id_to_dest_id[mig_id][:shell_id] })
+                           add_asset_pair_to_mapping(mapping, "assignments", mig_id, { id: src_assignment_id }, { id: mig_id_to_dest_id[mig_id][:shell_id] })
           end
         end
       else
@@ -1552,7 +1625,7 @@ class ContentMigration < ActiveRecord::Base
                        .where(migration_id: mig_id_to_dest_id.keys)
                        .pluck(:content_id, :migration_id)
                        .each do |src_id, mig_id|
-          mapping[asset_type][src_id] = mig_id_to_dest_id[mig_id]
+                         mapping[asset_type][src_id] = mig_id_to_dest_id[mig_id]
         end
       else
         source_course.shard.activate do

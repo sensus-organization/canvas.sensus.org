@@ -24,7 +24,6 @@ module AttachmentHelper
     url_opts = {
       anonymous_instructor_annotations: attrs.delete(:anonymous_instructor_annotations),
       enable_annotations: attrs.delete(:enable_annotations),
-      moderated_grading_allow_list: attrs[:moderated_grading_allow_list],
       submission_id: attrs.delete(:submission_id)
     }
     url_opts[:enrollment_type] = attrs.delete(:enrollment_type) if url_opts[:enable_annotations]
@@ -210,7 +209,8 @@ module AttachmentHelper
                                        host_and_shard: @safer_domain_host,
                                        verifier:,
                                        download: !inline,
-                                       authorization: @attachment_authorization)
+                                       authorization: @attachment_authorization,
+                                       query_params: options.slice(:location))
     elsif attachment.stored_locally?
       @headers = false if @files_domain
       send_file(attachment.full_filename, type: attachment.content_type_with_encoding, disposition: (inline ? "inline" : "attachment"), filename: attachment.display_name)

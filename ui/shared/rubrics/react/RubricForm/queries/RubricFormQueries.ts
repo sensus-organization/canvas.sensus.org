@@ -186,6 +186,22 @@ export const saveRubric = async (
     }
   })
 
+  let rubricAssociationTypeId = rubric.associationTypeId
+
+  if (!rubricAssociationTypeId) {
+    if (rubric.associationType === 'Assignment') {
+      rubricAssociationTypeId = assignmentId
+    } else if (rubric.associationType === 'Course') {
+      rubricAssociationTypeId = courseId
+    } else if (rubric.associationType === 'Account') {
+      rubricAssociationTypeId = accountId
+    }
+  }
+
+  if (!rubricAssociationTypeId) {
+    throw new Error('Missing rubric association type ID')
+  }
+
   const response = await fetch(url, {
     method,
     headers: {
@@ -206,7 +222,7 @@ export const saveRubric = async (
       rubric_association_id: rubricAssociationId,
       rubric_association: {
         id: rubricAssociationId,
-        association_id: assignmentId ?? accountId ?? courseId,
+        association_id: rubricAssociationTypeId,
         association_type: rubric.associationType,
         purpose: rubric.associationType === 'Assignment' ? 'grading' : 'bookmark',
         hide_points: hidePoints ? 1 : 0,
@@ -263,7 +279,7 @@ export const generateCriteria = async (
       generate_options: {
         criteria_count: generateCriteriaProps.criteriaCount,
         rating_count: generateCriteriaProps.ratingCount,
-        points_per_criterion: generateCriteriaProps.pointsPerCriterion,
+        total_points: generateCriteriaProps.totalPoints,
         use_range: generateCriteriaProps.useRange,
         additional_prompt_info: generateCriteriaProps.additionalPromptInfo,
         grade_level: generateCriteriaProps.gradeLevel,
@@ -320,14 +336,14 @@ export const regenerateCriteria = async (
       generate_options: {
         criteria_count: generateFormOptions?.criteriaCount,
         rating_count: generateFormOptions?.ratingCount,
-        points_per_criterion: generateFormOptions?.pointsPerCriterion,
+        total_points: generateFormOptions?.totalPoints,
         use_range: generateFormOptions?.useRange,
         grade_level: generateFormOptions?.gradeLevel,
+        standard: generateFormOptions?.standard,
       },
       regenerate_options: {
         criterion_id: criterionId,
         additional_user_prompt: additionalPrompt,
-        standard: generateFormOptions?.standard,
       },
     }),
   })

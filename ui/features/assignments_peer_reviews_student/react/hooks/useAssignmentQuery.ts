@@ -19,13 +19,7 @@
 import {useQuery} from '@tanstack/react-query'
 import {executeQuery} from '@canvas/graphql'
 import {PEER_REVIEW_ASSIGNMENT_QUERY} from '../queries'
-
-export interface Assignment {
-  _id: string
-  name: string
-  dueAt: string | null
-  description: string | null
-}
+import {Assignment} from '@canvas/assignments/react/AssignmentsPeerReviewsStudentTypes'
 
 interface AssignmentQueryData {
   assignment: Assignment
@@ -33,15 +27,16 @@ interface AssignmentQueryData {
 
 interface AssignmentQueryVariables {
   assignmentId: string
+  userId: string
 }
 
-export function useAssignmentQuery(assignmentId: string) {
+export function useAssignmentQuery(assignmentId: string, userId: string) {
   return useQuery({
-    queryKey: ['peerReviewAssignment', assignmentId],
+    queryKey: ['peerReviewAssignment', assignmentId, userId],
     queryFn: async () => {
       const result = await executeQuery<AssignmentQueryData, AssignmentQueryVariables>(
         PEER_REVIEW_ASSIGNMENT_QUERY,
-        {assignmentId},
+        {assignmentId, userId},
       )
       return result
     },

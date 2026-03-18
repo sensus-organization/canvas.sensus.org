@@ -148,6 +148,46 @@ describe Submission do
         end
       end
     end
+
+    describe "attachment_id for media_recording submissions" do
+      let(:submission) { @assignment.submissions.build(user: @student) }
+      let(:attachment) { @course.attachments.create!(filename: "test.mp4", uploaded_data: StringIO.new("test")) }
+      let(:media_object) do
+        MediaObject.create!(
+          media_id: "test_media_id_123",
+          media_type: "video",
+          context: @course,
+          user: @student,
+          attachment_id: attachment.id
+        )
+      end
+
+      before do
+        submission.assignment = @assignment
+        submission.user = @student
+        submission.submission_type = "media_recording"
+        submission.media_comment_id = media_object.media_id
+        submission.submitted_at = Time.zone.now
+      end
+
+      it "sets attachment_id from media_object when media_comment_id is present" do
+        expect(submission.attachment_id).to be_nil
+        submission.infer_values
+        expect(submission.attachment_id).to eq(attachment.id)
+      end
+
+      it "does not set attachment_id if media_object has no attachment_id" do
+        media_object.update_column(:attachment_id, nil)
+        submission.infer_values
+        expect(submission.attachment_id).to be_nil
+      end
+
+      it "does not set attachment_id if submission_type is not media_recording" do
+        submission.submission_type = "online_text_entry"
+        submission.infer_values
+        expect(submission.attachment_id).to be_nil
+      end
+    end
   end
 
   describe ".json_serialization_full_parameters" do
@@ -2708,6 +2748,99 @@ describe Submission do
         @course.account.save!
         expect(@submission.grants_right?(@student, :comment)).to be false
       end
+
+      context "for peer reviewers" do
+        before(:once) do
+          @assignment.update!(peer_reviews: true, submission_types: "online_text_entry")
+          @peer_reviewer = @course.enroll_user(User.create!, "StudentEnrollment", enrollment_state: "active").user
+          @peer_reviewer_submission = @assignment.submissions.find_by(user: @peer_reviewer)
+          AssessmentRequest.create!(
+            assessor: @peer_reviewer,
+            assessor_asset: @peer_reviewer_submission,
+            asset: @submission,
+            user: @student
+          )
+        end
+
+        context "when peer_review_allocation_and_grading feature is disabled" do
+          before do
+            @course.root_account.disable_feature!(:peer_review_allocation_and_grading)
+          end
+
+          it "allows peer reviewer to read and comment when they have submitted" do
+            @assignment.submit_homework(@peer_reviewer, body: "my submission")
+            expect(@submission.grants_right?(@peer_reviewer, :read)).to be true
+            expect(@submission.grants_right?(@peer_reviewer, :comment)).to be true
+            expect(@submission.grants_right?(@peer_reviewer, :make_group_comment)).to be true
+          end
+
+          it "does not allow peer reviewer to read and comment when they have not submitted" do
+            expect(@submission.grants_right?(@peer_reviewer, :read)).to be false
+            expect(@submission.grants_right?(@peer_reviewer, :comment)).to be false
+            expect(@submission.grants_right?(@peer_reviewer, :make_group_comment)).to be false
+          end
+        end
+
+        context "when peer_review_allocation_and_grading feature is enabled" do
+          before do
+            @course.root_account.enable_feature!(:peer_review_allocation_and_grading)
+          end
+
+          context "when peer_review_submission_required is false" do
+            before do
+              @assignment.update!(peer_review_submission_required: false)
+              @submission.reload
+            end
+
+            it "allows peer reviewer to read and comment even without submission" do
+              expect(@submission.grants_right?(@peer_reviewer, :read)).to be true
+              expect(@submission.grants_right?(@peer_reviewer, :comment)).to be true
+              expect(@submission.grants_right?(@peer_reviewer, :make_group_comment)).to be true
+            end
+
+            it "allows peer reviewer to read and comment with submission" do
+              @assignment.submit_homework(@peer_reviewer, body: "my submission")
+              expect(@submission.grants_right?(@peer_reviewer, :read)).to be true
+              expect(@submission.grants_right?(@peer_reviewer, :comment)).to be true
+              expect(@submission.grants_right?(@peer_reviewer, :make_group_comment)).to be true
+            end
+          end
+
+          context "when peer_review_submission_required is true" do
+            before do
+              @assignment.update!(peer_review_submission_required: true)
+              @submission.reload
+            end
+
+            it "allows peer reviewer to read and comment when they have submitted" do
+              @assignment.submit_homework(@peer_reviewer, body: "my submission")
+              expect(@submission.grants_right?(@peer_reviewer, :read)).to be true
+              expect(@submission.grants_right?(@peer_reviewer, :comment)).to be true
+              expect(@submission.grants_right?(@peer_reviewer, :make_group_comment)).to be true
+            end
+
+            it "does not allow peer reviewer to read and comment when they have not submitted" do
+              expect(@submission.grants_right?(@peer_reviewer, :read)).to be false
+              expect(@submission.grants_right?(@peer_reviewer, :comment)).to be false
+              expect(@submission.grants_right?(@peer_reviewer, :make_group_comment)).to be false
+            end
+          end
+        end
+      end
+    end
+
+    describe "can :download" do
+      before(:once) do
+        @course = Course.create!
+        @teacher = @course.enroll_teacher(User.create!, enrollment_state: "active").user
+        @student = @course.enroll_user(User.create!, "StudentEnrollment", enrollment_state: "active").user
+        @assignment = @course.assignments.create!(submission_types: "online_text_entry")
+        @submission = @assignment.submit_homework(@student, submission_type: "online_text_entry", body: "test submission")
+      end
+
+      it "allows teachers to download submission attachments" do
+        expect(@submission.grants_right?(@teacher, :download)).to be true
+      end
     end
   end
 
@@ -3476,6 +3609,40 @@ describe Submission do
         submission = @assignment.submit_homework(@student, submission_type: "online_upload", attachments:)
         submission.update!(attachment_id: single_attachment)
         expect(submission.attachment_ids_for_version).to match_array attachments.map(&:id) + [single_attachment.id]
+      end
+    end
+
+    describe "#originality_data with CPF migration" do
+      it "returns empty hash when cpf_migrated? is true" do
+        submission.assignment.assignment_configuration_tool_lookups.create!(
+          tool_product_code: "turnitin-lti",
+          tool_vendor_code: "turnitin.com",
+          tool_resource_type_code: "resource-type-code",
+          tool_type: "Lti::MessageHandler"
+        )
+        allow_any_instance_of(AssignmentConfigurationToolLookup).to receive(:migrated?).and_return(true)
+
+        originality_report.originality_report_url = "http://example.com"
+        originality_report.save!
+
+        expect(submission.originality_data).to eq({})
+      end
+
+      it "returns originality data when cpf_migrated? is false" do
+        submission.assignment.assignment_configuration_tool_lookups.create!(
+          tool_product_code: "turnitin-lti",
+          tool_vendor_code: "turnitin.com",
+          tool_resource_type_code: "resource-type-code",
+          tool_type: "Lti::MessageHandler"
+        )
+        allow_any_instance_of(AssignmentConfigurationToolLookup).to receive(:migrated?).and_return(false)
+
+        originality_report.originality_report_url = "http://example.com"
+        originality_report.save!
+
+        result = submission.originality_data
+        expect(result).to include(attachment.asset_string)
+        expect(result[attachment.asset_string][:report_url]).to eq originality_report.originality_report_url
       end
     end
 
@@ -7495,6 +7662,39 @@ describe Submission do
         assessments = @moderated_submission.visible_rubric_assessments_for(@other_grader, include_provisional: true, provisional_assessments: @all_provisional_assessments)
         expect(assessments).to contain_exactly(@other_assessment)
       end
+
+      context "when grades are published" do
+        before(:once) do
+          @final_assessment = @moderated_rubric_association.assess({
+                                                                     user: @student,
+                                                                     assessor: @final_grader,
+                                                                     artifact: @moderated_submission,
+                                                                     assessment: { assessment_type: "grading", criterion_crit1: { points: 9 } }
+                                                                   })
+          @moderated_assignment.update!(grades_published_at: Time.zone.now)
+        end
+
+        it "returns only the selected rubric assessment when grades are published" do
+          assessments = @moderated_submission.visible_rubric_assessments_for(@final_grader)
+          expect(assessments).to contain_exactly(@final_assessment)
+        end
+
+        it "returns only the selected rubric assessment for provisional graders when grades are published" do
+          assessments = @moderated_submission.visible_rubric_assessments_for(@provisional_grader)
+          expect(assessments).to contain_exactly(@final_assessment)
+        end
+
+        it "returns only the selected rubric assessment for students when grades are published" do
+          assessments = @moderated_submission.visible_rubric_assessments_for(@student)
+          expect(assessments).to contain_exactly(@final_assessment)
+        end
+
+        it "does not return provisional assessments when grades are published" do
+          assessments = @moderated_submission.visible_rubric_assessments_for(@final_grader, include_provisional: true, provisional_assessments: @all_provisional_assessments)
+          expect(assessments).to contain_exactly(@final_assessment)
+          expect(assessments).not_to include(@provisional_assessment, @other_assessment)
+        end
+      end
     end
 
     context "anonymous peer reviews" do
@@ -9705,6 +9905,38 @@ describe Submission do
     end
   end
 
+  describe "submission_type_is_valid" do
+    describe "peer_review submission type" do
+      it "is valid without body field" do
+        parent_assignment = @course.assignments.create!
+        peer_review_sub_assignment = PeerReviewSubAssignment.create!(
+          parent_assignment:,
+          submission_types: PeerReviewSubAssignment::PEER_REVIEW_SUBMISSION_TYPE
+        )
+        submission = peer_review_sub_assignment.submit_homework(
+          @user,
+          submission_type: PeerReviewSubAssignment::PEER_REVIEW_SUBMISSION_TYPE
+        )
+        expect(submission).to be_valid
+        expect(submission.body).to be_nil
+      end
+
+      it "is valid with empty body" do
+        parent_assignment = @course.assignments.create!
+        peer_review_sub_assignment = PeerReviewSubAssignment.create!(
+          parent_assignment:,
+          submission_types: PeerReviewSubAssignment::PEER_REVIEW_SUBMISSION_TYPE
+        )
+        submission = peer_review_sub_assignment.submit_homework(
+          @user,
+          submission_type: PeerReviewSubAssignment::PEER_REVIEW_SUBMISSION_TYPE,
+          body: ""
+        )
+        expect(submission).to be_valid
+      end
+    end
+  end
+
   describe "#ensure_attempts_are_in_range" do
     let(:submission) { @assignment.submissions.first }
 
@@ -10678,6 +10910,32 @@ describe Submission do
           comments = @submission.visible_provisional_comments(@teacher)
           expect(comments).to include(@second_ta_comment)
         end
+
+        context "when grader comments are not visible to graders" do
+          before(:once) do
+            @assignment.update!(grader_comments_visible_to_graders: false)
+          end
+
+          it "allows graders to see their own comments" do
+            comments = @submission.visible_provisional_comments(@second_ta)
+            expect(comments).to include(@second_ta_comment)
+          end
+
+          it "allows graders to see moderator comments after grades are published" do
+            comments = @submission.visible_provisional_comments(@second_ta)
+            expect(comments).to include(@final_grader_comment)
+          end
+
+          it "does not allow graders to see other graders' comments" do
+            comments = @submission.visible_provisional_comments(@second_ta)
+            expect(comments).not_to include(@first_ta_comment)
+          end
+
+          it "allows moderators to see all comments" do
+            comments = @submission.visible_provisional_comments(@teacher)
+            expect(comments).to match_array([@second_ta_comment, @final_grader_comment])
+          end
+        end
       end
     end
   end
@@ -11013,6 +11271,68 @@ describe Submission do
         it "returns false when both conditions are false" do
           expect(submission.skip_broadcasts).to be false
         end
+      end
+    end
+  end
+
+  describe "#submission_type_for_asset_reports" do
+    let(:course) { @course }
+    let(:assignment) { @assignment }
+    let(:student) { @student }
+    let(:submission) { assignment.submissions.find_by(user: student) }
+
+    context "when submission has a submission_type" do
+      it "returns the actual submission_type" do
+        assignment.update!(submission_types: "online_text_entry")
+        submission.update!(submission_type: "online_text_entry")
+        expect(submission.submission_type_for_asset_reports).to eq("online_text_entry")
+      end
+    end
+
+    context "with checkpointed discussions" do
+      let(:checkpointed_topic) { DiscussionTopic.create_graded_topic!(course:, title: "checkpointed discussion") }
+      let(:checkpointed_assignment) { checkpointed_topic.assignment }
+      let(:submission) { checkpointed_assignment.submissions.find_by(user: student) }
+
+      before do
+        # Create checkpoint sub-assignments
+        Checkpoints::DiscussionCheckpointCreatorService.call(
+          discussion_topic: checkpointed_topic,
+          checkpoint_label: CheckpointLabels::REPLY_TO_TOPIC,
+          dates: [{ type: "everyone", due_at: 3.days.from_now }],
+          points_possible: 3
+        )
+        Checkpoints::DiscussionCheckpointCreatorService.call(
+          discussion_topic: checkpointed_topic,
+          checkpoint_label: CheckpointLabels::REPLY_TO_ENTRY,
+          dates: [{ type: "everyone", due_at: 5.days.from_now }],
+          points_possible: 7
+        )
+      end
+
+      it "returns 'discussion_topic' when submission_type is nil for checkpointed discussion" do
+        # Checkpointed discussions have nil submission_type until fully submitted
+        submission.update!(submission_type: nil)
+        expect(submission.submission_type_for_asset_reports).to eq("discussion_topic")
+      end
+    end
+
+    context "with non-checkpointed discussion" do
+      let(:discussion_topic) { DiscussionTopic.create_graded_topic!(course:, title: "regular discussion") }
+      let(:discussion_assignment) { discussion_topic.assignment }
+      let(:submission) { discussion_assignment.submissions.find_by(user: student) }
+
+      it "returns nil when submission_type is nil" do
+        submission.update!(submission_type: nil)
+        expect(submission.submission_type_for_asset_reports).to be_nil
+      end
+    end
+
+    context "with other assignment types" do
+      it "returns nil when submission_type is nil" do
+        assignment.update!(submission_types: "online_upload")
+        submission.update!(submission_type: nil)
+        expect(submission.submission_type_for_asset_reports).to be_nil
       end
     end
   end

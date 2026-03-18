@@ -65,16 +65,28 @@ module WidgetDashboardPage
     "#{widget_pagination_container_selector(widget)} button[data-direction='prev']"
   end
 
-  def people_widget_selector
-    "[data-testid='widget-people-widget']"
-  end
-
   def instructor_list_item_selector(name)
-    "#{people_widget_selector} span[aria-label='#{name}']"
+    "#{widget_container_selector("people")} span[aria-label='#{name}']"
   end
 
   def message_instructor_button_selector(account_id, course_id)
     "[data-testid='message-button-#{account_id}-#{course_id}']"
+  end
+
+  def course_filter_select_selector
+    "[data-testid='course-filter-select']"
+  end
+
+  def role_filter_select_selector
+    "[data-testid='role-filter-select']"
+  end
+
+  def people_course_filter_select_selector
+    "#{widget_container_selector("people")} [data-testid='course-filter-select']"
+  end
+
+  def people_role_filter_select_selector
+    "#{widget_container_selector("people")} [data-testid='role-filter-select']"
   end
 
   def send_message_to_modal_selector(teacher_name)
@@ -117,6 +129,10 @@ module WidgetDashboardPage
     "[data-testid='course-#{course_id}-gradebook-link']"
   end
 
+  def course_grades_go_to_course_link_selector(course_id)
+    "[data-testid='course-#{course_id}-link']"
+  end
+
   def course_grade_text_selector(course_id)
     "[data-testid='course-#{course_id}-grade']"
   end
@@ -143,6 +159,10 @@ module WidgetDashboardPage
 
   def course_work_item_link_selector(item_id)
     "[data-testid='course-work-item-link-#{item_id}']"
+  end
+
+  def course_work_item_course_link_selector(item_id)
+    "[data-testid='course-work-item-course-link-#{item_id}']"
   end
 
   def course_work_item_pill_selector(status_label, item_id)
@@ -184,6 +204,129 @@ module WidgetDashboardPage
   def observed_student_dropdown_selector
     "[data-testid='observed-student-dropdown']"
   end
+
+  # Customization selectors
+  def customize_dashboard_button_selector
+    "[data-testid='customize-dashboard-button']"
+  end
+
+  def save_customize_button_selector
+    "[data-testid='save-customize-button']"
+  end
+
+  def cancel_customize_button_selector
+    "[data-testid='cancel-customize-button']"
+  end
+
+  def widget_column_selector(column_number)
+    "[data-testid='widget-column-#{column_number}']"
+  end
+
+  def widget_container_selector(widget_id)
+    "[data-testid='widget-container-#{widget_id}-widget']"
+  end
+
+  def widget_drag_handle_selector(widget_id)
+    "[data-testid='#{widget_id}-widget-drag-handle']"
+  end
+
+  def widget_remove_button_selector(widget_id)
+    "[data-testid='#{widget_id}-widget-remove-button']"
+  end
+
+  def add_widget_modal_selector
+    "[data-testid='add-widget-modal']"
+  end
+
+  def widget_card_selector(widget_type)
+    "[data-testid='widget-card-#{widget_type}']"
+  end
+
+  def widget_reorder_menu_option_selector(option_text)
+    "span[role='menuitem']:contains('#{option_text}')"
+  end
+
+  def add_widget_button_selector
+    "button:contains('Add widget')"
+  end
+
+  def add_widget_modal_add_button_selector(widget_type)
+    "#{widget_card_selector(widget_type)} button:contains('Add')"
+  end
+
+  def add_widget_modal_added_button_selector(widget_type)
+    "#{widget_card_selector(widget_type)} button:contains('Added')"
+  end
+
+  def add_widget_modal_close_button_selector
+    "#{add_widget_modal_selector} [data-testid='close-button']"
+  end
+
+  # Inbox widget selectors
+  def inbox_filter_select_selector
+    "[data-testid='inbox-filter-select']"
+  end
+
+  def inbox_message_item_prefix_selector
+    "[data-testid*='message-item-']"
+  end
+
+  def inbox_message_item_selector(message_id)
+    "[data-testid='message-item-#{message_id}']"
+  end
+
+  def inbox_no_messages_message_selector
+    "[data-testid='no-messages-message']"
+  end
+
+  def inbox_show_all_messages_link_selector
+    "[data-testid='show-all-messages-link']"
+  end
+
+  def recent_grades_widget_selector
+    "[data-testid='widget-container-recent_grades-widget']"
+  end
+
+  def recent_grade_course_name_prefix_selector
+    "[data-testid*='course-name-']"
+  end
+
+  def recent_grade_expand_button_selector(submission_id)
+    "[data-testid='expand-grade-#{submission_id}']"
+  end
+
+  def recent_grade_open_assignment_link_selector(submission_id)
+    "[data-testid='open-assignment-link-#{submission_id}']"
+  end
+
+  def recent_grade_whatif_link_selector(submission_id)
+    "[data-testid='open-whatif-link-#{submission_id}']"
+  end
+
+  def recent_grade_message_instructor_link_selector(submission_id)
+    "[data-testid='message-instructor-link-#{submission_id}']"
+  end
+
+  def recent_grade_view_feedback_link_selector(submission_id)
+    "[data-testid='view-inline-feedback-button-#{submission_id}']"
+  end
+
+  def recent_grade_feedback_section_selector(submission_id)
+    "[data-testid='feedback-section-#{submission_id}']"
+  end
+
+  def recent_grades_course_filter_selector
+    "[data-testid='course-filter-select']"
+  end
+
+  def recent_grades_view_all_link_selector
+    "[data-testid='view-all-grades-link']"
+  end
+
+  def recent_grades_empty_message_selector
+    "[data-testid='recent-grades-list']"
+  end
+
   #------------------------------ Elements ------------------------------
 
   def announcement_filter
@@ -226,10 +369,6 @@ module WidgetDashboardPage
     f(widget_pagination_prev_button_selector(widget))
   end
 
-  def people_widget
-    f(people_widget_selector)
-  end
-
   def all_message_buttons
     ff("[data-testid*='message-button-']")
   end
@@ -240,6 +379,18 @@ module WidgetDashboardPage
 
   def message_instructor_button(account_id, course_id)
     f(message_instructor_button_selector(account_id, course_id))
+  end
+
+  def course_filter_select
+    f(course_filter_select_selector)
+  end
+
+  def role_filter_select
+    f(role_filter_select_selector)
+  end
+
+  def filter_option(option_text)
+    fj(filter_option_selector(option_text))
   end
 
   def send_message_to_modal(teacher_name)
@@ -282,6 +433,10 @@ module WidgetDashboardPage
     f(course_gradebook_link_selector(course_id))
   end
 
+  def course_grades_go_to_course_link(course_id)
+    f(course_grades_go_to_course_link_selector(course_id))
+  end
+
   def course_grade_text(course_id)
     f(course_grade_text_selector(course_id))
   end
@@ -308,6 +463,10 @@ module WidgetDashboardPage
 
   def course_work_item_link(item_id)
     f(course_work_item_link_selector(item_id))
+  end
+
+  def course_work_item_course_link(item_id)
+    f(course_work_item_course_link_selector(item_id))
   end
 
   def course_work_item_pill(status_label, item_id)
@@ -350,6 +509,132 @@ module WidgetDashboardPage
     f(observed_student_dropdown_selector)
   end
 
+  def customize_dashboard_button
+    f(customize_dashboard_button_selector)
+  end
+
+  def save_customize_button
+    f(save_customize_button_selector)
+  end
+
+  def cancel_customize_button
+    f(cancel_customize_button_selector)
+  end
+
+  def widget_column(column_number)
+    f(widget_column_selector(column_number))
+  end
+
+  def widget_container(widget_id)
+    f(widget_container_selector(widget_id))
+  end
+
+  def all_widget_on_column(column_number)
+    ff("#{widget_column_selector(column_number)} [data-testid^='widget-container-']")
+  end
+
+  def widget_drag_handle(widget_id)
+    f(widget_drag_handle_selector(widget_id))
+  end
+
+  def widget_remove_button(widget_id)
+    f(widget_remove_button_selector(widget_id))
+  end
+
+  def add_widget_modal
+    f(add_widget_modal_selector)
+  end
+
+  def widget_card(widget_type)
+    f(widget_card_selector(widget_type))
+  end
+
+  def widget_reorder_menu_option(option_text)
+    fj(widget_reorder_menu_option_selector(option_text))
+  end
+
+  def add_widget_button
+    fj(add_widget_button_selector)
+  end
+
+  def add_widget_modal_add_button(widget_type)
+    fj(add_widget_modal_add_button_selector(widget_type))
+  end
+
+  def add_widget_modal_added_button(widget_type)
+    fj(add_widget_modal_added_button_selector(widget_type))
+  end
+
+  def add_widget_modal_close_button
+    f(add_widget_modal_close_button_selector)
+  end
+
+  # Inbox widget elements
+  def inbox_filter_select
+    f(inbox_filter_select_selector)
+  end
+
+  def all_inbox_message_items
+    ff(inbox_message_item_prefix_selector)
+  end
+
+  def inbox_message_item(message_id)
+    f(inbox_message_item_selector(message_id))
+  end
+
+  def inbox_no_messages_message
+    f(inbox_no_messages_message_selector)
+  end
+
+  def inbox_show_all_messages_link
+    f(inbox_show_all_messages_link_selector)
+  end
+
+  # Recent grades widget elements
+  def recent_grades_widget
+    f(recent_grades_widget_selector)
+  end
+
+  def all_recent_grade_course_name
+    ff(recent_grade_course_name_prefix_selector)
+  end
+
+  def recent_grade_expand_button(submission_id)
+    f(recent_grade_expand_button_selector(submission_id))
+  end
+
+  def recent_grade_open_assignment_link(submission_id)
+    f(recent_grade_open_assignment_link_selector(submission_id))
+  end
+
+  def recent_grade_whatif_link(submission_id)
+    f(recent_grade_whatif_link_selector(submission_id))
+  end
+
+  def recent_grade_message_instructor_link(submission_id)
+    f(recent_grade_message_instructor_link_selector(submission_id))
+  end
+
+  def recent_grade_view_feedback_link(submission_id)
+    f(recent_grade_view_feedback_link_selector(submission_id))
+  end
+
+  def recent_grade_feedback_section(submission_id)
+    f(recent_grade_feedback_section_selector(submission_id))
+  end
+
+  def recent_grades_course_filter
+    f(recent_grades_course_filter_selector)
+  end
+
+  def recent_grades_view_all_link
+    f(recent_grades_view_all_link_selector)
+  end
+
+  def recent_grades_empty_message
+    f(recent_grades_empty_message_selector)
+  end
+
   #------------------------------ Actions -------------------------------
 
   def filter_announcements_list_by(status)
@@ -367,6 +652,16 @@ module WidgetDashboardPage
     wait_for_ajaximations
   end
 
+  def filter_people_by(filter_type, filter_value)
+    case filter_type
+    when :course
+      click_INSTUI_Select_option(people_course_filter_select_selector, filter_value)
+    when :role
+      click_INSTUI_Select_option(people_role_filter_select_selector, filter_value)
+    end
+    wait_for_ajaximations
+  end
+
   def select_observed_student(student_name)
     expect(observed_student_dropdown).to be_displayed
     click_INSTUI_Select_option(observed_student_dropdown_selector, student_name)
@@ -376,5 +671,91 @@ module WidgetDashboardPage
   def go_to_dashboard
     get "/"
     wait_for_ajaximations
+  end
+
+  def verify_reordered_widget_up_down
+    wait_for_ajaximations
+    reordered_column_2_widgets = all_widget_on_column(2)
+    expect(reordered_column_2_widgets.length).to eq(2)
+    expect(reordered_column_2_widgets[1].attribute("data-testid")).to eq("widget-container-people-widget")
+  end
+
+  def verify_reordered_widget_top_bottom
+    wait_for_ajaximations
+    reordered_column_1_widgets = all_widget_on_column(1)
+    expect(reordered_column_1_widgets.length).to eq(2)
+    expect(reordered_column_1_widgets[0].attribute("data-testid")).to eq("widget-container-course-work-combined-widget")
+    expect(reordered_column_1_widgets[1].attribute("data-testid")).to eq("widget-container-course-grades-widget")
+  end
+
+  def verify_reordered_widget_btw_columns
+    wait_for_ajaximations
+    reordered_column_1_widgets = all_widget_on_column(1)
+    reordered_column_2_widgets = all_widget_on_column(2)
+    expect(reordered_column_1_widgets.length).to eq(2)
+    expect(reordered_column_2_widgets.length).to eq(2)
+    expect(reordered_column_1_widgets[1].attribute("data-testid")).to eq("widget-container-announcements-widget")
+    expect(reordered_column_2_widgets[0].attribute("data-testid")).to eq("widget-container-course-grades-widget")
+  end
+
+  def click_widget_customize_button
+    expect(customize_dashboard_button).to be_displayed
+    customize_dashboard_button.click
+  end
+
+  def click_add_widget_button
+    expect(add_widget_button).to be_displayed
+    add_widget_button.click
+  end
+
+  def click_widget_remove_button(widget_name)
+    expect(widget_remove_button(widget_name)).to be_displayed
+    widget_remove_button(widget_name).click
+  end
+
+  def click_save_customize_button
+    expect(save_customize_button).to be_displayed
+    save_customize_button.click
+  end
+
+  def verify_widget_is_removed(widget_name, column_number)
+    column_widgets = all_widget_on_column(column_number)
+    expect(column_widgets.length).to eq(1)
+    expect(element_exists?(widget_container_selector(widget_name))).to be_falsey
+  end
+
+  def verify_default_widget_count
+    column_1_widgets = all_widget_on_column(1)
+    column_2_widgets = all_widget_on_column(2)
+    expect(column_1_widgets.length).to eq(2)
+    expect(column_2_widgets.length).to eq(2)
+  end
+
+  def filter_inbox_messages_by(filter_value)
+    expect(inbox_filter_select).to be_displayed
+    inbox_filter_select.click
+    click_INSTUI_Select_option(inbox_filter_select_selector, filter_value)
+    wait_for_ajaximations
+  end
+
+  def click_inbox_show_all_messages_link
+    expect(inbox_show_all_messages_link).to be_displayed
+    inbox_show_all_messages_link.click
+  end
+
+  def verify_inbox_message_count(expected_count)
+    expect(all_inbox_message_items.size).to eq(expected_count)
+  end
+
+  def filter_recent_grades_by_course(course_name)
+    expect(recent_grades_course_filter).to be_displayed
+    recent_grades_course_filter.click
+    click_INSTUI_Select_option(recent_grades_course_filter_selector, course_name)
+    wait_for_ajaximations
+  end
+
+  def expand_feedback_on_recent_grade(submission_id)
+    expect(recent_grade_expand_button(submission_id)).to be_displayed
+    recent_grade_expand_button(submission_id).click
   end
 end

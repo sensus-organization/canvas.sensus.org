@@ -32,20 +32,22 @@ import {ZUserId} from '../../model/UserId'
 export const mockDynamicRegistrationWizardService = (
   mocked?: Partial<DynamicRegistrationWizardService>,
 ): DynamicRegistrationWizardService => ({
-  fetchRegistrationToken: jest.fn(),
-  deleteRegistration: jest.fn(),
-  getRegistrationByUUID: jest.fn(),
-  fetchLtiRegistration: jest.fn(),
-  updateRegistration: jest.fn(),
+  fetchRegistrationToken: vi.fn(),
+  getLtiRegistrationUpdateRequestByUUID: vi.fn(),
+  deleteRegistration: vi.fn(),
+  getRegistrationByUUID: vi.fn(),
+  fetchLtiRegistration: vi.fn(),
+  updateRegistration: vi.fn(),
+  applyLtiRegistrationUpdateRequest: vi.fn(),
   ...mocked,
 })
 
 export const mockLti1p3RegistrationWizardService = (
   mocked?: Partial<Lti1p3RegistrationWizardService>,
 ): Lti1p3RegistrationWizardService => ({
-  createLtiRegistration: jest.fn(),
-  updateLtiRegistration: jest.fn(),
-  fetchLtiRegistration: jest.fn(),
+  createLtiRegistration: vi.fn(),
+  updateLtiRegistration: vi.fn(),
+  fetchLtiRegistration: vi.fn(),
   ...mocked,
 })
 

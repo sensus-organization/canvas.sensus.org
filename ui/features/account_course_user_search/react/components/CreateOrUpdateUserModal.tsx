@@ -190,7 +190,7 @@ export default function CreateOrUpdateUserModal(props: Props) {
 
       if (field === 'user[name]') {
         // shamelessly copypasted from user_sortable_name.js
-        const sortableNameParts = nameParts(trim(updatedUser.sortable_name))
+        const sortableNameParts = nameParts(trim(updatedUser.sortable_name), undefined)
         if (
           !trim(updatedUser.sortable_name) ||
           trim(firstNameFirst(sortableNameParts)) === trim(userFields.name)
@@ -278,7 +278,7 @@ export default function CreateOrUpdateUserModal(props: Props) {
       try {
         if (error instanceof FetchApiError) {
           const errorJson = await error.response.json()
-          const fetchErrors = registrationErrors(errorJson.errors)
+          const fetchErrors = registrationErrors(errorJson.errors, undefined)
           setErrors(prevErrors => ({
             ...defaultErrors,
             ...prevErrors,

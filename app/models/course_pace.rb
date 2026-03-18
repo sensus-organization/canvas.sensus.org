@@ -163,11 +163,9 @@ class CoursePace < ActiveRecord::Base
         Assignment.suspend_grading_period_grade_recalculation do
           progress&.calculate_completion!(0, enrollments.size)
           enrollments.each do |enrollment|
+            course_pace_module_items.each(&:restore_attributes)
+            # Compressor handles sorting internally
             compressed_module_items = compress_dates(start_date: nil, enrollment:)
-                                      .sort_by { |ppmi| ppmi.module_item.position }
-                                      .group_by { |ppmi| ppmi.module_item.context_module }
-                                      .sort_by { |context_module, _items| context_module.position }
-                                      .to_h.values.flatten
             dates =
               CoursePaceDueDatesCalculator.new(self).get_due_dates(compressed_module_items, enrollment)
             course_pace_module_items.each do |course_pace_module_item|
@@ -297,7 +295,7 @@ class CoursePace < ActiveRecord::Base
 
   def start_date(with_context: false)
     valid_date_range = CourseDateRange.new(course)
-    student_enrollment = course.student_enrollments.find_by(user_id:) if user_id
+    student_enrollment = course.student_enrollments.order(created_at: :desc).find_by(user_id:) if user_id
 
     enrollment_start_date = student_enrollment&.start_at || [student_enrollment&.effective_start_at, student_enrollment&.created_at].compact.max
     date = enrollment_start_date || course_section&.start_at || valid_date_range.start_at[:date]
@@ -341,7 +339,7 @@ class CoursePace < ActiveRecord::Base
       range_end = CanvasTime.fancy_midnight(range_end - 1.minute)
     end
 
-    is_student_plan = course.student_enrollments.find_by(user_id:).present? if user_id
+    is_student_plan = course.student_enrollments.order(created_at: :desc).find_by(user_id:).present? if user_id
 
     date = if hard_end_dates
              self[:end_date]

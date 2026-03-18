@@ -17,67 +17,8 @@
  */
 import axios from '@canvas/axios'
 import {AxiosResponse} from 'axios'
-import {
-  DEFAULT_STUDENTS_PER_PAGE,
-  SortOrder,
-  SortBy,
-  GradebookSettings,
-  DisplayFilter,
-} from './utils/constants'
-
-/**
- * Parameters for outcome rollups API
- */
-interface RollupParams {
-  rating_percents: boolean
-  per_page: number
-  exclude: string[]
-  include: string[]
-  sort_by: string
-  sort_order: string
-  page: number
-  add_defaults?: boolean
-  sort_outcome_id?: string
-}
-
-/**
- * Load outcome rollups for a course
- * @param courseId - The ID of the course
- * @param gradebookFilters - Filters to exclude from the results
- * @param needDefaults - Whether to include default outcomes
- * @param page - The page number to retrieve
- * @param perPage - The number of results per page
- * @param sortOrder - The order to sort the results by
- * @param sortBy - The field to sort the results by
- * @param sortOutcomeId - The ID of the outcome to sort by (when sortBy is 'outcome')
- * @returns A promise that resolves to the API response
- */
-export const loadRollups = (
-  courseId: string | number,
-  gradebookFilters: string[],
-  needDefaults: boolean = false,
-  page: number = 1,
-  perPage: number = DEFAULT_STUDENTS_PER_PAGE,
-  sortOrder: SortOrder = SortOrder.ASC,
-  sortBy: string = SortBy.SortableName,
-  sortOutcomeId?: string,
-): Promise<AxiosResponse> => {
-  const params: {params: RollupParams} = {
-    params: {
-      rating_percents: true,
-      per_page: perPage,
-      exclude: gradebookFilters,
-      include: ['outcomes', 'users', 'outcome_paths', 'alignments'],
-      sort_by: sortBy,
-      sort_order: sortOrder,
-      page,
-      ...(needDefaults && {add_defaults: true}),
-      ...(sortOutcomeId && {sort_outcome_id: sortOutcomeId}),
-    },
-  }
-
-  return axios.get(`/api/v1/courses/${courseId}/outcome_rollups`, params)
-}
+import {GradebookSettings, DisplayFilter} from '@canvas/outcomes/react/utils/constants'
+import {Student, Outcome} from '@canvas/outcomes/react/types/rollup'
 
 /**
  * Parameters for CSV export
@@ -133,11 +74,65 @@ export const saveLearningMasteryGradebookSettings = (
       show_students_with_no_results: settings.displayFilters.includes(
         DisplayFilter.SHOW_STUDENTS_WITH_NO_RESULTS,
       ),
+      show_outcomes_with_no_results: settings.displayFilters.includes(
+        DisplayFilter.SHOW_OUTCOMES_WITH_NO_RESULTS,
+      ),
+      show_unpublished_assignments: settings.displayFilters.includes(
+        DisplayFilter.SHOW_UNPUBLISHED_ASSIGNMENTS,
+      ),
       name_display_format: settings.nameDisplayFormat,
       students_per_page: settings.studentsPerPage,
       score_display_format: settings.scoreDisplayFormat,
+      outcome_arrangement: settings.outcomeArrangement,
     },
   }
 
   return axios.put(`/api/v1/courses/${courseId}/learning_mastery_gradebook_settings`, body)
+}
+
+/**
+ * Parameters for course users API
+ */
+interface CourseUsersParams {
+  enrollment_type?: string[]
+  per_page?: number
+  search_term?: string
+}
+
+/**
+ * Load users enrolled in a course
+ * @param courseId - The ID of the course
+ * @returns A promise that resolves to the API response with Student array
+ */
+export const loadCourseUsers = (
+  courseId: string | number,
+  searchTerm?: string,
+): Promise<AxiosResponse<Student[]>> => {
+  const params: {params: CourseUsersParams} = {
+    params: {
+      enrollment_type: ['student', 'student_view'],
+      per_page: 100,
+      ...(searchTerm ? {search_term: searchTerm} : {}),
+    },
+  }
+
+  return axios.get(`/api/v1/courses/${courseId}/users`, params)
+}
+
+/**
+ * Save learning mastery gradebook outcome order
+ * @param courseId - The ID of the course
+ * @param outcomes - Array of outcomes in the desired order
+ * @returns A promise that resolves to the API response
+ */
+export const saveOutcomeOrder = (
+  courseId: string | number,
+  outcomes: Outcome[],
+): Promise<AxiosResponse> => {
+  const outcomeOrder = outcomes.map((outcome, index) => ({
+    outcome_id: Number(outcome.id),
+    position: index,
+  }))
+
+  return axios.post(`/api/v1/courses/${courseId}/assign_outcome_order`, outcomeOrder)
 }

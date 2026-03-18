@@ -57,6 +57,8 @@ class Quizzes::QuizQuestion < ActiveRecord::Base
   serialize :question_data
   after_save :update_quiz
 
+  delegate :assessment_question_bank, to: :assessment_question, allow_nil: true
+
   resolves_root_account through: :quiz
 
   include MasterCourses::CollectionRestrictor
@@ -90,9 +92,12 @@ class Quizzes::QuizQuestion < ActiveRecord::Base
     comments_html
   ].freeze
 
-  def update_attachment_associations(migration: nil)
-    return unless attachment_associations_creation_enabled?
-    return unless migration || saved_change_to_attribute?(:question_data)
+  def update_attachment_associations(migration: nil, skip_user_verification: false)
+    unless skip_user_verification
+      return if workflow_state == "deleted"
+      return unless attachment_associations_creation_enabled?
+      return unless migration || saved_change_to_attribute?(:question_data)
+    end
 
     all_html = []
 
@@ -107,7 +112,8 @@ class Quizzes::QuizQuestion < ActiveRecord::Base
       end
     end
 
-    associate_attachments_to_rce_object(all_html.compact.join("\n"), updating_user, migration:)
+    user = skip_user_verification ? nil : updating_user
+    associate_attachments_to_rce_object(all_html.compact.join("\n"), user, skip_user_verification:, migration:)
   end
 
   def access_for_attachment_association?(user, session, _association)

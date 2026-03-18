@@ -267,6 +267,23 @@ BASE_PERMISSIONS = {
         description: -> { I18n.t("Not available at the subaccount level.") } }
     ]
   },
+  modify_site_admin_developer_keys: {
+    label: -> { I18n.t("Developer Keys - modify Site Admin developer keys") },
+    account_only: :site_admin,
+    true_for: %w[AccountAdmin],
+    available_to: %w[AccountAdmin AccountMembership],
+    account_details: [
+      { title: -> { I18n.t("Developer Keys") },
+        description: -> { I18n.t("Allows user to create, modify, and delete global (Site Admin) developer keys and LTI configurations.") } },
+      { description: -> { I18n.t("This permission controls access to Site Admin developer keys that are inherited by all accounts. Root Account-level keys are unaffected.") } }
+    ],
+    account_considerations: [
+      { title: -> { I18n.t("Developer Keys") },
+        description: -> { I18n.t("Developer Keys - manage must also be enabled to access the Developer Keys page.") } },
+      { title: -> { I18n.t("Site Admin") },
+        description: -> { I18n.t("This permission is only available in Site Admin and controls access to global developer keys.") } }
+    ]
+  },
   moderate_user_content: {
     label: -> { I18n.t("Users - moderate content") },
     account_only: true,
@@ -2149,20 +2166,13 @@ BASE_PERMISSIONS = {
     account_only: true,
     account_allows: ->(a) { a.feature_enabled?(:intelligent_insights_rsi_report) }
   },
-  access_ignite_agent: {
-    label: -> { I18n.t("Ignite Agent - access") },
+  view_accessibility_insights: {
+    label: -> { I18n.t("Accessibility Insights") },
+    group: :view_advanced_analytics,
     available_to: %w[AccountAdmin AccountMembership],
     true_for: %w[AccountAdmin],
     account_only: true,
-    account_allows: ->(a) { a.feature_enabled?(:ignite_agent_enabled) },
-    account_details: [
-      { title: -> { I18n.t("Ignite Agent") },
-        description: -> { I18n.t("Allows user to access the Ignite Agent AI companion for Canvas LMS.") } }
-    ],
-    account_considerations: [
-      { title: -> { I18n.t("Ignite Agent") },
-        description: -> { I18n.t("The Ignite Agent feature must be enabled for the account to assign this permission.") } }
-    ]
+    account_allows: ->(a) { a.feature_enabled?(:intelligent_insights_accessibility_insights) }
   },
   manage_impact: {
     label: -> { I18n.t("Impact - Manage") },
@@ -2176,6 +2186,34 @@ BASE_PERMISSIONS = {
     account_considerations: [
       { title: -> { I18n.t("Impact") },
         description: -> { I18n.t("Impact is an add-on to Canvas LMS. Contact your CSM if interested.") } }
+    ]
+  },
+  access_oak: {
+    label: -> { I18n.t("IgniteAI Agent - Admins") },
+    available_to: %w[AccountAdmin AccountMembership],
+    true_for: %w[AccountAdmin],
+    account_allows: ->(a) { a.feature_enabled?(:oak_for_admins) },
+    details: [
+      { title: -> { I18n.t("IgniteAI Agent - Admins") },
+        description: -> { I18n.t("Allows user to access the IgniteAI Agent for Canvas LMS.") } }
+    ],
+    considerations: [
+      { title: -> { I18n.t("IgniteAI Agent - Admins") },
+        description: -> { I18n.t("The IgniteAI Agent feature flag must be enabled for the account to assign this permission.") } }
+    ]
+  },
+  access_oak_teacher: {
+    label: -> { I18n.t("IgniteAI Agent - Faculty & Support") },
+    available_to: %w[TeacherEnrollment TaEnrollment DesignerEnrollment AccountAdmin AccountMembership],
+    true_for: %w[AccountAdmin],
+    account_allows: ->(a) { a.feature_enabled?(:oak_for_teachers) },
+    details: [
+      { title: -> { I18n.t("IgniteAI Agent - Faculty & Support") },
+        description: -> { I18n.t("Allows user to access the IgniteAI Agent for Canvas LMS.") } }
+    ],
+    considerations: [
+      { title: -> { I18n.t("IgniteAI Agent - Faculty & Support") },
+        description: -> { I18n.t("The IgniteAI Agent feature flag must be enabled for the account to assign this permission.") } }
     ]
   },
   block_editor_template_editor: {

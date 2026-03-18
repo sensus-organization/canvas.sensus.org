@@ -142,11 +142,7 @@ module Importers
           migration.update_import_progress(58)
           Importers::ContextExternalToolImporter.process_migration(data, migration)
           migration.update_import_progress(60)
-          # We don't currently import context controls, as that would allow teachers to modify
-          # Context Controls, which they shouldn't have permission to do! We might revisit this
-          # in the future and let admins make this a toggleable feature, but for now it is
-          # always disabled.
-          # Importers::LtiContextControlImporter.process_migration(data, migration)
+          Importers::LtiContextControlImporter.process_migration(data, migration)
           migration.update_import_progress(61)
           Importers::ToolProfileImporter.process_migration(data, migration)
           migration.update_import_progress(62)
@@ -168,7 +164,7 @@ module Importers
             migration.update_import_progress(80)
           end
 
-          Importers::RubricImporter.process_rubric_association_count(data)
+          Importers::RubricImporter.process_rubric_association_count(migration)
           migration.update_import_progress(83)
 
           module_id = migration.migration_settings[:insert_into_module_id].presence
@@ -208,7 +204,7 @@ module Importers
             import_syllabus_from_migration(course, syllabus_body, migration) if syllabus_body
           end
 
-          course.updating_user = migration.user
+          course.importing = true
           course.save! if course.changed?
 
           migration.resolve_content_links!
@@ -234,8 +230,7 @@ module Importers
                                     .where.not(migration_id: nil)
                                     .where(assessment_questions: { updated_at: migration.created_at.. })
             imported_aqs.each do |aq|
-              aq.updating_user = migration.user
-              aq.translate_links
+              aq.translate_links(migration:)
             end
           end
 
@@ -472,7 +467,11 @@ module Importers
 
     def self.import_syllabus_from_migration(course, syllabus_body, migration)
       if migration.for_master_course_import?
-        course.master_migration = migration
+        if Account.site_admin.feature_enabled?(:syllabus_versioning)
+          course.mark_as_importing!(migration)
+        else
+          course.master_migration = migration
+        end
       end
       course.syllabus_body = migration.convert_html(syllabus_body, :syllabus, nil, :syllabus)
     end

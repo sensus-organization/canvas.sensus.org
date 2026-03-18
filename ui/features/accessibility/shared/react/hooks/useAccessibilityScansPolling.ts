@@ -24,6 +24,7 @@ import {useAccessibilityScansStore} from '../stores/AccessibilityScansStore'
 import {AccessibilityResourceScan, ScanWorkflowState} from '../types'
 import {convertKeysToCamelCase} from '../utils/apiData'
 import {getCourseBasedPath} from '../utils/query'
+import {useAccessibilityScansFetchUtils} from './useAccessibilityScansFetchUtils'
 
 const POLLING_INTERVAL_MS = 5000
 
@@ -36,6 +37,7 @@ type PollingResponse = {
  * Uses TanStack Query for efficient polling with automatic cleanup.
  */
 export const useAccessibilityScansPolling = () => {
+  const {doFetchAccessibilityIssuesSummary} = useAccessibilityScansFetchUtils()
   const [accessibilityScans, setAccessibilityScans] = useAccessibilityScansStore(
     useShallow(state => [state.accessibilityScans, state.setAccessibilityScans]),
   )
@@ -56,7 +58,7 @@ export const useAccessibilityScansPolling = () => {
   const shouldPoll = scansNeedingPolling.length > 0
 
   useQuery({
-    queryKey: ['resourceAccessibilityScan', scansNeedingPolling],
+    queryKey: ['resourceAccessibilityScan'],
     queryFn: async () => {
       // Double-check we have scans to poll (should be guaranteed by enabled flag)
       if (scansNeedingPolling.length === 0) {
@@ -88,6 +90,15 @@ export const useAccessibilityScansPolling = () => {
         })
 
         setAccessibilityScans(newScans)
+
+        // Only refetch summary if any scans are in finished state (completed or failed)
+        const hasFinishedScans = updatedScans.some(
+          scan => scan.workflowState === 'completed' || scan.workflowState === 'failed',
+        )
+
+        if (hasFinishedScans) {
+          doFetchAccessibilityIssuesSummary({})
+        }
 
         return updatedScans
       }

@@ -18,7 +18,7 @@
 
 import $ from 'jquery'
 import React, {Suspense} from 'react'
-import {createRoot} from 'react-dom/client'
+import {render} from '@canvas/react'
 import NavigationView from './backbone/views/NavigationView'
 import ErrorBoundary from '@canvas/error-boundary'
 import {Spinner} from '@instructure/ui-spinner'
@@ -53,6 +53,9 @@ const QuantitativeDataOptions = React.lazy(
 const CourseDefaultDueTime = React.lazy(() => import('./react/components/CourseDefaultDueTime'))
 const Integrations = React.lazy(() => import('@canvas/integrations/react/courses/Integrations'))
 const CourseApps = React.lazy(() => import('./react/components/CourseApps'))
+const CourseNavigationSettings = React.lazy(
+  () => import('./react/components/CourseNavigationSettings'),
+)
 
 const Loading = () => <Spinner size="x-small" renderTitle={I18n.t('Loading')} />
 const ErrorMessage = () => (
@@ -64,8 +67,7 @@ const ErrorMessage = () => (
 ready(() => {
   const blueprint = document.getElementById('blueprint_menu')
   if (blueprint) {
-    const blueprintRoot = createRoot(blueprint)
-    blueprintRoot.render(
+    render(
       <Suspense fallback={<Loading />}>
         <ErrorBoundary errorComponent={<ErrorMessage />}>
           <BlueprintLockOptions
@@ -77,6 +79,7 @@ ready(() => {
           />
         </ErrorBoundary>
       </Suspense>,
+      blueprint,
     )
   }
 
@@ -84,13 +87,13 @@ ready(() => {
   if (courseTemplate) {
     const isEditable = courseTemplate.getAttribute('data-is-editable') === 'true'
 
-    const courseTemplateRoot = createRoot(courseTemplate)
-    courseTemplateRoot.render(
+    render(
       <Suspense fallback={<Loading />}>
         <ErrorBoundary errorComponent={<ErrorMessage />}>
           <CourseTemplateDetails isEditable={isEditable} />
         </ErrorBoundary>
       </Suspense>,
+      courseTemplate,
     )
   }
 
@@ -100,32 +103,31 @@ ready(() => {
   // @ts-expect-error
   $(() => navView.render())
 
-  const imageSelectorRoot = createRoot($('.CourseImageSelector__Container')[0])
-  imageSelectorRoot.render(
+  render(
     <CourseImageSelector
       store={configureStore(initialState)}
       courseId={ENV.COURSE_ID}
       setting="image"
     />,
+    $('.CourseImageSelector__Container')[0],
   )
 
   const bannerImageContainer = document.getElementById('course_banner_image_selector_container')
   if (bannerImageContainer) {
-    const bannerImageRoot = createRoot(bannerImageContainer)
-    bannerImageRoot.render(
+    render(
       <CourseImageSelector
         store={configureStore(initialState)}
         courseId={ENV.COURSE_ID}
         setting="banner_image"
         wide={true}
       />,
+      bannerImageContainer,
     )
   }
 
   const availabilityOptionsContainer = document.getElementById('availability_options_container')
   if (availabilityOptionsContainer) {
-    const availabilityOptionsRoot = createRoot(availabilityOptionsContainer)
-    availabilityOptionsRoot.render(
+    render(
       <Suspense fallback={<Loading />}>
         <ErrorBoundary errorComponent={<ErrorMessage />}>
           <CourseAvailabilityOptions
@@ -135,6 +137,7 @@ ready(() => {
           />
         </ErrorBoundary>
       </Suspense>,
+      availabilityOptionsContainer,
     )
   }
 
@@ -142,11 +145,11 @@ ready(() => {
     'restrict_quantitative_data_options_container',
   )
   if (restrictQuantitativeDataContainer) {
-    const quantitativeDataRoot = createRoot(restrictQuantitativeDataContainer)
-    quantitativeDataRoot.render(
+    render(
       <Suspense fallback={<Loading />}>
         <QuantitativeDataOptions canManage={ENV.CAN_EDIT_RESTRICT_QUANTITATIVE_DATA} />
       </Suspense>,
+      restrictQuantitativeDataContainer,
     )
   }
 
@@ -154,8 +157,7 @@ ready(() => {
   if (defaultDueTimeContainer) {
     const defaultValue = defaultDueTimeContainer.dataset.defaultDueTime
     if (!defaultValue) throw new Error('attr data-default-due-time is missing on container')
-    const defaultDueTimeRoot = createRoot(defaultDueTimeContainer)
-    defaultDueTimeRoot.render(
+    render(
       <Suspense fallback={<Loading />}>
         <CourseDefaultDueTime
           canManage={ENV.PERMISSIONS.manage}
@@ -163,63 +165,94 @@ ready(() => {
           value={defaultValue}
         />
       </Suspense>,
+      defaultDueTimeContainer,
     )
   }
 
   const licenseHelpContainer = document.getElementById('license_mount')
   if (licenseHelpContainer) {
-    const licenseRoot = createRoot(licenseHelpContainer)
-    licenseRoot.render(<LicenseHelpIcon />)
+    render(<LicenseHelpIcon />, licenseHelpContainer)
   }
 
   const visibilityHelpContainer = document.getElementById('visibility_mount')
   if (visibilityHelpContainer) {
-    const root = createRoot(visibilityHelpContainer)
-    root.render(<VisibilityHelpIcon />)
+    render(<VisibilityHelpIcon />, visibilityHelpContainer)
   }
 
   if (ENV.COURSE_COLORS_ENABLED) {
     const courseColorPickerContainer = document.getElementById('course_color_picker_container')
     if (courseColorPickerContainer) {
-      const courseColorRoot = createRoot(courseColorPickerContainer)
-      courseColorRoot.render(<CourseColorSelector courseColor={ENV.COURSE_COLOR || undefined} />)
+      render(
+        <CourseColorSelector courseColor={ENV.COURSE_COLOR || undefined} />,
+        courseColorPickerContainer,
+      )
     }
   }
 
   const integrationsContainer = document.getElementById('tab-integrations-mount')
   if (integrationsContainer) {
-    const integrationsRoot = createRoot(integrationsContainer)
-    integrationsRoot.render(
+    render(
       <Suspense fallback={<Loading />}>
         <ErrorBoundary errorComponent={<ErrorMessage />}>
           <Integrations />
         </ErrorBoundary>
       </Suspense>,
+      integrationsContainer,
     )
   }
 
   const appsMountpoint = document.getElementById('tab-apps-mount')
   if (appsMountpoint) {
-    const appsRoot = createRoot(appsMountpoint)
-    appsRoot.render(
+    render(
       <Suspense fallback={<Loading />}>
         <ErrorBoundary errorComponent={<ErrorMessage />}>
           <CourseApps />
         </ErrorBoundary>
       </Suspense>,
+      appsMountpoint,
     )
   }
 
   const tabsMountpoint = document.getElementById('course_settings_tabs_mount')
   if (tabsMountpoint && tabsMountpoint.dataset.props) {
     const {tabs} = JSON.parse(tabsMountpoint.dataset.props)
-    const root = createRoot(tabsMountpoint)
-    root.render(
+    render(
       <Suspense fallback={<Loading />}>
         <ErrorBoundary errorComponent={<ErrorMessage />}>
           <SettingsTabs tabs={tabs} />
         </ErrorBoundary>
       </Suspense>,
+      tabsMountpoint,
+    )
+  }
+
+  const navSettingsContainer = document.getElementById('course_navigation_settings_container')
+  if (navSettingsContainer) {
+    render(
+      <Suspense fallback={<Loading />}>
+        <ErrorBoundary errorComponent={<ErrorMessage />}>
+          <CourseNavigationSettings
+            onSubmit={tabs => {
+              const form = document.querySelector<HTMLFormElement>(
+                'form#course_navigation_settings_form',
+              )
+              if (!form) {
+                console.error('Course navigation settings form not found')
+                return
+              }
+              const tabsJsonHiddenInput =
+                form.querySelector<HTMLInputElement>('input[name="tabs_json"]')
+              if (!tabsJsonHiddenInput) {
+                console.error('Tabs JSON input not found')
+                return
+              }
+              tabsJsonHiddenInput.value = JSON.stringify(tabs)
+              form.submit()
+            }}
+          />
+        </ErrorBoundary>
+      </Suspense>,
+      navSettingsContainer,
     )
   }
 })

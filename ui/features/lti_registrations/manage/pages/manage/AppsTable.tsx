@@ -19,9 +19,9 @@
 import * as tz from '@instructure/moment-utils'
 import {useScope as createI18nScope} from '@canvas/i18n'
 import {Alert} from '@instructure/ui-alerts'
-import {IconButton} from '@instructure/ui-buttons'
+import {IconButton, Button} from '@instructure/ui-buttons'
 import {Flex} from '@instructure/ui-flex'
-import {IconMoreLine, IconSearchLine} from '@instructure/ui-icons'
+import {IconMoreLine, IconSearchLine, IconRefreshLine} from '@instructure/ui-icons'
 import {Menu} from '@instructure/ui-menu'
 import {Responsive, type ResponsivePropsObject} from '@instructure/ui-responsive'
 import {Table} from '@instructure/ui-table'
@@ -53,6 +53,7 @@ import {alert} from '@canvas/instui-bindings/react/Alert'
 import {ToolIconOrDefault} from '@canvas/lti-apps/components/common/ToolIconOrDefault'
 import type {AccountId} from '../../model/AccountId'
 import {confirmDanger} from '@canvas/instui-bindings/react/Confirm'
+import {useRegistrationUpdateWizardModalState} from '../../registration_update_wizard/RegistrationUpdateWizardModalState'
 
 type CallbackWithRegistration = (registration: LtiRegistration) => void
 
@@ -91,7 +92,7 @@ const renderEditButton = (r: LtiRegistration) => {
     return (
       <Menu.Item
         onClick={() => {
-          openEditDynamicRegistrationWizard(r.id, refreshRegistrations)
+          openEditDynamicRegistrationWizard(r.id, () => refreshRegistrations())
         }}
       >
         {I18n.t('Edit App')}
@@ -101,7 +102,7 @@ const renderEditButton = (r: LtiRegistration) => {
     return (
       <Menu.Item
         onClick={() => {
-          openEditManualRegistrationWizard(r.id, refreshRegistrations)
+          openEditManualRegistrationWizard(r.id, () => refreshRegistrations())
         }}
       >
         {I18n.t('Edit App')}
@@ -199,6 +200,8 @@ const Columns: ReadonlyArray<Column> = [
     header: I18n.t('Installed On'),
     width: '130px',
     sortable: true,
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore - tz.format's third argument (zone) is optional at runtime but required by tsgo
     render: r => <div>{tz.format(r.created_at, 'date.formats.medium')}</div>,
   },
   {
@@ -227,6 +230,8 @@ const Columns: ReadonlyArray<Column> = [
     header: I18n.t('Updated On'),
     width: '130px',
     sortable: true,
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore - tz.format's third argument (zone) is optional at runtime but required by tsgo
     render: r => <div>{tz.format(r.updated_at, 'date.formats.medium')}</div>,
   },
   {
@@ -237,6 +242,37 @@ const Columns: ReadonlyArray<Column> = [
     render: r => (
       <div>{r.account_binding?.workflow_state === 'on' ? I18n.t('On') : I18n.t('Off')}</div>
     ),
+  },
+  {
+    id: 'status',
+    header: I18n.t('Status'),
+    width: '140px',
+    sortable: true,
+    render: r => {
+      // Check if feature flag is enabled
+      if (!window.ENV.LTI_DR_REGISTRATIONS_UPDATE) {
+        return <div>{I18n.t('Up to date')}</div>
+      }
+
+      const pendingUpdate = r.pending_update
+      if (pendingUpdate) {
+        return (
+          <Button
+            color="secondary"
+            size="small"
+            renderIcon={() => <IconRefreshLine />}
+            data-pendo="lti-registrations-update-available-button"
+            onClick={() => {
+              useRegistrationUpdateWizardModalState.getState().open(r, pendingUpdate)
+            }}
+          >
+            {I18n.t('Update Available')}
+          </Button>
+        )
+      } else {
+        return <div>{I18n.t('Up to date')}</div>
+      }
+    },
   },
   {
     id: 'actions',
@@ -326,7 +362,7 @@ const CondensedColumns: ReadonlyArray<Column> = [
   {
     id: 'name',
     header: I18n.t('App Name'),
-    width: '42%',
+    width: '27%',
     sortable: true,
     render: r => {
       const appName = (
@@ -357,25 +393,69 @@ const CondensedColumns: ReadonlyArray<Column> = [
   {
     id: 'nickname',
     header: I18n.t('Nickname'),
-    width: '40%',
+    width: '20%',
     sortable: true,
     render: r => (r.admin_nickname ? <Text wrap="break-word">{r.admin_nickname}</Text> : null),
+  },
+  {
+    id: 'installed',
+    header: I18n.t('Installed On'),
+    width: '15%',
+    sortable: true,
+    textAlign: 'center',
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore - tz.format's third argument (zone) is optional at runtime but required by tsgo
+    render: r => <div>{tz.format(r.created_at, 'date.formats.medium')}</div>,
   },
   {
     id: 'lti_version',
     sortable: true,
     header: I18n.t('Version'),
     width: '8%',
+    textAlign: 'center',
+
     render: r => <div>{'legacy_configuration_id' in r ? '1.1' : '1.3'}</div>,
   },
   {
     id: 'on',
+    textAlign: 'center',
     header: I18n.t('On/Off'),
     width: '10%',
     sortable: true,
     render: r => (
       <div>{r.account_binding?.workflow_state === 'on' ? I18n.t('On') : I18n.t('Off')}</div>
     ),
+  },
+  {
+    id: 'status',
+    header: I18n.t('Status'),
+    width: '20%',
+    sortable: true,
+    render: r => {
+      // Check if feature flag is enabled
+      if (!window.ENV.LTI_DR_REGISTRATIONS_UPDATE) {
+        return <div>{I18n.t('Up to date')}</div>
+      }
+
+      const pendingUpdate = r.pending_update
+      if (pendingUpdate) {
+        return (
+          <Button
+            color="secondary"
+            size="small"
+            renderIcon={() => <IconRefreshLine />}
+            data-pendo="lti-registrations-update-available-button"
+            onClick={() => {
+              useRegistrationUpdateWizardModalState.getState().open(r, pendingUpdate)
+            }}
+          >
+            {I18n.t('Update Available')}
+          </Button>
+        )
+      } else {
+        return <div>{I18n.t('Up to date')}</div>
+      }
+    },
   },
 ]
 

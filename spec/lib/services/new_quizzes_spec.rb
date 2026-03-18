@@ -30,8 +30,7 @@ module Services
         .with(tree: :private)
         .and_return(DynamicSettings::FallbackProxy.new({
                                                          "new_quizzes.yml" => {
-                                                           "launch_url" => "https://test.instructure.com/quizzes",
-                                                           "backend_url" => "https://api.test.instructure.com/quizzes"
+                                                           "launch_url" => "https://test.instructure.com/quizzes"
                                                          }.to_yaml
                                                        }))
     end
@@ -51,12 +50,6 @@ module Services
       end
     end
 
-    describe ".backend_url" do
-      it "returns the backend URL from the dynamic settings" do
-        expect(NewQuizzes.backend_url).to eq("https://api.test.instructure.com/quizzes")
-      end
-    end
-
     context "when dynamic settings are not available" do
       before do
         # Reset the cached config for this context
@@ -72,9 +65,56 @@ module Services
       it "returns nil for launch_url" do
         expect(NewQuizzes.launch_url).to be_nil
       end
+    end
 
-      it "returns nil for backend_url" do
-        expect(NewQuizzes.backend_url).to be_nil
+    describe ".ui_version" do
+      context "when launch URL contains a version" do
+        it "extracts the version from the URL" do
+          allow(NewQuizzes).to receive(:launch_url).and_return("https://example.com/abc123/remoteEntry.js")
+          expect(NewQuizzes.ui_version).to eq("abc123")
+        end
+
+        it "handles URLs with multiple path segments" do
+          allow(NewQuizzes).to receive(:launch_url).and_return("https://example.com/path/to/abc123/remoteEntry.js")
+          expect(NewQuizzes.ui_version).to eq("abc123")
+        end
+
+        it "returns 'none' for local development placeholder" do
+          allow(NewQuizzes).to receive(:launch_url).and_return("http://example.com:8082/none/remoteEntry.js")
+          expect(NewQuizzes.ui_version).to eq("none")
+        end
+      end
+
+      context "when launch URL is missing" do
+        it "returns nil when launch_url is nil" do
+          allow(NewQuizzes).to receive(:launch_url).and_return(nil)
+          expect(NewQuizzes.ui_version).to be_nil
+        end
+
+        it "returns nil when launch_url is empty string" do
+          allow(NewQuizzes).to receive(:launch_url).and_return("")
+          expect(NewQuizzes.ui_version).to be_nil
+        end
+      end
+
+      context "when launch URL has unexpected format" do
+        it "returns nil and logs error for URL without remoteEntry.js" do
+          allow(NewQuizzes).to receive(:launch_url).and_return("https://example.com/abc123/index.js")
+          expect(Rails.logger).to receive(:error).with(/Failed to parse New Quizzes launch URL/)
+          expect(NewQuizzes.ui_version).to be_nil
+        end
+
+        it "returns nil and logs error for URL with only remoteEntry.js" do
+          allow(NewQuizzes).to receive(:launch_url).and_return("https://example.com/remoteEntry.js")
+          expect(Rails.logger).to receive(:error).with(/Failed to parse New Quizzes launch URL/)
+          expect(NewQuizzes.ui_version).to be_nil
+        end
+
+        it "returns nil and logs error for invalid URL" do
+          allow(NewQuizzes).to receive(:launch_url).and_return("not a valid url")
+          expect(Rails.logger).to receive(:error).with(/Failed to parse New Quizzes launch URL/)
+          expect(NewQuizzes.ui_version).to be_nil
+        end
       end
     end
   end

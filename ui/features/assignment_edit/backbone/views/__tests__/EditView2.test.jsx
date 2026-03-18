@@ -32,12 +32,13 @@ import fakeENV from '@canvas/test-utils/fakeENV'
 import {unfudgeDateForProfileTimezone} from '@instructure/moment-utils'
 import EditView from '../EditView'
 import '@canvas/jquery/jquery.simulate'
-import fetchMock from 'fetch-mock'
+import {setupServer} from 'msw/node'
+import {http, HttpResponse} from 'msw'
 import {getUrlWithHorizonParams} from '@canvas/horizon/utils'
 
 // Mock the horizon utils module
-jest.mock('@canvas/horizon/utils', () => ({
-  getUrlWithHorizonParams: jest.fn(),
+vi.mock('@canvas/horizon/utils', () => ({
+  getUrlWithHorizonParams: vi.fn(),
 }))
 
 const s_params = 'some super secure params'
@@ -45,6 +46,22 @@ const currentOrigin = window.location.origin
 
 // Mock RCE initialization
 EditView.prototype._attachEditorToDescription = () => {}
+
+// MSW server setup
+const server = setupServer(
+  http.get('/api/v1/courses/1/settings', () => {
+    return HttpResponse.json({})
+  }),
+  http.get('/api/v1/courses/1/sections', () => {
+    return HttpResponse.json([])
+  }),
+  http.get(/\/api\/v1\/courses\/\d+\/lti_apps\/launch_definitions.*/, () => {
+    return HttpResponse.json([])
+  }),
+  http.post(/.*\/api\/graphql/, () => {
+    return HttpResponse.json({})
+  }),
+)
 
 const editView = (assignmentOpts = {}) => {
   const defaultAssignmentOpts = {
@@ -108,6 +125,9 @@ const disableCheckbox = id => {
 describe('EditView', () => {
   let fixtures
 
+  beforeAll(() => server.listen())
+  afterAll(() => server.close())
+
   beforeEach(() => {
     fixtures = document.createElement('div')
     fixtures.id = 'fixtures'
@@ -143,10 +163,6 @@ describe('EditView', () => {
       return url
     })
 
-    fetchMock.get('/api/v1/courses/1/settings', {})
-    fetchMock.get('/api/v1/courses/1/sections?per_page=100', [])
-    fetchMock.get(/\/api\/v1\/courses\/\d+\/lti_apps\/launch_definitions*/, [])
-    fetchMock.post(/.*\/api\/graphql/, {})
     RCELoader.RCE = null
     return RCELoader.loadRCE()
   })
@@ -157,8 +173,8 @@ describe('EditView', () => {
     $('ul[id^=ui-id-]').remove()
     $('.form-dialog').remove()
     fixtures.remove()
-    fetchMock.reset()
-    jest.clearAllMocks()
+    server.resetHandlers()
+    vi.clearAllMocks()
   })
 
   it('routes to return_to', () => {
@@ -175,7 +191,7 @@ describe('EditView', () => {
 
     const testLocationAfterSave = (isFeatureFlagEnabled, expectedDisplay) => {
       ENV.FEATURES.new_quizzes_navigation_updates = isFeatureFlagEnabled
-      jest.spyOn(view.assignment, 'showBuildButton').mockReturnValue(true)
+      vi.spyOn(view.assignment, 'showBuildButton').mockReturnValue(true)
       view.preventBuildNavigation = false
 
       expect(view.locationAfterSave({return_to: 'http://calendar'})).toBe(
@@ -277,14 +293,6 @@ describe('EditView', () => {
   })
 
   describe('#togglePeerReviewsAndGroupCategoryEnabled', () => {
-    beforeEach(() => {
-      fetchMock.mock('*', {})
-    })
-
-    afterEach(() => {
-      fetchMock.reset()
-    })
-
     it('locks down group category after students submit', () => {
       const view = editView({has_submitted_submissions: true})
       expect(view.$('.group_category_locked_explanation').length).toBeTruthy()
@@ -575,7 +583,7 @@ describe('EditView', () => {
     view.$el.appendTo($(fixtures))
     $('<input type="radio" id="fixture_radio"/>').appendTo($(view.$el))
 
-    const ignoreClickHandlerSpy = jest.spyOn(view, 'ignoreClickHandler')
+    const ignoreClickHandlerSpy = vi.spyOn(view, 'ignoreClickHandler')
     view.disableFields()
 
     view.$el.find('#fixture_radio').click()
@@ -590,7 +598,7 @@ describe('EditView', () => {
     ).appendTo($(view.$el))
     view.$el.appendTo($(fixtures))
 
-    const lockSelectValueHandlerSpy = jest.spyOn(view, 'lockSelectValueHandler')
+    const lockSelectValueHandlerSpy = vi.spyOn(view, 'lockSelectValueHandler')
     view.disableFields()
     expect(lockSelectValueHandlerSpy).toHaveBeenCalledTimes(1)
   })

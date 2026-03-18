@@ -31,21 +31,24 @@ import {RowsProvider} from '../../../contexts/RowsContext'
 import {createMockFileManagementContext} from '../../../__tests__/createMockContext'
 import {mockRowFocusContext, mockRowsContext} from './testUtils'
 import {showFlashError} from '@canvas/alerts/react/FlashAlert'
-import fetchMock from 'fetch-mock'
+import {setupServer} from 'msw/node'
+import {http, HttpResponse} from 'msw'
 import userEvent from '@testing-library/user-event'
 import {assignLocation} from '@canvas/util/globalUtils'
 import {downloadZip} from '../../../../utils/downloadUtils'
 
-jest.mock('@canvas/alerts/react/FlashAlert', () => ({
-  showFlashError: jest.fn().mockReturnValue(() => {}),
+const server = setupServer()
+
+vi.mock('@canvas/alerts/react/FlashAlert', () => ({
+  showFlashError: vi.fn().mockReturnValue(() => {}),
 }))
 
-// jest.mock('@canvas/util/globalUtils', () => ({
-//   assignLocation: jest.fn(),
-// }))
+vi.mock('@canvas/util/globalUtils', () => ({
+  assignLocation: vi.fn(),
+}))
 
-jest.mock('../../../../utils/downloadUtils', () => ({
-  downloadZip: jest.fn(),
+vi.mock('../../../../utils/downloadUtils', () => ({
+  downloadZip: vi.fn(),
 }))
 
 const defaultProps: ActionMenuButtonProps = {
@@ -76,19 +79,17 @@ const renderComponent = (
 }
 
 describe('ActionMenuButton', () => {
+  beforeAll(() => server.listen())
   afterEach(() => {
-    fetchMock.restore()
-    jest.clearAllMocks()
+    server.resetHandlers()
+    vi.clearAllMocks()
     if (ENV.FEATURES?.restrict_student_access !== undefined) {
       delete ENV.FEATURES.restrict_student_access
     }
   })
+  afterAll(() => server.close())
 
   describe('when item is a file', () => {
-    beforeEach(() => {
-      defaultProps.row = FAKE_FILES[0]
-    })
-
     it('renders all items for file type', async () => {
       const user = userEvent.setup()
       renderComponent()
@@ -344,13 +345,11 @@ describe('ActionMenuButton', () => {
   })
 
   describe('when item is a folder', () => {
-    beforeEach(() => {
-      defaultProps.row = FAKE_FOLDERS[0]
-    })
+    const folderProps = {...defaultProps, row: FAKE_FOLDERS[0]}
 
     it('renders all items for folder type', async () => {
       const user = userEvent.setup()
-      renderComponent()
+      renderComponent(folderProps)
 
       const button = screen.getByTestId('action-menu-button-large')
       expect(button).toBeInTheDocument()
@@ -371,7 +370,7 @@ describe('ActionMenuButton', () => {
       ENV.current_user_roles = ['student']
 
       const user = userEvent.setup()
-      renderComponent()
+      renderComponent(folderProps)
 
       const button = screen.getByTestId('action-menu-button-large')
       expect(button).toBeInTheDocument()
@@ -388,7 +387,7 @@ describe('ActionMenuButton', () => {
     })
     it('does call correct download API with correct parameters', async () => {
       const user = userEvent.setup()
-      renderComponent()
+      renderComponent(folderProps)
 
       const button = screen.getByTestId('action-menu-button-large')
       await user.click(button)
@@ -402,7 +401,7 @@ describe('ActionMenuButton', () => {
 
     it('opens the rename modal', async () => {
       const user = userEvent.setup()
-      renderComponent()
+      renderComponent(folderProps)
 
       const button = screen.getByTestId('action-menu-button-large')
       await user.click(button)
@@ -420,7 +419,7 @@ describe('ActionMenuButton', () => {
       const fileMenuTools = [
         {id: '1', title: 'Tool1', base_url: 'http://toolone.com', icon_url: ''},
       ]
-      renderComponent({...defaultProps}, {fileMenuTools})
+      renderComponent(folderProps, {fileMenuTools})
       const menuButton = screen.getByTestId('action-menu-button-large')
       await user.click(menuButton)
       // necessary to make sure the menu is open
@@ -430,15 +429,22 @@ describe('ActionMenuButton', () => {
   })
 
   describe('Delete behavior', () => {
+    const fileProps = {...defaultProps, row: FAKE_FILES[0]}
+
     beforeEach(() => {
-      // Mock successful delete responses for both files and folders
-      fetchMock.delete(/.*\/files\/\d+\?force=true/, 200, {overwriteRoutes: true})
-      fetchMock.delete(/.*\/folders\/\d+\?force=true/, 200, {overwriteRoutes: true})
+      server.use(
+        http.delete(/.*\/files\/\d+/, () => {
+          return new HttpResponse(null, {status: 200})
+        }),
+        http.delete(/.*\/folders\/\d+/, () => {
+          return new HttpResponse(null, {status: 200})
+        }),
+      )
     })
 
     it('opens delete modal when delete button is clicked', async () => {
       const user = userEvent.setup()
-      renderComponent()
+      renderComponent(fileProps)
 
       const button = screen.getByTestId('action-menu-button-large')
       await user.click(button)
@@ -453,8 +459,12 @@ describe('ActionMenuButton', () => {
 
     it('renders flash error when delete fails', async () => {
       const user = userEvent.setup()
-      fetchMock.delete(/.*\/files\/178\?force=true/, 500, {overwriteRoutes: true})
-      renderComponent()
+      server.use(
+        http.delete(/.*\/files\/178/, () => {
+          return new HttpResponse(null, {status: 500})
+        }),
+      )
+      renderComponent(fileProps)
 
       const button = screen.getByTestId('action-menu-button-large')
       await user.click(button)
@@ -467,14 +477,14 @@ describe('ActionMenuButton', () => {
 
       await waitFor(() => {
         expect(showFlashError).toHaveBeenCalledWith(
-          'An error occurred while deleting the items. Please try again.',
+          'Failed to delete the selected item. Please try again.',
         )
       })
     })
 
     it('does not render "Delete" when userCanDeleteFilesForContext is false', async () => {
       const user = userEvent.setup()
-      renderComponent({...defaultProps, userCanDeleteFilesForContext: false})
+      renderComponent({...fileProps, userCanDeleteFilesForContext: false})
 
       const button = screen.getByTestId('action-menu-button-large')
       expect(button).toBeInTheDocument()

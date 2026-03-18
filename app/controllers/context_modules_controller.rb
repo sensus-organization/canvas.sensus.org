@@ -153,6 +153,9 @@ class ContextModulesController < ApplicationController
         hash[:MODULE_FEATURES][:STUDENT_MODULE_SELECTION] = true if @feature_student_module_selection
         hash[:MODULE_FEATURES][:TEACHER_MODULE_SELECTION] = true if @feature_teacher_module_selection
       end
+      if Account.site_admin.feature_enabled?(:module_external_url_seamless_redirect)
+        hash[:MODULE_FEATURES][:SEAMLESS_EXTERNAL_URL_REDIRECT] = true
+      end
 
       if @context.use_modules_rewrite_view?(@current_user, session)
         tags_count = GuardRail.activate(:secondary) { context.module_items_visible_to(@current_user).count }
@@ -280,7 +283,17 @@ class ContextModulesController < ApplicationController
       if @is_student
         return unless tab_enabled?(@context.class::TAB_MODULES)
 
-        @modules.each { |m| m.evaluate_for(@current_user) }
+        progressions_by_module_id = ContextModule.preload_progressions_for_user(@modules, @current_user)
+        @modules.each do |m|
+          existing_progression = progressions_by_module_id[m.id]
+          if existing_progression
+            existing_progression.context_module = m
+            existing_progression.user = @current_user
+            existing_progression.evaluate!
+          else
+            m.evaluate_for(@current_user)
+          end
+        end
         session[:module_progressions_initialized] = true
       end
       add_body_class("padless-content")

@@ -26,11 +26,14 @@ import {FileManagementProvider} from '../../../contexts/FileManagementContext'
 import {createMockFileManagementContext} from '../../../__tests__/createMockContext'
 import {RowsProvider} from '../../../contexts/RowsContext'
 import {mockRowsContext} from '../../FileFolderTable/__tests__/testUtils'
-import fetchMock from 'fetch-mock'
+import {setupServer} from 'msw/node'
+import {http, HttpResponse} from 'msw'
 import {showFlashSuccess} from '@canvas/alerts/react/FlashAlert'
 
-jest.mock('@canvas/alerts/react/FlashAlert', () => ({
-  showFlashSuccess: jest.fn(() => () => {}),
+const server = setupServer()
+
+vi.mock('@canvas/alerts/react/FlashAlert', () => ({
+  showFlashSuccess: vi.fn(() => () => {}),
 }))
 
 const renderComponent = () => {
@@ -44,15 +47,22 @@ const renderComponent = () => {
     </FileManagementProvider>,
   )
 }
-jest.useFakeTimers()
+vi.useFakeTimers()
 describe('CreateFolderButton', () => {
+  beforeAll(() => server.listen())
+  afterAll(() => server.close())
+
   beforeEach(() => {
-    jest.clearAllMocks()
-    fetchMock.post(/.*\/folders/, 200)
+    vi.clearAllMocks()
+    server.use(
+      http.post(/.*\/folders/, () => {
+        return new HttpResponse(null, {status: 200})
+      }),
+    )
   })
 
   afterEach(() => {
-    fetchMock.restore()
+    server.resetHandlers()
   })
 
   it('can open and close the create folder modal', async () => {
@@ -89,7 +99,7 @@ describe('CreateFolderButton', () => {
     const createButton = screen.getByRole('button', {name: /Create Folder/i})
     await user.click(createButton)
 
-    jest.runAllTimers()
+    vi.runAllTimers()
     await waitFor(() =>
       expect(showFlashSuccess).toHaveBeenCalledWith('Folder created successfully'),
     )

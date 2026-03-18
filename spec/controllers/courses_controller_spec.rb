@@ -5352,6 +5352,26 @@ describe CoursesController do
     end
   end
 
+  describe "#re_send_invitations" do
+    before :once do
+      @notification = Notification.create!(name: "Enrollment Invitation")
+      course_factory(active_all: true)
+      @user1 = user_with_pseudonym(active_all: true)
+      @course.enroll_student(@user1)
+    end
+
+    before do
+      user_session(@teacher)
+    end
+
+    it "only creates one job per course at a time" do
+      post "re_send_invitations", params: { course_id: @course.id }
+      post "re_send_invitations", params: { course_id: @course.id }
+
+      expect(Delayed::Job.where(tag: "Course#re_send_invitations!").count).to eq 1
+    end
+  end
+
   context "accept_enrollment" do
     before do
       allow(RequestCache).to receive(:clear).and_call_original
@@ -6159,6 +6179,286 @@ describe CoursesController do
     it "returns error for non-existent version" do
       post "restore_version", params: { course_id: @course.id, version_id: 999 }, format: :json
       expect(response).to have_http_status(:not_found)
+    end
+  end
+
+  describe "POST #create" do
+    let(:root_account) { Account.default }
+    let(:mcc_account) { root_account.manually_created_courses_account }
+    let(:other_subaccount) { root_account.sub_accounts.create!(name: "Other Subaccount") }
+    let(:admin_user) { account_admin_user(account: root_account) }
+    let(:teacher_user) { user_factory(active_all: true) }
+    let(:designer_user) { user_factory(active_all: true) }
+    let(:student_user) { user_factory(active_all: true) }
+
+    before do
+      root_course = course_factory(account: root_account)
+      root_course.enroll_teacher(teacher_user, enrollment_state: "active")
+      root_course.enroll_designer(designer_user, enrollment_state: "active")
+      root_course.enroll_student(student_user, enrollment_state: "active")
+
+      mcc_course = course_factory(account: mcc_account)
+      mcc_course.enroll_teacher(teacher_user, enrollment_state: "active")
+      mcc_course.enroll_designer(designer_user, enrollment_state: "active")
+      mcc_course.enroll_student(student_user, enrollment_state: "active")
+
+      other_course = course_factory(account: other_subaccount)
+      other_course.enroll_teacher(teacher_user, enrollment_state: "active")
+      other_course.enroll_designer(designer_user, enrollment_state: "active")
+      other_course.enroll_student(student_user, enrollment_state: "active")
+    end
+
+    context "when teachers_can_create_courses is disabled" do
+      before do
+        root_account.settings[:teachers_can_create_courses] = false
+        root_account.save!
+      end
+
+      context "creating in root account" do
+        it "allows admin to create course" do
+          user_session(admin_user)
+          post :create, params: { account_id: root_account.id, course: { name: "Test Course" }, format: :json }
+          expect(response).to be_successful
+        end
+
+        it "does not allow teacher to create course" do
+          user_session(teacher_user)
+          post :create, params: { account_id: root_account.id, course: { name: "Test Course" }, format: :json }
+          expect(response).to be_forbidden
+        end
+
+        it "does not allow designer to create course" do
+          user_session(designer_user)
+          post :create, params: { account_id: root_account.id, course: { name: "Test Course" }, format: :json }
+          expect(response).to be_forbidden
+        end
+
+        it "does not allow student to create course" do
+          user_session(student_user)
+          post :create, params: { account_id: root_account.id, course: { name: "Test Course" }, format: :json }
+          expect(response).to be_forbidden
+        end
+      end
+
+      context "creating in other subaccount" do
+        it "allows admin to create course" do
+          user_session(admin_user)
+          post :create, params: { account_id: other_subaccount.id, course: { name: "Test Course" }, format: :json }
+          expect(response).to be_successful
+        end
+
+        it "does not allow teacher to create course" do
+          user_session(teacher_user)
+          post :create, params: { account_id: other_subaccount.id, course: { name: "Test Course" }, format: :json }
+          expect(response).to be_forbidden
+        end
+
+        it "does not allow designer to create course" do
+          user_session(designer_user)
+          post :create, params: { account_id: other_subaccount.id, course: { name: "Test Course" }, format: :json }
+          expect(response).to be_forbidden
+        end
+
+        it "does not allow student to create course" do
+          user_session(student_user)
+          post :create, params: { account_id: other_subaccount.id, course: { name: "Test Course" }, format: :json }
+          expect(response).to be_forbidden
+        end
+      end
+    end
+
+    context "when teachers_can_create_courses is enabled and they can create anywhere" do
+      before do
+        root_account.settings[:teachers_can_create_courses] = true
+        root_account.settings[:teachers_can_create_courses_anywhere] = true
+        root_account.save!
+      end
+
+      context "creating in root account" do
+        it "allows admin to create course" do
+          user_session(admin_user)
+          post :create, params: { account_id: root_account.id, course: { name: "Test Course" }, format: :json }
+          expect(response).to be_successful
+        end
+
+        it "allows teacher to create course" do
+          user_session(teacher_user)
+          post :create, params: { account_id: root_account.id, course: { name: "Test Course" }, format: :json }
+          expect(response).to be_successful
+        end
+
+        it "allows designer to create course" do
+          user_session(designer_user)
+          post :create, params: { account_id: root_account.id, course: { name: "Test Course" }, format: :json }
+          expect(response).to be_successful
+        end
+
+        it "does not allow student to create course" do
+          user_session(student_user)
+          post :create, params: { account_id: root_account.id, course: { name: "Test Course" }, format: :json }
+          expect(response).to be_forbidden
+        end
+      end
+
+      context "creating in other subaccount" do
+        it "allows admin to create course" do
+          user_session(admin_user)
+          post :create, params: { account_id: other_subaccount.id, course: { name: "Test Course" }, format: :json }
+          expect(response).to be_successful
+        end
+
+        it "allows teacher to create course" do
+          user_session(teacher_user)
+          post :create, params: { account_id: other_subaccount.id, course: { name: "Test Course" }, format: :json }
+          expect(response).to be_successful
+        end
+
+        it "allows designer to create course" do
+          user_session(designer_user)
+          post :create, params: { account_id: other_subaccount.id, course: { name: "Test Course" }, format: :json }
+          expect(response).to be_successful
+        end
+
+        it "does not allow student to create course" do
+          user_session(student_user)
+          post :create, params: { account_id: other_subaccount.id, course: { name: "Test Course" }, format: :json }
+          expect(response).to be_forbidden
+        end
+      end
+    end
+
+    context "when teachers_can_create_courses is enabled but restricted to manually created courses subaccount" do
+      before do
+        root_account.settings[:teachers_can_create_courses] = true
+        root_account.settings[:teachers_can_create_courses_anywhere] = false
+        root_account.save!
+      end
+
+      context "creating in root account" do
+        it "allows admin to create course" do
+          user_session(admin_user)
+          post :create, params: { account_id: root_account.id, course: { name: "Test Course" }, format: :json }
+          expect(response).to be_successful
+        end
+
+        context "with mcc_specific_error_message feature flag enabled" do
+          before do
+            Account.site_admin.enable_feature!(:mcc_specific_error_message)
+          end
+
+          it "does not allow teacher to create course and returns manually_created_courses_subaccount_error" do
+            user_session(teacher_user)
+            post :create, params: { account_id: root_account.id, course: { name: "Test Course" }, format: :json }
+            expect(response).to be_unauthorized
+            json = response.parsed_body
+            expect(json["error"]).to eq("manually_created_courses_subaccount_error")
+          end
+
+          it "does not allow designer to create course and returns manually_created_courses_subaccount_error" do
+            user_session(designer_user)
+            post :create, params: { account_id: root_account.id, course: { name: "Test Course" }, format: :json }
+            expect(response).to be_unauthorized
+            json = response.parsed_body
+            expect(json["error"]).to eq("manually_created_courses_subaccount_error")
+          end
+        end
+
+        context "with mcc_specific_error_message feature flag disabled" do
+          it "does not allow teacher to create course" do
+            user_session(teacher_user)
+            post :create, params: { account_id: root_account.id, course: { name: "Test Course" }, format: :json }
+            expect(response).to be_unauthorized
+          end
+
+          it "does not allow designer to create course" do
+            user_session(designer_user)
+            post :create, params: { account_id: root_account.id, course: { name: "Test Course" }, format: :json }
+            expect(response).to be_unauthorized
+          end
+        end
+
+        it "does not allow student to create course" do
+          user_session(student_user)
+          post :create, params: { account_id: root_account.id, course: { name: "Test Course" }, format: :json }
+          expect(response).to be_forbidden
+        end
+      end
+
+      context "creating in non-manually created courses subaccount" do
+        it "allows admin to create course" do
+          user_session(admin_user)
+          post :create, params: { account_id: other_subaccount.id, course: { name: "Test Course" }, format: :json }
+          expect(response).to be_successful
+        end
+
+        context "with mcc_specific_error_message feature flag enabled" do
+          before do
+            Account.site_admin.enable_feature!(:mcc_specific_error_message)
+          end
+
+          it "does not allow teacher to create course and returns manually_created_courses_subaccount_error" do
+            user_session(teacher_user)
+            post :create, params: { account_id: other_subaccount.id, course: { name: "Test Course" }, format: :json }
+            expect(response).to be_unauthorized
+            json = response.parsed_body
+            expect(json["error"]).to eq("manually_created_courses_subaccount_error")
+          end
+
+          it "does not allow designer to create course and returns manually_created_courses_subaccount_error" do
+            user_session(designer_user)
+            post :create, params: { account_id: other_subaccount.id, course: { name: "Test Course" }, format: :json }
+            expect(response).to be_unauthorized
+            json = response.parsed_body
+            expect(json["error"]).to eq("manually_created_courses_subaccount_error")
+          end
+        end
+
+        context "with mcc_specific_error_message feature flag disabled" do
+          it "does not allow teacher to create course and returns unauthorized" do
+            user_session(teacher_user)
+            post :create, params: { account_id: other_subaccount.id, course: { name: "Test Course" }, format: :json }
+            expect(response).to be_unauthorized
+          end
+
+          it "does not allow designer to create course and returns unauthorized" do
+            user_session(designer_user)
+            post :create, params: { account_id: other_subaccount.id, course: { name: "Test Course" }, format: :json }
+            expect(response).to be_unauthorized
+          end
+        end
+
+        it "does not allow student to create course" do
+          user_session(student_user)
+          post :create, params: { account_id: other_subaccount.id, course: { name: "Test Course" }, format: :json }
+          expect(response).to be_forbidden
+        end
+      end
+
+      context "creating in manually created courses subaccount" do
+        it "allows admin to create course" do
+          user_session(admin_user)
+          post :create, params: { account_id: mcc_account.id, course: { name: "Test Course" }, format: :json }
+          expect(response).to be_successful
+        end
+
+        it "allows teacher to create course" do
+          user_session(teacher_user)
+          post :create, params: { account_id: mcc_account.id, course: { name: "Test Course" }, format: :json }
+          expect(response).to be_successful
+        end
+
+        it "allows designer to create course" do
+          user_session(designer_user)
+          post :create, params: { account_id: mcc_account.id, course: { name: "Test Course" }, format: :json }
+          expect(response).to be_successful
+        end
+
+        it "does not allow student to create course" do
+          user_session(student_user)
+          post :create, params: { account_id: mcc_account.id, course: { name: "Test Course" }, format: :json }
+          expect(response).to be_forbidden
+        end
+      end
     end
   end
 end

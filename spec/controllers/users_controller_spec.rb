@@ -1196,6 +1196,80 @@ describe UsersController do
           expect(p.unique_id).to eq "spaceman@example.com"
           expect(p.user.email).to eq "spaceman@example.com"
         end
+
+        it "does not raises RecordNotUnique when reactivating a user with a retired CC and capitalized Email type" do
+          # First, create a user
+          post "create",
+               params: {
+                 account_id: account.id,
+                 pseudonym: {
+                   unique_id: "tim.mariner@example.com",
+                   sis_user_id: "041349",
+                   integration_id: "StaffID: 041349",
+                   send_confirmation: "False"
+                 },
+                 communication_channel: {
+                   type: "Email",
+                   skip_confirmation: "False"
+                 },
+                 user: {
+                   name: "Tim Mariner",
+                   sortable_name: "Mariner, Tim"
+                 }
+               },
+               format: "json"
+          expect(response).to be_successful
+
+          # Get the created user and pseudonym
+          pseudonym = Pseudonym.where(unique_id: "tim.mariner@example.com").first
+          user = pseudonym.user
+
+          # Verify we have a communication channel
+          cc = user.communication_channels.where(path_type: "email").by_path("tim.mariner@example.com").first
+          expect(cc).to be_present
+          expect(cc.path_type).to eq "email"
+
+          # Retire the communication channel and delete the user/pseudonym
+          user.destroy!
+
+          expect(user.reload.workflow_state).to eq "deleted"
+          expect(cc.reload.workflow_state).to eq "retired"
+
+          # Verify there's only ONE retired communication channel
+          expect(CommunicationChannel.where(
+            user_id: user.id,
+            path_type: "email"
+          ).count).to eq 1
+
+          # Try to reactivate with capitalized "Email" type (this reproduces the bug)
+          # The bug causes a database constraint violation
+          post "create",
+               params: {
+                 account_id: account.id,
+                 force_validations: "False",
+                 enable_sis_reactivation: "True",
+                 pseudonym: {
+                   unique_id: "tim.mariner@example.com",
+                   sis_user_id: "041349",
+                   integration_id: "StaffID: 041349",
+                   send_confirmation: "False"
+                 },
+                 communication_channel: {
+                   type: "Email",
+                   skip_confirmation: "True"
+                 },
+                 user: {
+                   name: "Tim Mariner",
+                   sortable_name: "Mariner, Tim"
+                 }
+               },
+               format: "json"
+          expect(response).to be_successful
+
+          # User is reactivated.
+          expect(user.reload.workflow_state).to eq "registered"
+          expect(cc.reload.workflow_state).to eq "active"
+        end
       end
 
       it "does not allow an admin to set the sis id when creating a user if they don't have privileges to manage sis" do
@@ -2727,7 +2801,7 @@ describe UsersController do
 
     it "sets the js_env properly with act as user data" do
       get "masquerade", params: { user_id: user2.id }
-      assert_response(:success)
+      expect(response).to have_http_status(:success)
       act_as_user_data = controller.js_env[:act_as_user_data][:user]
       expect(act_as_user_data).to include({
                                             name: user2.name,
@@ -3356,6 +3430,24 @@ describe UsersController do
         expect(assigns[:js_env][:DASHBOARD_FEATURES][:widget_dashboard_customization]).to be false
       end
 
+      it "includes platform_ui_unified_widgets_dashboard in DASHBOARD_FEATURES when enabled" do
+        course_with_student_logged_in(active_all: true)
+        @user.preferences[:widget_dashboard_user_preference] = true
+        @user.save!
+        Account.site_admin.enable_feature!(:platform_ui_unified_widgets_dashboard)
+        get "user_dashboard"
+        expect(assigns[:js_env][:DASHBOARD_FEATURES][:platform_ui_unified_widgets_dashboard]).to be true
+      end
+
+      it "does not include platform_ui_unified_widgets_dashboard in DASHBOARD_FEATURES when disabled" do
+        course_with_student_logged_in(active_all: true)
+        @user.preferences[:widget_dashboard_user_preference] = true
+        @user.save!
+        Account.site_admin.disable_feature!(:platform_ui_unified_widgets_dashboard)
+        get "user_dashboard"
+        expect(assigns[:js_env][:DASHBOARD_FEATURES][:platform_ui_unified_widgets_dashboard]).to be false
+      end
+
       describe "dashboard routing" do
         before :once do
           @observer = user_factory(active_all: true)
@@ -3443,13 +3535,24 @@ describe UsersController do
           expect(assigns[:js_bundles].flatten).to include :dashboard
         end
 
-        it "ignores user preference when feature is locked on (cannot override)" do
+        it "respects user preference when feature is locked on (can override)" do
           Account.default.enable_feature!(:widget_dashboard)
           user_session(@student)
           @student.preferences[:widget_dashboard_user_preference] = false
           @student.save!
           get "user_dashboard"
-          expect(assigns[:js_bundles].flatten).to include :widget_dashboard
+          expect(assigns[:js_bundles].flatten).not_to include :widget_dashboard
+          expect(assigns[:js_bundles].flatten).to include :dashboard
+        end
+
+        it "does not show widget dashboard when feature is disabled even if user preference is true" do
+          Account.default.disable_feature!(:widget_dashboard)
+          user_session(@student)
+          @student.preferences[:widget_dashboard_user_preference] = true
+          @student.save!
+          get "user_dashboard"
+          expect(assigns[:js_bundles].flatten).not_to include :widget_dashboard
+          expect(assigns[:js_bundles].flatten).to include :dashboard
         end
       end
     end
@@ -3993,13 +4096,13 @@ describe UsersController do
 
   describe "dashboard with course grades" do
     before do
-      # Enable feature at account level - widget dashboard shown by default
       Account.default.enable_feature!(:widget_dashboard)
     end
 
     context "when student accesses their own dashboard" do
       before do
         course_with_student(active_all: true)
+        @student.update!(preferences: @student.preferences.merge(widget_dashboard_user_preference: true))
         user_session(@student)
       end
 
@@ -4052,6 +4155,7 @@ describe UsersController do
       before do
         course_with_student(active_all: true)
         @observer = user_with_pseudonym(active_all: true)
+        @observer.update!(preferences: @observer.preferences.merge(widget_dashboard_user_preference: true))
         @course.enroll_user(@observer, "ObserverEnrollment", associated_user_id: @student.id, enrollment_state: "active")
         user_session(@observer)
         session[:observed_user_id] = @student.id
@@ -4081,6 +4185,7 @@ describe UsersController do
     context "grade priority and display" do
       before do
         course_with_student(active_all: true)
+        @student.update!(preferences: @student.preferences.merge(widget_dashboard_user_preference: true))
         user_session(@student)
         @assignment = @course.assignments.create!(title: "Test", points_possible: 100)
       end
@@ -4112,6 +4217,7 @@ describe UsersController do
 
       it "sorts courses alphabetically by name" do
         course_with_student_logged_in(active_all: true)
+        @user.update!(preferences: @user.preferences.merge(widget_dashboard_user_preference: true))
         @course.update!(name: "Zebra Course")
 
         @course2 = course_factory(active_all: true)
@@ -4129,6 +4235,7 @@ describe UsersController do
     context "enrollment filtering" do
       before do
         @student = user_factory(active_all: true)
+        @student.update!(preferences: @student.preferences.merge(widget_dashboard_user_preference: true))
         @current_course = course_factory(active_all: true)
         @current_course.enroll_student(@student, enrollment_state: "active")
         user_session(@student)
@@ -4268,6 +4375,7 @@ describe UsersController do
       before do
         @student = user_factory(active_all: true)
         @observer = user_with_pseudonym(active_all: true)
+        @observer.update!(preferences: @observer.preferences.merge(widget_dashboard_user_preference: true))
         @current_course = course_factory(active_all: true)
         @current_course.enroll_student(@student, enrollment_state: "active")
         @current_course.enroll_user(@observer, "ObserverEnrollment", associated_user_id: @student.id, enrollment_state: "active")

@@ -18,22 +18,30 @@
 
 import React from 'react'
 import {fireEvent, render, screen, waitFor} from '@testing-library/react'
-import fetchMock from 'fetch-mock'
+import {setupServer} from 'msw/node'
+import {http, HttpResponse} from 'msw'
 import RegisterService, {serviceConfigByName, USERNAME_MAX_LENGTH} from '../RegisterService'
 
+const server = setupServer()
+
 describe('RegisterService', () => {
-  const onClose = jest.fn()
-  const onSubmit = jest.fn()
+  const onClose = vi.fn()
+  const onSubmit = vi.fn()
   const mockUrl = 'mock-url'
   const USER_SERVICE_URI = '/profile/user_services'
 
   beforeAll(() => {
     window.ENV.google_drive_oauth_url = mockUrl
+    server.listen()
   })
 
   afterAll(() => {
-    // @ts-expect-error
-    window.ENV = {}
+    ;(window as any).ENV = {}
+    server.close()
+  })
+
+  afterEach(() => {
+    server.resetHandlers()
   })
 
   describe('when the service is Google Drive', () => {
@@ -101,7 +109,11 @@ describe('RegisterService', () => {
     })
 
     it('should show an error if the network request fails', async () => {
-      fetchMock.post(USER_SERVICE_URI, 500, {overwriteRoutes: true})
+      server.use(
+        http.post(USER_SERVICE_URI, () => {
+          return new HttpResponse(null, {status: 500})
+        }),
+      )
       render(<RegisterService serviceName={serviceName} onSubmit={onSubmit} onClose={onClose} />)
       const username = screen.getByLabelText('Username')
       const button = screen.getByLabelText('Save Login')
@@ -116,7 +128,14 @@ describe('RegisterService', () => {
     })
 
     it('should be able to submit the form if it is valid', async () => {
-      fetchMock.post(USER_SERVICE_URI, 200, {overwriteRoutes: true})
+      const requestBodyCapture = vi.fn()
+      server.use(
+        http.post(USER_SERVICE_URI, async ({request}) => {
+          const body = await request.json()
+          requestBodyCapture(body)
+          return new HttpResponse(null, {status: 200})
+        }),
+      )
       const usernameValue = 'test-username'
       const passwordValue = 'test-password'
       render(<RegisterService serviceName={serviceName} onSubmit={onSubmit} onClose={onClose} />)
@@ -129,11 +148,8 @@ describe('RegisterService', () => {
       fireEvent.click(button)
 
       await waitFor(() => {
-        fetchMock.called(USER_SERVICE_URI, {
-          method: 'POST',
-          body: {
-            user_service: {service: serviceName, user_name: usernameValue, password: passwordValue},
-          },
+        expect(requestBodyCapture).toHaveBeenCalledWith({
+          user_service: {service: serviceName, user_name: usernameValue, password: passwordValue},
         })
         expect(onSubmit).toHaveBeenCalled()
       })

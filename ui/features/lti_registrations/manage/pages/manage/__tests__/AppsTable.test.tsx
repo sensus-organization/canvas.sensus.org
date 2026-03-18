@@ -17,6 +17,7 @@
  */
 
 import {fireEvent, render, screen, waitFor} from '@testing-library/react'
+import {type MockedFunction} from 'vitest'
 import {AppsTableInner, type AppsTableInnerProps} from '../AppsTable'
 import {mockPageOfRegistrations, mockRegistration, mswHandlers} from './helpers'
 import {BrowserRouter} from 'react-router-dom'
@@ -26,9 +27,9 @@ import fakeENV from '@canvas/test-utils/fakeENV'
 import {showFlashAlert} from '@canvas/alerts/react/FlashAlert'
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query'
 
-jest.mock('@canvas/alerts/react/FlashAlert')
+vi.mock('@canvas/alerts/react/FlashAlert')
 
-const mockFlash = showFlashAlert as jest.MockedFunction<typeof showFlashAlert>
+const mockFlash = showFlashAlert as MockedFunction<typeof showFlashAlert>
 
 const server = setupServer(...mswHandlers)
 // Need to use AppsTableInner because AppsTable uses Responsive
@@ -228,6 +229,33 @@ describe('AppsTableInner', () => {
 
       const link = wrapper.getByTestId('reg-link-1')
       expect(link).toHaveAttribute('href', '/manage/1')
+    })
+
+    it('displays the appropriate columns', async () => {
+      const wrapper = renderTable({
+        tableProps: {
+          apps: {
+            data: [
+              mockRegistration(
+                'ExampleApp',
+                1,
+                {},
+                {created_by: 'Instructure', updated_by: 'Instructure'},
+              ),
+            ],
+            total: 1,
+          },
+        },
+      })
+
+      const columns = wrapper.getAllByRole('columnheader')
+      expect(columns).toHaveLength(6)
+      expect(columns[0]).toHaveTextContent('Name')
+      expect(columns[1]).toHaveTextContent('Nickname')
+      expect(columns[2]).toHaveTextContent('Installed On')
+      expect(columns[3]).toHaveTextContent('Version')
+      expect(columns[4]).toHaveTextContent('On/Off')
+      expect(columns[5]).toHaveTextContent('Status')
     })
 
     it('shows condensed version of table', async () => {

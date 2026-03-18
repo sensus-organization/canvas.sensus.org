@@ -47,7 +47,7 @@ class CalendarEvent < ActiveRecord::Base
   end
 
   def update_attachment_associations(**args)
-    return if series_uuid.present? && !series_head
+    return if series_uuid.present? && !series_head && description == CalendarEvent.find_by(series_uuid:, series_head: true)&.description
 
     super
   end
@@ -744,6 +744,19 @@ class CalendarEvent < ActiveRecord::Base
     )
     end
     can :delete
+  end
+
+  # effective_context_code is hardwritten, but context is shard dependant so sometimes we want to globalize it
+  def sharded_effective_context_code
+    return nil unless effective_context_code
+
+    codes = effective_context_code.split(",")
+    result = codes.map do |code|
+      type, id = code.split("_", 2)
+      global_id = Shard.global_id_for(id, shard)
+      "#{type}_#{global_id}"
+    end
+    result.join(",")
   end
 
   class IcalEvent

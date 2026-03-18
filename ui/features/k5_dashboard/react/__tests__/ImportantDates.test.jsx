@@ -23,7 +23,7 @@ import moment from 'moment-timezone'
 // Use dynamic dates relative to current date to avoid year/day failures
 const CURRENT_TIME = '2025-01-01T13:00:40-07:00'
 const TWO_YEARS_FROM_NOW = moment(CURRENT_TIME).add(2, 'years').toISOString()
-import {act, render, waitForElementToBeRemoved, waitFor} from '@testing-library/react'
+import {act, cleanup, render, waitForElementToBeRemoved, waitFor} from '@testing-library/react'
 
 import ImportantDates from '../ImportantDates'
 import {destroyContainer} from '@canvas/alerts/react/FlashAlert'
@@ -54,14 +54,15 @@ describe('ImportantDates', () => {
   })
 
   beforeEach(() => {
-    jest.useFakeTimers()
-    jest.setSystemTime(new Date(CURRENT_TIME))
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(CURRENT_TIME))
     fetchMock.get(ASSIGNMENTS_URL, MOCK_ASSIGNMENTS)
     fetchMock.get(EVENTS_URL, MOCK_EVENTS)
   })
 
   afterEach(() => {
-    jest.useRealTimers()
+    cleanup()
+    vi.useRealTimers()
     fetchMock.restore()
     destroyContainer()
     localStorage.clear()
@@ -167,7 +168,7 @@ describe('ImportantDates', () => {
   })
 
   it('shows close button if handleClose is provided', async () => {
-    const handleCloseFunc = jest.fn()
+    const handleCloseFunc = vi.fn()
     const {findByRole} = render(<ImportantDates {...getProps()} handleClose={handleCloseFunc} />)
     const closeButton = await findByRole('button', {name: 'Hide Important Dates'})
     expect(closeButton).toBeInTheDocument()

@@ -35,6 +35,9 @@ class Lti::Registration < ActiveRecord::Base
   belongs_to :created_by, class_name: "User", inverse_of: :created_lti_registrations, optional: true
   belongs_to :updated_by, class_name: "User", inverse_of: :updated_lti_registrations, optional: true
 
+  belongs_to :template_registration, class_name: "Lti::Registration", inverse_of: :local_copies, optional: true
+  has_many :local_copies, class_name: "Lti::Registration", inverse_of: :template_registration
+
   # If this tool has been installed via dynamic registration, it will have an ims_registration.
   has_one :ims_registration, class_name: "Lti::IMS::Registration", inverse_of: :lti_registration, foreign_key: :lti_registration_id
 
@@ -53,6 +56,7 @@ class Lti::Registration < ActiveRecord::Base
   validates :description, length: { maximum: 2048 }, allow_blank: true
   validates :name, presence: true
   validate :account_is_root_account
+  validate :template_registration_must_be_in_site_admin, if: :template_registration_id?
 
   scope :active, -> { where(workflow_state: "active") }
   scope :site_admin, -> { where(account: Account.site_admin) }
@@ -132,47 +136,54 @@ class Lti::Registration < ActiveRecord::Base
   # @param available [Boolean] Sets availability on the ContextControl created alongside this tool. Defaults to true,
   #   which means the tool will be available for use directly after creation.
   # @return [ContextExternalTool] A new ContextExternalTool for this Registration and the given context.
-  def new_external_tool(context, existing_tool: nil, verify_uniqueness: false, current_user: nil, available: true)
+  def new_external_tool(context, existing_tool: nil, verify_uniqueness: false, current_user: nil, available: true, enabled: true)
     # disabled tools should stay disabled while getting updated
     # deleted tools are never updated during a dev key update so can be safely ignored
     tool_is_disabled = existing_tool&.workflow_state == ContextExternalTool::DISABLED_STATE
 
-    tool = existing_tool || ContextExternalTool.new(context:)
-    Importers::ContextExternalToolImporter.import_from_migration(
-      deployment_configuration(context:),
-      context,
-      item: tool,
-      persist: false
-    )
-    tool.lti_registration = self
-    tool.developer_key = developer_key
-    tool.workflow_state = (tool_is_disabled && ContextExternalTool::DISABLED_STATE) || privacy_level
+    context.shard.activate do
+      Lti::Registration.transaction do
+        tool = existing_tool || ContextExternalTool.new(context:)
+        Importers::ContextExternalToolImporter.import_from_migration(
+          deployment_configuration(context:),
+          context,
+          item: tool,
+          persist: false
+        )
+        tool.lti_registration = self
+        tool.developer_key = developer_key
+        tool.workflow_state = privacy_level
+        if tool_is_disabled || !enabled
+          tool.workflow_state = ContextExternalTool::DISABLED_STATE
+        end
 
-    if verify_uniqueness
-      tool.check_for_duplication
+        if verify_uniqueness
+          tool.check_for_duplication
+        end
+
+        if tool.errors.any? || !tool.save
+          raise Lti::ContextExternalToolErrors, tool.errors
+        end
+
+        if existing_tool
+          # Do not update availability when propagating tool changes
+          available = nil
+        end
+        Lti::ContextControlService.create_or_update(
+          {
+            available:,
+            course_id: context.is_a?(Course) ? context.id : nil,
+            account_id: context.is_a?(Account) ? context.id : nil,
+            registration_id: id,
+            deployment_id: tool.id,
+            created_by_id: current_user&.id,
+            updated_by_id: current_user&.id
+          }.compact
+        )
+
+        tool
+      end
     end
-
-    if tool.errors.any? || !tool.save
-      raise Lti::ContextExternalToolErrors, tool.errors
-    end
-
-    if existing_tool
-      # Do not update availability when propagating tool changes
-      available = nil
-    end
-    Lti::ContextControlService.create_or_update(
-      {
-        available:,
-        course_id: context.is_a?(Course) ? context.id : nil,
-        account_id: context.is_a?(Account) ? context.id : nil,
-        registration_id: id,
-        deployment_id: tool.id,
-        created_by_id: current_user&.id,
-        updated_by_id: current_user&.id
-      }.compact
-    )
-
-    tool
   end
 
   # Returns true if this Registration is from a different account than the given account.
@@ -180,14 +191,18 @@ class Lti::Registration < ActiveRecord::Base
   # This will not properly account for a possible future scenario where the account is
   # for a _sub_ account underneath the registration's root account.
   def inherited_for?(account)
-    account != self.account
+    if self.account.feature_enabled?(:lti_registrations_templates)
+      template_registration_id.present?
+    else
+      account != self.account
+    end
   end
 
   delegate :site_admin?, to: :account
 
   # TODO: this will eventually need to account for 1.1 registrations
-  def icon_url
-    ims_registration&.logo_uri || manual_configuration&.launch_settings&.dig("icon_url")
+  def icon_url(context: nil)
+    internal_lti_configuration(context:).dig(:launch_settings, :icon_url)
   end
 
   # Returns an LtiConfiguration-conforming Hash with the overlay appropriate
@@ -318,5 +333,12 @@ class Lti::Registration < ActiveRecord::Base
     return unless account
 
     errors.add :account, "account is not a root account" unless account.root_account?
+  end
+
+  def template_registration_must_be_in_site_admin
+    return unless template_registration
+
+    errors.add :template_registration, "Site Admin registrations cannot inherit from a template" if site_admin? && template_registration.present?
+    errors.add :template_registration, "must be inherited from Site Admin" unless template_registration.site_admin?
   end
 end

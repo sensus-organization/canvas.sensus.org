@@ -72,15 +72,13 @@ const isCaptionMetaData = (track: MediaTrack | CaptionMetaData): track is Captio
 const convertMediaTracksIfNeeded = (
   tracks: MediaTrack[] | CaptionMetaData[],
 ): CaptionMetaData[] => {
-  // @ts-expect-error
-  return tracks.map(track => {
+  return tracks.map((track): CaptionMetaData => {
     if (isCaptionMetaData(track)) return track
     return {
-      locale: track.locale,
       language: captionLanguageForLocale(track.locale),
-      inherited: track.inherited,
       label: captionLanguageForLocale(track.locale),
       src: track.url,
+      type: 'vtt',
     }
   })
 }
@@ -155,6 +153,15 @@ export default function CanvasStudioPlayer({
   const [containerHeight, setContainerHeight] = useState(explicitSize?.height || 0)
   const [isLoading, setIsLoading] = useState(true)
   const [canAddCaptions, setCanAddCaptions] = useState(false)
+
+  useEffect(() => {
+    if (media_id && media_id !== mediaId) {
+      setMediaId(media_id)
+      setMediaSources([])
+      setRetryAttempt(0)
+    }
+  }, [media_id, mediaId])
+
   // the ability to set these makes testing easier
   // hint: set these values in a conditional breakpoint in
   // media_player_iframe_content.js where the CanvasStudioPlayer is rendered
@@ -385,6 +392,54 @@ export default function CanvasStudioPlayer({
     }
   }, [explicitSize, containerWidth, containerHeight])
 
+  /**
+   * When escape is pressed, if focus is inside the player:
+   * - If in fullscreen: manually exit and restore focus to fullscreen button
+   * - If menu is open: restore focus to the menu button
+   * Why: Chrome loses focus after fullscreen exit, Firefox doesn't
+   */
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+
+    const handleEscapeCapture = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+
+      const target = event.target as HTMLElement
+      if (!container.contains(target)) return
+
+      if (document.fullscreenElement) {
+        event.preventDefault()
+        event.stopPropagation()
+
+        document.exitFullscreen().then(() => {
+          const fullscreenButton = container.querySelector(
+            '[class*="_full-screen-button"]',
+          ) as HTMLElement | null
+          fullscreenButton?.focus()
+        })
+
+        return
+      }
+
+      // Handle menu escape - restore focus to menu button
+      const openMenuButton = container.querySelector(
+        '.controls-button[aria-expanded="true"], #kebab-menu-button[aria-expanded="true"]',
+      ) as HTMLElement | null
+      if (openMenuButton) {
+        setTimeout(() => {
+          openMenuButton.focus()
+        }, 0)
+      }
+    }
+
+    document.addEventListener('keydown', handleEscapeCapture, true)
+
+    return () => {
+      document.removeEventListener('keydown', handleEscapeCapture, true)
+    }
+  }, [])
+
   function renderLoader() {
     if (retryAttempt >= showBePatientMsgAfterAttempts) {
       setIsLoading(false)
@@ -419,7 +474,7 @@ export default function CanvasStudioPlayer({
               src={mediaSources}
               captions={mediaCaptions}
               hideFullScreen={!includeFullscreen}
-              title={getAriaLabel()}
+              title={getAriaLabel() ?? ''}
               onCaptionsDelete={hideCaptionButtons ? undefined : deleteCaption}
               enableSidebar={enableSidebar}
               openSidebar={openSidebar}

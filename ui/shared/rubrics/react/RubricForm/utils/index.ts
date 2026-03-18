@@ -24,11 +24,12 @@ import type {
 } from '@canvas/rubrics/react/types/rubric'
 import type {RubricQueryResponse} from '../queries/RubricFormQueries'
 import type {RubricFormProps} from '../types/RubricForm'
-import {isEqual} from 'lodash'
+import {isEqual} from 'es-toolkit/compat'
 
 export const translateRubricQueryResponse = (fields: RubricQueryResponse): RubricFormProps => {
   return {
     associationType: fields.rubricAssociationForContext?.associationType ?? 'Assignment',
+    associationTypeId: fields.rubricAssociationForContext?.associationId,
     id: fields.id,
     title: fields.title ?? '',
     hasRubricAssociations: fields.hasRubricAssociations ?? false,
@@ -68,6 +69,7 @@ export const translateRubricData = (
     useForGrading: rubricAssociation.useForGrading ?? false,
     rubricAssociationId: rubricAssociation.id,
     associationType: rubricAssociation.associationType,
+    associationTypeId: rubricAssociation.associationId,
     canUpdateRubric: rubric.canUpdateRubric ?? false,
   }
 }

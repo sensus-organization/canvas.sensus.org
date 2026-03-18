@@ -464,7 +464,9 @@ uk:
     report_header_token_dev_key_id: "ідентифікатор ключа dev"
     report_header_token_dev_key_name: "Ім'я ключа dev"
     report_header_token_hint: "маркер поради"
+    report_header_token_id: ідентифікатор
     report_header_token_last_used: "останній використаний"
+    report_header_token_status: статус
     report_header_user__id: user_id
     report_header_user_id: "ідентифікатор користувача"
     report_header_user_name: "імя користувача"
@@ -1956,6 +1958,7 @@ uk:
       recipients_required: "Потрібен принаймні один отримувач"
       threshold_should_be_numeric: "Це має бути додатнє число"
   alerts_6b871b71: "Сповіщення про небезпеку"
+  aligned_outcomes_d0a0c159: "Вирівнювання результатів"
   all_4321c3a1: Всі
   all_account_types_e83c1516: "Всі типи облікових записів"
   all_accounts_3bafc860: "Всі облікові записи"
@@ -3229,6 +3232,7 @@ uk:
   big_blue_button_conference: 
     recording_setting: Запис
     recording_setting_enabled_description: "Дозволити запис для цієї конференції"
+  bio_a519d807: Біо
   blackboard: 
     no_manifest: "Цей Blackboard .zip не має файлу imsmanifest.xml в кореневому каталозі."
   blank_38df4238: порожній
@@ -4000,8 +4004,10 @@ uk:
   close_grade_info_58ef5a20: "Закрити інформацію оцінки"
   close_move_tray_8609e988: "закрити панель переміщення"
   close_opportunity_center_popup_9907d981: "Закрити спливаюче вікно Центру можливостей"
+  close_rubric_a0fc8166: "Закрити рубрику"
   close_sidebar_10b0fbb4: "Закрити бічну панель"
   close_submission_tray_c4988fa8: "Закрити панель подання"
+  closed_983a96fe: Закрито
   closed_for_comments_e395b42f: "Закрито для коментарів"
   closes_5c6b4367: "Закриття:"
   code_is_case_sensitive_d8175cad: "Код чутливий до регістру."
@@ -4334,6 +4340,7 @@ uk:
   confirmation_code_required_22984955: "Код підтвердження (обов'язково)"
   confirmation_failed_please_try_again_ae566d37: "Підтвердження не вдале.  Будь ласка, спробуйте ще раз."
   confirming_2df4b68f: Підтвердження...
+  confirming_course_name_5a509f48: "Підтвердження %{course_name}..."
   consumer_key_6f94ba11: "Ключ клієнта"
   contact_a6e7f6da: Зв'язатися
   content_1440204b: Вміст
@@ -5378,6 +5385,7 @@ uk:
   course_id_8bd2a21c: "ID курсу"
   course_id_a7c924d5: "ідентифікатор курса"
   course_id_b0bc82d4: "Ідентифікатор курсу"
+  course_id_course_id_2841413a: "Ідентифікатор курсу \"%{course_id}\""
   course_id_f8640bb8: course_id
   course_image_for_course_cfbb08df: "Зображення курсу для %{course}"
   course_image_settings_eba3ec55: "Налаштування зображення курсу"
@@ -5459,8 +5467,16 @@ uk:
   course_name_45175338: "назва курса"
   course_name_63b973d1: "Назва курсу"
   course_name_is_required_90919349: "Ім'я курсу обов'язкове"
+  course_name_not_authorized_for_cross_listing_353e500f: "%{course_name} не авторизован для cross-listing"
   course_name_successfully_added_48116a50: "%{course_name} було успішно додано!"
   course_navigation_dd035109: "Навігація курсу"
+  course_navigation_settings: 
+    buttons: 
+      save: Зберегти
+    drag_details: "Відключення більшості сторінок змусить студентів, які відвідують ці сторінки, бути перенаправленими на головну сторінку курсу."
+    drag_to_hide: "Перетягніть елементи сюди, щоб приховати їх від студентів."
+    help: 
+      edit_navigation: "Перетягніть елементи, щоб змінити їх порядок в навігації цього курсу."
   course_not_found_c248a721: "Курс не знайдено"
   course_option_links_a79d263d: "Посилання на опції курсу"
   course_outcomes_7dc1cbc7: "Результати курсу"
@@ -5636,6 +5652,13 @@ uk:
         content: Вміст
         due_dates: "Відповідні дати"
         points: Бали
+    navigation_form: 
+      drag_details: "Відключення більшості сторінок змусить студентів, які відвідують ці сторінки, бути перенаправленими на головну сторінку курсу."
+      drag_to_hide: "Перетягніть елементи сюди, щоб приховати їх від студентів."
+      help: 
+        edit_navigation: "Перетягніть елементи, щоб змінити їх порядок в навігації цього курсу."
+      titles: 
+        edit_navigation: "Редагування навігації курсу"
     notices: 
       concluded: "Курс успішно завершено"
       deleted: "Курс успішно видалено"
@@ -6018,6 +6041,9 @@ uk:
   criterion_long_description_e9a97247: "Детальний опис критерія"
   criterion_ratings_3eed22e2: "Рейтинг критеріїв"
   criterion_updated_36c0b3dc: "Критерій оновлено"
+  cross_list_section_27801ec9: "Cross-List Розділу"
+  cross_list_this_section_889f7287: "Cross-List цього розділу"
+  cross_list_this_section_90aea97f: "Cross-List цього розділу"
   crumbs: 
     access_report: "Звіт про доступ"
     announcements: Оголошення
@@ -7987,6 +8013,7 @@ uk:
   generate_item_analysis_report_statuslabel_16e02c8: "Згенерувати пункт аналітичного звіту %{statusLabel}"
   generate_student_analysis_report_statuslabel_aecdc4dc: "Згенерувати аналітичний звіт студента %{statusLabel}"
   generate_token_393ab5b4: "Згенерувати маркер"
+  generated_e71c6622: Згенеровано
   generated_f26ee56b: "Згенеровано:"
   generating_5b5e20f8: "Генерується:"
   generating_c2aabc02: Генерується...
@@ -8048,6 +8075,7 @@ uk:
       warning: Попередження
   grade_distribution_e52c9256: "Розподіл оцінок"
   grade_export_title: "Експорт оцінок"
+  grade_f949a691: "%{grade}%"
   grade_for_name_b9df168a: "Оцінка за: %{name}"
   grade_grade_7e52dd1c: "Оцінка: %{grade}"
   grade_high_to_low_1cea0381: "Оцінка - від більшої до меншої"
@@ -8916,6 +8944,7 @@ uk:
   hide_e057ff36: Приховати
   hide_groups_navigation_menu_62e8b3d0: "Сховати меню навігації груп"
   hide_navigation_menu_f0b3e90: "Сховати меню навігації "
+  hide_rubric_27903c8: "Приховати рубрику"
   hide_score_total_for_assessment_results_d0ef117f: "Приховати загальну кількість балів за результатами оцінки"
   hide_sidebar_2b5b3776: "Сховати бічну панель"
   hide_student_names_3e59e862: "Приховати імена студентів"
@@ -12063,6 +12092,7 @@ uk:
   no_grading_periods_configured_for_this_term_ca22393e: "не налаштовано періоди оцінювання для цього терміну"
   no_grading_periods_set_up_a20a8819: "Немає Налаштувань Періоду Оцінювання"
   no_grading_schemes_to_display_8b0e92e7: "Жодної схеми оцінювання не показано"
+  no_items_20cde5bf: "Елементи не знайдено."
   no_items_found_870b2d0d: "Елементи не знайдено"
   no_items_in_module_21f111a2: "Жодного пункту в модулі"
   no_marks_5e7d2b59: "Відміток немає"
@@ -12111,6 +12141,7 @@ uk:
   not_anonymously_graded_87574f91: "Не оцінюється анонімно"
   not_available_487d3648: "Не доступно"
   not_available_during_sync_ae645e8c: "Недоступний протягом синхронізації"
+  not_available_until_14e61f1e: "Не доступно до"
   not_available_until_next_submission_2175158: "Не доступно до наступного відправлення"
   not_completed_55fb4c00: "Не Завершено"
   not_completed_d70acea3: "Не завершено "
@@ -12126,6 +12157,7 @@ uk:
   not_submitted_7d05fdb4: "Не відправлено"
   not_synced_529cbf29: "Не синхронізовано"
   not_synced_message_a343fe5e: "Не синхронізовано: %{message}"
+  not_yet_available_9aa23a77: "Ще недоступний"
   not_yet_completed_345a0bca: "Ще не завершено "
   not_yet_graded_8b655a7: "Ще не оцінений"
   note_8b73ce09: Примітка
@@ -12554,6 +12586,7 @@ uk:
   options_3ab0ea65: Варіанти
   options_for_title_label_17f821ff: "Варіанти для %{title_label}"
   or_ef4e808: або
+  or_enter_the_course_s_id_46e0792a: "Або введіть ідентифікатор курсу"
   orange_81386a62: Помаранчевий
   orbis_report_header_assignment_id: "ідентифікатор призначення"
   orbis_report_header_assignment_title: "назва призначення"
@@ -13466,6 +13499,7 @@ uk:
   print_d0e3d53f: Розрдрукувати
   priority_dd4381ee: Пріоритет
   privacy_290109ea: Приватність
+  privacy_notice_7eff08fe: Конфіденційність
   privacy_policy_c68f482a: "Політика конфіденційності"
   private_copyrighted_3cac9686: "Приватний (Захищено авторським правом)"
   proceed_f3d33864: Продовжувати
@@ -15169,6 +15203,7 @@ uk:
   ratio_answered_correctly_b0c1e7d: "%{ratio}відповіли правильно"
   ratio_responded_correctly_6d890107: "%{ratio}відповіли правильно"
   re_activate_user_f7d77c9a: "Повторно активувати користувача"
+  re_cross_list_this_section_faf7df4d: "Re-Cross-List цього розділу"
   re_reported_b9671073: "Повторно повідомлено"
   re_send_confirmation_bcc66940: "Повторна відправка підтвердження"
   re_sending_379a8580: "Повторна відправка..."
@@ -15852,6 +15887,7 @@ uk:
   search_for_a_course_58fdc7a6: "Пошук для курсу"
   search_for_a_deleted_course_by_id_f553398d: "Шукайте видалений курс за ідентифікатором"
   search_for_assignment_8149cb1: "Пошук Завдання"
+  search_for_course_e1a1dfc6: "Шукати курс"
   search_for_files_7541fb28: "Шукати файли"
   search_for_people_by_id_or_name_36107593: "Пошук людей за ID або іменем"
   search_form_fcaa38f7: "Форма пошуку"
@@ -15913,6 +15949,7 @@ uk:
   section_specific_discussions_are_disabled_9e3fd431: "Обговорення для конкретних розділів відключено"
   section_specific_topics_must_have_sections_11868960: "Теми конкретних розділів повинні мати розділи"
   section_starts_at_65eaed1: "Розділ починається в"
+  section_successfully_cross_listed_86eb2765: "Розділ успішно cross-listed!"
   section_successfully_de_cross_listed_df3b64e: "Розділ успішно de-cross-listed!"
   sections: 
     section_created: "Розділ успішно створено!"
@@ -16058,6 +16095,7 @@ uk:
   selected_274ce24f: Обраний
   selected_all_courses_9cfef57f: "Вибрати усі курси"
   selected_answer: "Ви вибрали цю відповідь."
+  selected_course_9bf57f33: "Обраний курс"
   selected_course_course_a581f834: "Обраний курс %{course}"
   selected_subtree_a7693937: "Обраний %{subtree}"
   self_enrollments: 
@@ -17028,6 +17066,7 @@ uk:
   starred_subject_click_to_unstar_6aafcddc: "Позначено \"%{subject}\", Натисніть на зірочку для того щоб відмінити."
   start_5a4cfcd6: Початок
   start_a_new_course_57ae2480: "Почати Новий  Курс "
+  start_at_c29f35f1: "Початок в"
   start_date_e937be8a: "Дата початку"
   start_date_end_date_d809dd93: "%{start_date} - %{end_date}"
   start_date_field_for_styleguide_8a8ab1d6: "Поле \"Дата початку\" для довідника стилів"
@@ -17304,6 +17343,7 @@ uk:
       teachers_notified_of_comments: "Викладачі та відправники будуть повідомлені про всі коментарі."
     show_preview: 
       anonymous_username: "Цей студент"
+      assignment_locked: "Це завдання на даний час заблоковано."
       discussion_submission_description: "Відповіддю для даного завдання є пост в обговоренні. Нижче представлені пости для  обговорення для %{user}, або ви можете натиснути  * переглянути все обговорення *."
       discussion_submission_description_without_link: "Віповіддю для даного завдання є пост в обговоренні. Нижче представлені пости для обговорення для %{user}."
       entry_no_image: "Пам'ятайте, що ця сторінка, можливо, змінилася після того, як відповідь вже була відправлена."
@@ -18367,6 +18407,7 @@ uk:
   upload_successful_ca47465f: "Завантаження виконано успішно"
   upload_to_d8556041: "Завантажити до"
   uploaded_285a2bfb: Завантажено
+  uploading_19e8a4e7: Завантаження
   uploading_ee585874: Завантаження...
   uploading_submission_4c8d944b: "Завантаження матеріалу"
   upper_limit_of_range_c454a8f2: "Верхня межа діапазону"

@@ -27,6 +27,67 @@ module Plannable
       after_save :update_associated_planner_overrides
       before_save :check_if_associated_planner_overrides_need_updating
       scope :available_to_planner, -> { where(workflow_state: ACTIVE_WORKFLOW_STATES) }
+      scope :incomplete_for_planner, lambda { |user|
+        scope = where.not(
+          id: PlannerOverride.where(
+            plannable_type: klass.name,
+            user:,
+            marked_complete: true
+          ).select(:plannable_id)
+        )
+
+        if [Assignment, SubAssignment].include?(klass)
+          scope = scope.where.not(
+            Submission.where(user:)
+                      .where("submissions.assignment_id = assignments.id")
+                      .where.not(submitted_at: nil)
+                      .where(redo_request: [false, nil])
+                      .joins("LEFT JOIN #{PlannerOverride.quoted_table_name} ON
+                              planner_overrides.plannable_id = submissions.assignment_id
+                              AND planner_overrides.plannable_type = 'Assignment'
+                              AND planner_overrides.user_id = #{user.id}")
+                      .where("planner_overrides.marked_complete IS NOT FALSE").arel.exists
+          )
+        end
+        scope
+      }
+      # Returns items that are considered complete for the planner.
+      #
+      # An item is complete if:
+      # 1. It has a PlannerOverride with marked_complete: true, OR
+      # 2. For Assignments/SubAssignments: it has a submission (submitted_at present)
+      #    AND (no redo_request OR redo_request is false)
+      #    AND (no PlannerOverride OR PlannerOverride.marked_complete is not explicitly false)
+      #
+      # In other words: PlannerOverride.marked_complete: false can override submission status,
+      # allowing users to mark submitted assignments as incomplete if they need to revise them.
+      scope :complete_for_planner, lambda { |user|
+        overridden_complete_ids = PlannerOverride.where(
+          plannable_type: klass.name,
+          user:,
+          marked_complete: true
+        ).select(:plannable_id)
+
+        if [Assignment, SubAssignment].include?(klass)
+          # Use UNION for better performance on large submissions tables
+          submitted_ids = klass
+                          .joins(:submissions)
+                          .joins("LEFT JOIN #{PlannerOverride.quoted_table_name} ON
+                                  planner_overrides.plannable_id = #{klass.table_name}.id
+                                  AND planner_overrides.plannable_type = '#{klass.name}'
+                                  AND planner_overrides.user_id = #{user.id}")
+                          .where(submissions: { user_id: user.id })
+                          .where.not(submissions: { submitted_at: nil })
+                          .where(submissions: { redo_request: [false, nil] })
+                          .where("planner_overrides.marked_complete IS NOT FALSE")
+                          .select("#{klass.table_name}.id")
+
+          union_sql = "((#{overridden_complete_ids.to_sql}) UNION (#{submitted_ids.to_sql}))"
+          where("#{klass.table_name}.id IN #{union_sql}")
+        else
+          where(id: overridden_complete_ids)
+        end
+      }
     end
   end
 
@@ -129,6 +190,16 @@ module Plannable
           rel_hash = nil
         end
       end
+      # For simple {association: :column} structure, check attributes first
+      # This handles cases where the column was added via SELECT (e.g., with_user_due_date scope)
+      if col.keys.size == 1 && col.values.first.is_a?(Symbol)
+        column_name = col.values.first.to_s
+        if object.attributes.key?(column_name)
+          return object.attributes[column_name]
+        end
+      end
+
+      # Fall back to association navigation for truly nested cases
       rel_array.reduce(object) { |val, key| val.try(key) || val.try(:first).try(key) }
     end
 

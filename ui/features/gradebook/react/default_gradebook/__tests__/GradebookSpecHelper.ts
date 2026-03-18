@@ -55,6 +55,7 @@ export const defaultGradebookEnv = {
     filter_speed_grader_by_student_group: false,
   },
   currentUserId: '1',
+  custom_grade_statuses_enabled: false,
   dataloader_improvements: true,
   default_grading_standard: [
     ['A', 0.9],
@@ -101,6 +102,7 @@ export const defaultGradebookEnv = {
   speed_grader_enabled: true,
   student_groups: {},
   viewHiddenGradesIndicator: false,
+  viewStatusForColorblindness: false,
 }
 
 export const defaultGradebookProps: GradebookProps = {

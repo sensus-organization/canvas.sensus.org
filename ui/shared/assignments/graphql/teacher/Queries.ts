@@ -62,7 +62,7 @@ const assignmentOverridesNodes = gql`
 `
 
 export const TEACHER_QUERY = gql`
-  query GetAssignment($assignmentLid: ID!) {
+  query GetTeacherAssignment($assignmentLid: ID!) {
     assignment(id: $assignmentLid) {
       __typename
       id
@@ -192,6 +192,9 @@ export const ASSIGNED_STUDENTS_QUERY = gql`
 export const ALLOCATION_RULES_QUERY = gql`
   query GetAllocationRules($assignmentId: ID!, $after: String, $searchTerm: String) {
     assignment(id: $assignmentId) {
+      peerReviews {
+        count
+      }
       allocationRules {
         rulesConnection(first: 20, after: $after, filter: { searchTerm: $searchTerm }) {
           nodes {
@@ -222,6 +225,24 @@ export const ALLOCATION_RULES_QUERY = gql`
           }
         }
         count(filter: { searchTerm: $searchTerm })
+      }
+    }
+  }
+`
+
+export const PEER_REVIEW_CONFIGURATION_QUERY = gql`
+  query GetPeerReviewConfiguration($assignmentId: ID!) {
+    assignment(id: $assignmentId) {
+      hasGroupCategory
+      peerReviews {
+        acrossSections
+        anonymousReviews
+        count
+        submissionRequired
+        intraReviews
+      }
+      peerReviewSubAssignment {
+        pointsPossible
       }
     }
   }

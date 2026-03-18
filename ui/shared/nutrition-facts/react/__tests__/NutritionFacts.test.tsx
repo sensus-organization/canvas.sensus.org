@@ -18,7 +18,6 @@
 
 import React from 'react'
 import {render, fireEvent} from '@testing-library/react'
-import '@testing-library/jest-dom/extend-expect'
 import injectGlobalAlertContainers from '@canvas/util/react/testing/injectGlobalAlertContainers'
 import {NutritionFacts} from '../NutritionFacts'
 
@@ -27,6 +26,8 @@ const mockInfo = {
     data: [
       {
         featureName: 'Canvas Course Translation',
+        privacyNoticeText: 'Privacy Notice',
+        privacyNoticeUrl: 'https://www.instructure.com/policies/privacy',
         permissionLevel: 'LEVEL 2',
         modelName: 'OpenAI GPT-4',
         description: 'Test description',

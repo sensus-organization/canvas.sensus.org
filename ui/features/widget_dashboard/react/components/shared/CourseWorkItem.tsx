@@ -22,7 +22,8 @@ import {View} from '@instructure/ui-view'
 import {Text} from '@instructure/ui-text'
 import {Link} from '@instructure/ui-link'
 import {useScope as createI18nScope} from '@canvas/i18n'
-import {getSubmissionStatus, getTypeIcon} from '../widgets/CourseWorkWidget/utils'
+import {getSubmissionStatus} from '../widgets/CourseWorkWidget/utils'
+import {getTypeIcon} from '../../utils/assignmentUtils'
 import type {CourseWorkItem as CourseWorkItemType} from '../../hooks/useCourseWork'
 import {useResponsiveContext} from '../../hooks/useResponsiveContext'
 
@@ -68,7 +69,7 @@ export function CourseWorkItem({item}: CourseWorkItemProps) {
           )}
           <Flex.Item shouldGrow shouldShrink>
             <Flex direction="column" gap="0">
-              <Flex.Item>
+              <Flex.Item overflowY="visible">
                 <Link
                   href={item.htmlUrl}
                   isWithinText={false}
@@ -79,7 +80,7 @@ export function CourseWorkItem({item}: CourseWorkItemProps) {
                   </Text>
                 </Link>
               </Flex.Item>
-              <Flex.Item>
+              <Flex.Item overflowY="visible">
                 <Flex direction="row" gap="x-small" alignItems="center">
                   <Text size="x-small" color="secondary">
                     {item.course.name}

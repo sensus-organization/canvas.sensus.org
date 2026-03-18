@@ -111,10 +111,12 @@ describe('DueDateLabel', () => {
       const dueDate1 = format(
         contentWithManyDueDates.assignedToDates?.[0].dueAt,
         dueAtFormat,
+        undefined,
       ) as string
       const dueDate2 = format(
         contentWithManyDueDates.assignedToDates?.[1].dueAt,
         dueAtFormat,
+        undefined,
       ) as string
 
       fireEvent.mouseOver(container.getByText('Multiple Due Dates'))

@@ -27,14 +27,13 @@ import {IconTrashLine} from '@instructure/ui-icons'
 import CanvasSelect from '@canvas/instui-bindings/react/Select'
 import type {Requirement, ModuleItem, PointsInputMessages} from './types'
 import {requirementTypesForResource} from '../utils/miscHelpers'
-import {groupBy} from 'lodash'
+import {groupBy} from 'es-toolkit/compat'
 import {useScope as createI18nScope} from '@canvas/i18n'
 import ScoreSection from './ScoreSection'
 
 const I18n = createI18nScope('differentiated_modules')
 
-// @ts-expect-error
-const resourceLabelMap: Record<ModuleItem['resource'], string> = {
+const resourceLabelMap: Record<NonNullable<ModuleItem['resource']>, string> = {
   assignment: I18n.t('Assignments'),
   quiz: I18n.t('Quizzes'),
   file: I18n.t('Files'),
@@ -74,9 +73,9 @@ export default function RequirementSelector({
   focusDropdown = false,
   focusDeleteButton = false,
   pointsInputMessages,
-  validatePointsInput
+  validatePointsInput,
 }: RequirementSelectorProps) {
-  const removeButton = useRef<Element | null>(null)
+  const removeButton = useRef<HTMLElement | null>(null)
   const dropdown = useRef<HTMLInputElement | null>(null)
   const requirementTypeOptions = useMemo(() => {
     const requirementTypes = requirementTypesForResource(requirement)
@@ -99,7 +98,6 @@ export default function RequirementSelector({
   const options = useMemo(() => groupBy(moduleItems, 'resource'), [moduleItems])
 
   useEffect(() => {
-    // @ts-expect-error
     focusDeleteButton && removeButton.current?.focus()
   }, [focusDeleteButton, removeButton])
 
@@ -108,7 +106,7 @@ export default function RequirementSelector({
   }, [focusDropdown, dropdown])
 
   const scoreSection = useMemo(() => {
-    if (requirement.type !== "score" && requirement.type !== "percentage") return null
+    if (requirement.type !== 'score' && requirement.type !== 'percentage') return null
 
     if (window.ENV.FEATURES.modules_requirements_allow_percentage) {
       return (
@@ -119,7 +117,7 @@ export default function RequirementSelector({
           pointsInputMessages={pointsInputMessages}
           validatePointsInput={validatePointsInput}
         />
-      );
+      )
     }
 
     return (
@@ -130,41 +128,29 @@ export default function RequirementSelector({
             value={requirement.minimumScore}
             width="4rem"
             showArrows={false}
-            renderLabel={
-              <ScreenReaderContent>
-                {I18n.t("Minimum Score")}
-              </ScreenReaderContent>
-            }
-            onChange={(event) => {
+            renderLabel={<ScreenReaderContent>{I18n.t('Minimum Score')}</ScreenReaderContent>}
+            onChange={event => {
               onUpdateRequirement(
                 {
                   ...requirement,
                   minimumScore: event.target.value,
                 } as Requirement,
-                index
-              );
+                index,
+              )
             }}
           />
         </Flex.Item>
         <Flex.Item shouldGrow={true} padding="0 0 0 small">
           {requirement.pointsPossible && (
             <View as="div">
-              <ScreenReaderContent>
-                {I18n.t("Points Possible")}
-              </ScreenReaderContent>
+              <ScreenReaderContent>{I18n.t('Points Possible')}</ScreenReaderContent>
               <Text data-testid="points-possible-value">{`/ ${requirement.pointsPossible}`}</Text>
             </View>
           )}
         </Flex.Item>
       </Flex>
-    );
-  }, [
-    requirement,
-    index,
-    onUpdateRequirement,
-    pointsInputMessages,
-    validatePointsInput
-  ]);
+    )
+  }, [requirement, index, onUpdateRequirement, pointsInputMessages, validatePointsInput])
 
   return (
     <View data-testid="module-requirement-card" as="div" borderRadius="medium" borderWidth="small">
@@ -175,7 +161,7 @@ export default function RequirementSelector({
           </Flex.Item>
           <Flex.Item padding="0 0 small 0">
             <IconButton
-              elementRef={el => (removeButton.current = el)}
+              elementRef={el => (removeButton.current = el instanceof HTMLElement ? el : null)}
               renderIcon={<IconTrashLine color="error" />}
               onClick={() => onDropRequirement(index)}
               screenReaderLabel={I18n.t('Remove %{name} Content Requirement', {
@@ -197,13 +183,10 @@ export default function RequirementSelector({
               onUpdateRequirement({...moduleItem, type: 'view'} as Requirement, index)
             }}
           >
-            {/* @ts-expect-error */}
-            {Object.keys(options).map((resource: ModuleItem['resource']) => {
+            {(Object.keys(options) as NonNullable<ModuleItem['resource']>[]).map(resource => {
               return (
-                // @ts-expect-error
                 <CanvasSelect.Group key={resource} label={resourceLabelMap[resource]}>
-                  {/* @ts-expect-error */}
-                  {options[resource].map((moduleItem: ModuleItem) => (
+                  {options[resource]?.map((moduleItem: ModuleItem) => (
                     <CanvasSelect.Option
                       id={moduleItem.id}
                       key={moduleItem.id}

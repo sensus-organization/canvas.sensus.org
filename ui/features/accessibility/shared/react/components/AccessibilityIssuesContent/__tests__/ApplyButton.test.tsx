@@ -16,21 +16,25 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import {render, screen, waitFor} from '@testing-library/react'
+import {cleanup, render, screen, waitFor} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import ApplyButton from '../ApplyButton'
 
 describe('ApplyButton', () => {
+  afterEach(() => {
+    cleanup()
+  })
+
   const defaultProps = {
     children: 'Apply',
-    onApply: jest.fn(),
-    onUndo: jest.fn(),
+    onApply: vi.fn(),
+    onUndo: vi.fn(),
     isApplied: false,
     isLoading: false,
   }
 
   beforeEach(() => {
-    jest.clearAllMocks()
+    vi.clearAllMocks()
   })
 
   describe('when not applied', () => {
@@ -72,6 +76,29 @@ describe('ApplyButton', () => {
       await userEvent.click(applyButton)
 
       expect(defaultProps.onApply).not.toHaveBeenCalled()
+    })
+
+    it('disables button when isDisabled is true', () => {
+      render(<ApplyButton {...defaultProps} isDisabled={true} />)
+
+      const applyButton = screen.getByTestId('apply-button')
+      expect(applyButton).toBeDisabled()
+    })
+
+    it('does not call onApply when isDisabled is true', async () => {
+      render(<ApplyButton {...defaultProps} isDisabled={true} />)
+
+      const applyButton = screen.getByTestId('apply-button')
+      await userEvent.click(applyButton)
+
+      expect(defaultProps.onApply).not.toHaveBeenCalled()
+    })
+
+    it('disables button when both isLoading and isDisabled are true', () => {
+      render(<ApplyButton {...defaultProps} isLoading={true} isDisabled={true} />)
+
+      const applyButton = screen.getByTestId('apply-button')
+      expect(applyButton).toBeDisabled()
     })
   })
 

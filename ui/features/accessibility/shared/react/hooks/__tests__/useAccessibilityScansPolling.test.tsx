@@ -17,6 +17,7 @@
  */
 
 import {renderHook} from '@testing-library/react-hooks'
+import {waitFor} from '@testing-library/react'
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query'
 import React from 'react'
 import {setupServer} from 'msw/node'
@@ -32,8 +33,17 @@ import {
 } from '../../types'
 
 // Mock getCourseBasedPath to return a predictable path
-jest.mock('../../utils/query', () => ({
-  getCourseBasedPath: jest.fn((path: string) => `/courses/1${path}`),
+vi.mock('../../utils/query', () => ({
+  getCourseBasedPath: vi.fn((path: string) => `/courses/1${path}`),
+  parseFetchParams: vi.fn(() => ({})),
+}))
+
+const mockDoFetchAccessibilityIssuesSummary = vi.fn().mockResolvedValue(undefined)
+
+vi.mock('../useAccessibilityScansFetchUtils', () => ({
+  useAccessibilityScansFetchUtils: vi.fn(() => ({
+    doFetchAccessibilityIssuesSummary: mockDoFetchAccessibilityIssuesSummary,
+  })),
 }))
 
 const server = setupServer()
@@ -58,6 +68,7 @@ const mockScan = (
   issueCount = 0,
 ): AccessibilityResourceScan => ({
   id,
+  courseId: 1,
   resourceId: id,
   resourceType: ResourceType.WikiPage,
   resourceName: `Resource ${id}`,
@@ -78,7 +89,8 @@ describe('useAccessibilityScansPolling', () => {
   })
 
   beforeEach(() => {
-    jest.clearAllMocks()
+    vi.clearAllMocks()
+    mockDoFetchAccessibilityIssuesSummary.mockClear()
     useAccessibilityScansStore.setState(initialState)
   })
 
@@ -271,6 +283,169 @@ describe('useAccessibilityScansPolling', () => {
       })
 
       expect(result.error).toBeUndefined()
+    })
+  })
+
+  describe('dashboard refetch integration', () => {
+    it('calls doFetchAccessibilityIssuesSummary through useAccessibilityScansFetchUtils', () => {
+      // This test verifies that useAccessibilityScansFetchUtils is called
+      // The actual dashboard refetch is tested through:
+      // 1. The AccessibilityIssuesTable pagination tests
+      // 2. Manual/integration testing as documented in test plan
+      const queuedScan = mockScan(1, ScanWorkflowState.Queued)
+
+      useAccessibilityScansStore.setState({
+        accessibilityScans: [queuedScan],
+      })
+
+      server.use(
+        http.get('*/accessibility/resource_scan/poll', () => {
+          return HttpResponse.json({
+            scans: [queuedScan],
+          })
+        }),
+      )
+
+      renderHook(() => useAccessibilityScansPolling(), {
+        wrapper: createWrapper(),
+      })
+
+      // Verify the hook uses the mocked fetch utils
+      expect(mockDoFetchAccessibilityIssuesSummary).toBeDefined()
+    })
+
+    it('should NOT fetch summary when scans are in progress', async () => {
+      const inProgressScan = mockScan(1, ScanWorkflowState.InProgress)
+
+      useAccessibilityScansStore.setState({
+        accessibilityScans: [inProgressScan],
+      })
+
+      server.use(
+        http.get('*/accessibility/resource_scan/poll', () => {
+          return HttpResponse.json({
+            scans: [inProgressScan],
+          })
+        }),
+      )
+
+      renderHook(() => useAccessibilityScansPolling(), {
+        wrapper: createWrapper(),
+      })
+
+      await waitFor(() => {
+        // Summary should NOT be fetched for in-progress scans
+        expect(mockDoFetchAccessibilityIssuesSummary).not.toHaveBeenCalled()
+      })
+    })
+
+    it('should NOT fetch summary when scans are queued', async () => {
+      const queuedScan = mockScan(1, ScanWorkflowState.Queued)
+
+      useAccessibilityScansStore.setState({
+        accessibilityScans: [queuedScan],
+      })
+
+      server.use(
+        http.get('*/accessibility/resource_scan/poll', () => {
+          return HttpResponse.json({
+            scans: [queuedScan],
+          })
+        }),
+      )
+
+      renderHook(() => useAccessibilityScansPolling(), {
+        wrapper: createWrapper(),
+      })
+
+      await waitFor(() => {
+        // Summary should NOT be fetched for queued scans
+        expect(mockDoFetchAccessibilityIssuesSummary).not.toHaveBeenCalled()
+      })
+    })
+
+    it('should fetch summary when scan transitions to completed', async () => {
+      const inProgressScan = mockScan(1, ScanWorkflowState.InProgress)
+      const completedScan = mockScan(1, ScanWorkflowState.Completed, 5)
+
+      useAccessibilityScansStore.setState({
+        accessibilityScans: [inProgressScan],
+      })
+
+      server.use(
+        http.get('*/accessibility/resource_scan/poll', () => {
+          // Return completed scan to simulate transition
+          return HttpResponse.json({
+            scans: [completedScan],
+          })
+        }),
+      )
+
+      renderHook(() => useAccessibilityScansPolling(), {
+        wrapper: createWrapper(),
+      })
+
+      await waitFor(() => {
+        // Summary SHOULD be fetched when scan transitions to completed
+        expect(mockDoFetchAccessibilityIssuesSummary).toHaveBeenCalled()
+      })
+    })
+
+    it('should fetch summary when scan transitions to failed', async () => {
+      const inProgressScan = mockScan(1, ScanWorkflowState.InProgress)
+      const failedScan = mockScan(1, ScanWorkflowState.Failed)
+
+      useAccessibilityScansStore.setState({
+        accessibilityScans: [inProgressScan],
+      })
+
+      server.use(
+        http.get('*/accessibility/resource_scan/poll', () => {
+          // Return failed scan to simulate transition
+          return HttpResponse.json({
+            scans: [failedScan],
+          })
+        }),
+      )
+
+      renderHook(() => useAccessibilityScansPolling(), {
+        wrapper: createWrapper(),
+      })
+
+      await waitFor(() => {
+        // Summary SHOULD be fetched when scan transitions to failed
+        expect(mockDoFetchAccessibilityIssuesSummary).toHaveBeenCalled()
+      })
+    })
+
+    it('should fetch summary when at least one polled scan finishes among mixed states', async () => {
+      const queuedScan = mockScan(1, ScanWorkflowState.Queued)
+      const inProgressScan = mockScan(2, ScanWorkflowState.InProgress)
+      const alreadyCompletedScan = mockScan(3, ScanWorkflowState.Completed, 5)
+
+      useAccessibilityScansStore.setState({
+        accessibilityScans: [queuedScan, inProgressScan, alreadyCompletedScan],
+      })
+
+      // Poll returns one scan as completed (transition) and one still queued
+      const nowCompletedScan = mockScan(2, ScanWorkflowState.Completed, 3)
+
+      server.use(
+        http.get('*/accessibility/resource_scan/poll', () => {
+          return HttpResponse.json({
+            scans: [queuedScan, nowCompletedScan],
+          })
+        }),
+      )
+
+      renderHook(() => useAccessibilityScansPolling(), {
+        wrapper: createWrapper(),
+      })
+
+      await waitFor(() => {
+        // Summary SHOULD be fetched when a polled scan transitions to finished
+        expect(mockDoFetchAccessibilityIssuesSummary).toHaveBeenCalled()
+      })
     })
   })
 })

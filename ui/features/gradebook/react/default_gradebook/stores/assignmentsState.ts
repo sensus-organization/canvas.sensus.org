@@ -25,7 +25,7 @@ import type {GradingPeriodAssignmentMap} from '../gradebook.d'
 import type {AssignmentGroup, Assignment, AssignmentMap, SubmissionType} from '../../../../../api.d'
 import {getAllAssignmentGroups} from './graphql/assignmentGroups/getAllAssignmentGroups'
 import {transformAssignmentGroup} from './graphql/assignmentGroups/transformAssignmentGroup'
-import {flatten, groupBy, isArray} from 'lodash'
+import {groupBy, flatten, isArray} from 'es-toolkit/compat'
 import {getAllAssignments} from './graphql/assignments/getAllAssignments'
 import {transformAssignment} from './graphql/assignments/transformAssignments'
 import pLimit from 'p-limit'
@@ -185,6 +185,7 @@ export default (
       'post_manually',
       'checkpoints',
       'has_rubric',
+      'peer_review',
     ]
 
     if (get().hasModules) {
@@ -294,6 +295,7 @@ export default (
     const {data: assignmentGroups} = await getAllAssignmentGroups({
       queryParams: {courseId: get().courseId},
       headers: {'Correlation-Id': get().correlationId},
+      queue: get().returnQueueIfDefined(),
     })
     const assignmentGroupIds = assignmentGroups.map(group => group._id)
     const limit = pLimit(GRADEBOOK_GRAPHQL_CONFIG.maxAssignmentRequestCount)
@@ -310,6 +312,7 @@ export default (
               getAllAssignments({
                 queryParams: {assignmentGroupId, gradingPeriodId},
                 headers: {'Correlation-Id': get().correlationId},
+                queue: get().returnQueueIfDefined(),
               }),
             ),
           )

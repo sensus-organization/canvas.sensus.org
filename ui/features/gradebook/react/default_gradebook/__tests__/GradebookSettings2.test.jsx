@@ -27,19 +27,22 @@ import {createGradebook, setFixtureHtml, defaultGradebookProps} from './Gradeboo
 import userSettings from '@canvas/user-settings'
 
 // Mock the @canvas/user-settings module
-jest.mock('@canvas/user-settings', () => ({
-  contextGet: jest.fn(),
-  contextRemove: jest.fn(),
-  contextSet: jest.fn(),
-  get: jest.fn(),
-  set: jest.fn(),
+vi.mock('@canvas/user-settings', () => ({
+  default: {
+    contextGet: vi.fn(),
+    contextRemove: vi.fn(),
+    contextSet: vi.fn(),
+    get: vi.fn(),
+    set: vi.fn(),
+    remove: vi.fn(),
+  },
 }))
 
 // Mock the FlashAlert module
-jest.mock('@canvas/alerts/react/FlashAlert', () => ({
-  showFlashError: jest.fn(),
-  showFlashSuccess: jest.fn(),
-  showFlashAlert: jest.fn(),
+vi.mock('@canvas/alerts/react/FlashAlert', () => ({
+  showFlashError: vi.fn(),
+  showFlashSuccess: vi.fn(),
+  showFlashAlert: vi.fn(),
 }))
 
 // Define a global beforeEach to set window.ENV for all tests
@@ -53,7 +56,7 @@ beforeEach(() => {
 
 // Clean up after all tests
 afterEach(() => {
-  jest.restoreAllMocks()
+  vi.restoreAllMocks()
   delete window.ENV
 })
 
@@ -163,9 +166,9 @@ describe('Gradebook#handleViewOptionsUpdated', () => {
     ])
 
     // Mock Gradebook methods
-    gradebook.createGrid = jest.fn()
-    gradebook.updateGrid = jest.fn()
-    gradebook.updateAllTotalColumns = jest.fn()
+    gradebook.createGrid = vi.fn()
+    gradebook.updateGrid = vi.fn()
+    gradebook.updateAllTotalColumns = vi.fn()
 
     // Initialize grid settings
     gradebook.setColumnOrder({sortType: 'due_date', direction: 'ascending'})
@@ -173,7 +176,7 @@ describe('Gradebook#handleViewOptionsUpdated', () => {
     gradebook.initGrid()
 
     // Mock GradebookApi methods
-    jest.spyOn(GradebookApi, 'createTeacherNotesColumn').mockResolvedValue({
+    vi.spyOn(GradebookApi, 'createTeacherNotesColumn').mockResolvedValue({
       data: {
         id: '9999',
         hidden: false,
@@ -182,13 +185,13 @@ describe('Gradebook#handleViewOptionsUpdated', () => {
         teacher_notes: true,
       },
     })
-    jest.spyOn(GradebookApi, 'saveUserSettings').mockResolvedValue()
-    jest.spyOn(GradebookApi, 'updateTeacherNotesColumn').mockResolvedValue()
+    vi.spyOn(GradebookApi, 'saveUserSettings').mockResolvedValue()
+    vi.spyOn(GradebookApi, 'updateTeacherNotesColumn').mockResolvedValue()
   })
 
   afterEach(() => {
     // Restore mocks and clean up DOM
-    jest.restoreAllMocks()
+    vi.restoreAllMocks()
     ReactDOM.unmountComponentAtNode(container2)
     container1.remove()
     container2.remove()
@@ -293,6 +296,7 @@ describe('Gradebook#handleViewOptionsUpdated', () => {
         statusColors: gradebook.state.gridColors,
         viewUngradedAsZero: false,
         viewHiddenGradesIndicator: false,
+        viewStatusForColorblindness: false,
         ...overrides,
       })
 
@@ -303,6 +307,7 @@ describe('Gradebook#handleViewOptionsUpdated', () => {
             statusColors: {...gradebook.state.gridColors, dropped: '#000000'},
             viewUngradedAsZero: true,
             viewHiddenGradesIndicator: true,
+            viewStatusForColorblindness: true,
           }),
         )
 
@@ -313,6 +318,7 @@ describe('Gradebook#handleViewOptionsUpdated', () => {
         expect(params.show_unpublished_assignments).toBe('true')
         expect(params.view_ungraded_as_zero).toBe('true')
         expect(params.view_hidden_grades_indicator).toBe('true')
+        expect(params.view_status_for_colorblindness).toBe('true')
       })
 
       test('does not call saveUserSettings if no value has changed', async () => {
@@ -446,6 +452,24 @@ describe('Gradebook#handleViewOptionsUpdated', () => {
         })
       })
 
+      describe('updating view status for colorblindness', () => {
+        test('makes updates to the grid when the request completes', async () => {
+          await gradebook.handleViewOptionsUpdated(
+            updateParams({viewStatusForColorblindness: true}),
+          )
+          expect(gradebook.gridDisplaySettings.viewStatusForColorblindness).toBe(true)
+        })
+
+        test('does not make updates to grid if the request fails', async () => {
+          GradebookApi.saveUserSettings.mockRejectedValue(new Error('STILL NO'))
+          await expect(
+            gradebook.handleViewOptionsUpdated({viewStatusForColorblindness: true}),
+          ).rejects.toThrow('STILL NO')
+          expect(gradebook.updateAllTotalColumns).not.toHaveBeenCalled()
+          expect(gradebook.gridDisplaySettings.viewStatusForColorblindness).toBe(false)
+        })
+      })
+
       describe('updating status colors', () => {
         test('updates the grid colors when the request completes', async () => {
           const newColors = {...gradebook.state.gridColors, dropped: '#AAAAAA'}
@@ -505,25 +529,27 @@ describe('Gradebook#handleViewOptionsUpdated', () => {
           window.ENV = {FEATURES: {instui_nav: false}, current_user_id: '12345'}
         })
 
-        test.skip('shows a flash error', async () => {
+        test('shows a flash error', async () => {
           GradebookApi.createTeacherNotesColumn.mockRejectedValue(new Error('NO!'))
           await expect(
             gradebook.handleViewOptionsUpdated({
               columnSortSettings: {criterion: 'points', direction: 'ascending'},
               showNotes: true,
             }),
-          ).rejects.toThrow('NO!')
-          expect(FlashAlert.showFlashError).toHaveBeenCalledWith('NO!')
+          ).rejects.toThrow('...')
+          expect(FlashAlert.showFlashError).toHaveBeenCalledWith(
+            'There was an error updating view options.',
+          )
         })
 
-        test.skip('nevertheless updates the grid', async () => {
+        test('nevertheless updates the grid', async () => {
           GradebookApi.createTeacherNotesColumn.mockRejectedValue(new Error('NO!'))
           await expect(
             gradebook.handleViewOptionsUpdated({
               columnSortSettings: {criterion: 'points', direction: 'ascending'},
               showNotes: true,
             }),
-          ).rejects.toThrow('NO!')
+          ).rejects.toThrow('...')
           expect(gradebook.updateGrid).toHaveBeenCalled()
         })
       })
@@ -553,25 +579,25 @@ describe('Gradebook#toggleShowSeparateFirstLastNames', () => {
     gradebook = createGradebook({
       grid: {
         getColumns: () => [],
-        updateCell: jest.fn(),
+        updateCell: vi.fn(),
       },
       settings: {
         allow_separate_first_last_names: 'true',
       },
     })
 
-    jest.spyOn(gradebook, 'saveSettings').mockResolvedValue()
+    vi.spyOn(gradebook, 'saveSettings').mockResolvedValue()
   })
 
   afterEach(() => {
     ReactDOM.unmountComponentAtNode($fixtures)
     document.body.removeChild($fixtures)
-    jest.restoreAllMocks()
+    vi.restoreAllMocks()
   })
 
   test('toggles showSeparateFirstLastNames to true when false', () => {
     gradebook.gridDisplaySettings.showSeparateFirstLastNames = false
-    jest.spyOn(gradebook, 'updateColumnsAndRenderViewOptionsMenu')
+    vi.spyOn(gradebook, 'updateColumnsAndRenderViewOptionsMenu')
     gradebook.toggleShowSeparateFirstLastNames()
 
     expect(gradebook.gridDisplaySettings.showSeparateFirstLastNames).toBe(true)
@@ -579,7 +605,7 @@ describe('Gradebook#toggleShowSeparateFirstLastNames', () => {
 
   test('toggles showSeparateFirstLastNames to false when true', () => {
     gradebook.gridDisplaySettings.showSeparateFirstLastNames = true
-    jest.spyOn(gradebook, 'updateColumnsAndRenderViewOptionsMenu')
+    vi.spyOn(gradebook, 'updateColumnsAndRenderViewOptionsMenu')
     gradebook.toggleShowSeparateFirstLastNames()
 
     expect(gradebook.gridDisplaySettings.showSeparateFirstLastNames).toBe(false)
@@ -587,7 +613,7 @@ describe('Gradebook#toggleShowSeparateFirstLastNames', () => {
 
   test('calls updateColumnsAndRenderViewOptionsMenu after toggling', () => {
     gradebook.gridDisplaySettings.showSeparateFirstLastNames = true
-    const updateSpy = jest.spyOn(gradebook, 'updateColumnsAndRenderViewOptionsMenu')
+    const updateSpy = vi.spyOn(gradebook, 'updateColumnsAndRenderViewOptionsMenu')
     gradebook.toggleShowSeparateFirstLastNames()
 
     expect(updateSpy).toHaveBeenCalledTimes(1)
@@ -596,7 +622,7 @@ describe('Gradebook#toggleShowSeparateFirstLastNames', () => {
 
   test('calls saveSettings with the new value of the setting', () => {
     gradebook.gridDisplaySettings.showSeparateFirstLastNames = false
-    jest.spyOn(gradebook, 'updateColumnsAndRenderViewOptionsMenu')
+    vi.spyOn(gradebook, 'updateColumnsAndRenderViewOptionsMenu')
 
     gradebook.toggleShowSeparateFirstLastNames()
 
@@ -619,22 +645,22 @@ describe('Gradebook#toggleHideAssignmentGroupTotals', () => {
     gradebook = createGradebook({
       grid: {
         getColumns: () => [],
-        updateCell: jest.fn(),
+        updateCell: vi.fn(),
       },
     })
 
-    jest.spyOn(gradebook, 'saveSettings').mockResolvedValue()
+    vi.spyOn(gradebook, 'saveSettings').mockResolvedValue()
   })
 
   afterEach(() => {
     ReactDOM.unmountComponentAtNode($fixtures)
     document.body.removeChild($fixtures)
-    jest.restoreAllMocks()
+    vi.restoreAllMocks()
   })
 
   test('toggles hideAssignmentGroupTotals to true when false', () => {
     gradebook.gridDisplaySettings.hideAssignmentGroupTotals = false
-    jest.spyOn(gradebook, 'updateColumnsAndRenderViewOptionsMenu')
+    vi.spyOn(gradebook, 'updateColumnsAndRenderViewOptionsMenu')
     gradebook.toggleHideAssignmentGroupTotals()
 
     expect(gradebook.gridDisplaySettings.hideAssignmentGroupTotals).toBe(true)
@@ -642,7 +668,7 @@ describe('Gradebook#toggleHideAssignmentGroupTotals', () => {
 
   test('toggles hideAssignmentGroupTotals to false when true', () => {
     gradebook.gridDisplaySettings.hideAssignmentGroupTotals = true
-    jest.spyOn(gradebook, 'updateColumnsAndRenderViewOptionsMenu')
+    vi.spyOn(gradebook, 'updateColumnsAndRenderViewOptionsMenu')
     gradebook.toggleHideAssignmentGroupTotals()
 
     expect(gradebook.gridDisplaySettings.hideAssignmentGroupTotals).toBe(false)
@@ -650,7 +676,7 @@ describe('Gradebook#toggleHideAssignmentGroupTotals', () => {
 
   test('calls updateColumnsAndRenderViewOptionsMenu after toggling', () => {
     gradebook.gridDisplaySettings.hideAssignmentGroupTotals = true
-    const updateSpy = jest.spyOn(gradebook, 'updateColumnsAndRenderViewOptionsMenu')
+    const updateSpy = vi.spyOn(gradebook, 'updateColumnsAndRenderViewOptionsMenu')
     gradebook.toggleHideAssignmentGroupTotals()
     expect(updateSpy).toHaveBeenCalledTimes(1)
     expect(gradebook.gridDisplaySettings.hideAssignmentGroupTotals).toBe(false)
@@ -658,7 +684,7 @@ describe('Gradebook#toggleHideAssignmentGroupTotals', () => {
 
   test('calls saveSettings with the new value of the setting', () => {
     gradebook.gridDisplaySettings.hideAssignmentGroupTotals = false
-    jest.spyOn(gradebook, 'updateColumnsAndRenderViewOptionsMenu')
+    vi.spyOn(gradebook, 'updateColumnsAndRenderViewOptionsMenu')
 
     gradebook.toggleHideAssignmentGroupTotals()
 
@@ -681,22 +707,22 @@ describe('Gradebook#toggleHideTotal', () => {
     gradebook = createGradebook({
       grid: {
         getColumns: () => [],
-        updateCell: jest.fn(),
+        updateCell: vi.fn(),
       },
     })
 
-    jest.spyOn(gradebook, 'saveSettings').mockResolvedValue()
+    vi.spyOn(gradebook, 'saveSettings').mockResolvedValue()
   })
 
   afterEach(() => {
     ReactDOM.unmountComponentAtNode($fixtures)
     document.body.removeChild($fixtures)
-    jest.restoreAllMocks()
+    vi.restoreAllMocks()
   })
 
   test('toggles hideTotal to true when false', () => {
     gradebook.gridDisplaySettings.hideTotal = false
-    jest.spyOn(gradebook, 'updateColumnsAndRenderViewOptionsMenu')
+    vi.spyOn(gradebook, 'updateColumnsAndRenderViewOptionsMenu')
     gradebook.toggleHideTotal()
 
     expect(gradebook.gridDisplaySettings.hideTotal).toBe(true)
@@ -704,7 +730,7 @@ describe('Gradebook#toggleHideTotal', () => {
 
   test('toggles hideTotal to false when true', () => {
     gradebook.gridDisplaySettings.hideTotal = true
-    jest.spyOn(gradebook, 'updateColumnsAndRenderViewOptionsMenu')
+    vi.spyOn(gradebook, 'updateColumnsAndRenderViewOptionsMenu')
     gradebook.toggleHideTotal()
 
     expect(gradebook.gridDisplaySettings.hideTotal).toBe(false)
@@ -712,7 +738,7 @@ describe('Gradebook#toggleHideTotal', () => {
 
   test('calls updateColumnsAndRenderViewOptionsMenu after toggling', () => {
     gradebook.gridDisplaySettings.hideTotal = true
-    const updateSpy = jest.spyOn(gradebook, 'updateColumnsAndRenderViewOptionsMenu')
+    const updateSpy = vi.spyOn(gradebook, 'updateColumnsAndRenderViewOptionsMenu')
     gradebook.toggleHideTotal()
     expect(updateSpy).toHaveBeenCalledTimes(1)
     expect(gradebook.gridDisplaySettings.hideTotal).toBe(false)
@@ -720,7 +746,7 @@ describe('Gradebook#toggleHideTotal', () => {
 
   test('calls saveSettings with the new value of the setting', () => {
     gradebook.gridDisplaySettings.hideTotal = false
-    jest.spyOn(gradebook, 'updateColumnsAndRenderViewOptionsMenu')
+    vi.spyOn(gradebook, 'updateColumnsAndRenderViewOptionsMenu')
 
     gradebook.toggleHideTotal()
 
@@ -731,6 +757,60 @@ describe('Gradebook#toggleHideTotal', () => {
 })
 
 describe('Gradebook#toggleViewHiddenGradesIndicator', () => {
+  let gradebook
+  let $fixtures
+
+  beforeEach(() => {
+    $fixtures = document.createElement('div')
+    $fixtures.id = 'fixtures'
+    document.body.appendChild($fixtures)
+
+    setFixtureHtml($fixtures)
+    gradebook = createGradebook({
+      grid: {
+        getColumns: () => [],
+        updateCell: vi.fn(),
+      },
+    })
+
+    vi.spyOn(gradebook, 'saveSettings').mockResolvedValue()
+  })
+
+  afterEach(() => {
+    ReactDOM.unmountComponentAtNode($fixtures)
+    document.body.removeChild($fixtures)
+    vi.restoreAllMocks()
+  })
+
+  test('toggles viewHiddenGradesIndicator to true when false', () => {
+    gradebook.gridDisplaySettings.viewHiddenGradesIndicator = false
+    // vi.spyOn(gradebook, 'updateColumnsAndRenderViewOptionsMenu')
+    gradebook.toggleViewHiddenGradesIndicator()
+
+    expect(gradebook.gridDisplaySettings.viewHiddenGradesIndicator).toBe(true)
+  })
+
+  test('toggles viewHiddenGradesIndicator to false when true', () => {
+    gradebook.gridDisplaySettings.viewHiddenGradesIndicator = true
+    // vi.spyOn(gradebook, 'updateColumnsAndRenderViewOptionsMenu')
+    gradebook.toggleViewHiddenGradesIndicator()
+
+    expect(gradebook.gridDisplaySettings.viewHiddenGradesIndicator).toBe(false)
+  })
+
+  test('calls saveSettings with the new value of the setting', () => {
+    gradebook.gridDisplaySettings.viewHiddenGradesIndicator = false
+    vi.spyOn(gradebook, 'updateColumnsAndRenderViewOptionsMenu')
+
+    gradebook.toggleViewHiddenGradesIndicator()
+
+    expect(gradebook.saveSettings).toHaveBeenCalledWith({
+      viewHiddenGradesIndicator: true,
+    })
+  })
+})
+
+describe('Gradebook#toggleViewStatusForColorblindness', () => {
   let gradebook
   let $fixtures
 
@@ -756,30 +836,30 @@ describe('Gradebook#toggleViewHiddenGradesIndicator', () => {
     jest.restoreAllMocks()
   })
 
-  test('toggles viewHiddenGradesIndicator to true when false', () => {
-    gradebook.gridDisplaySettings.viewHiddenGradesIndicator = false
+  test('toggles viewStatusForColorblindness to true when false', () => {
+    gradebook.gridDisplaySettings.viewStatusForColorblindness = false
     // jest.spyOn(gradebook, 'updateColumnsAndRenderViewOptionsMenu')
-    gradebook.toggleViewHiddenGradesIndicator()
+    gradebook.toggleViewStatusForColorblindness()
 
-    expect(gradebook.gridDisplaySettings.viewHiddenGradesIndicator).toBe(true)
+    expect(gradebook.gridDisplaySettings.viewStatusForColorblindness).toBe(true)
   })
 
-  test('toggles viewHiddenGradesIndicator to false when true', () => {
-    gradebook.gridDisplaySettings.viewHiddenGradesIndicator = true
+  test('toggles viewStatusForColorblindness to false when true', () => {
+    gradebook.gridDisplaySettings.viewStatusForColorblindness = true
     // jest.spyOn(gradebook, 'updateColumnsAndRenderViewOptionsMenu')
-    gradebook.toggleViewHiddenGradesIndicator()
+    gradebook.toggleViewStatusForColorblindness()
 
-    expect(gradebook.gridDisplaySettings.viewHiddenGradesIndicator).toBe(false)
+    expect(gradebook.gridDisplaySettings.viewStatusForColorblindness).toBe(false)
   })
 
   test('calls saveSettings with the new value of the setting', () => {
-    gradebook.gridDisplaySettings.viewHiddenGradesIndicator = false
+    gradebook.gridDisplaySettings.viewStatusForColorblindness = false
     jest.spyOn(gradebook, 'updateColumnsAndRenderViewOptionsMenu')
 
-    gradebook.toggleViewHiddenGradesIndicator()
+    gradebook.toggleViewStatusForColorblindness()
 
     expect(gradebook.saveSettings).toHaveBeenCalledWith({
-      viewHiddenGradesIndicator: true,
+      viewStatusForColorblindness: true,
     })
   })
 })
@@ -795,14 +875,14 @@ describe('Gradebook#updateColumnsAndRenderGradebookSettingsModal', () => {
 
     setFixtureHtml($fixtures)
     gradebook = createGradebook()
-    jest.spyOn(gradebook, 'updateColumns').mockImplementation()
-    jest.spyOn(gradebook, 'renderGradebookSettingsModal').mockImplementation()
+    vi.spyOn(gradebook, 'updateColumns').mockImplementation()
+    vi.spyOn(gradebook, 'renderGradebookSettingsModal').mockImplementation()
   })
 
   afterEach(() => {
     ReactDOM.unmountComponentAtNode($fixtures)
     document.body.removeChild($fixtures)
-    jest.restoreAllMocks()
+    vi.restoreAllMocks()
   })
 
   test('calls updateColumns', () => {

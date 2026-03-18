@@ -403,3 +403,11 @@ restrict_student_access:
   description: Enable restricted functionalities for students so that inbox communications, file movements and calendar events can be restricted.
   applies_to: RootAccount
   shadow: true
+classic_quizzes_client_ip:
+  state: hidden
+  display_name: Classic Quizzes Use quiz_client_ip
+  description: |-
+    In regions where Cloudfront is active we can't use the request.remote_ip method, it returns the Cloudfront IP.
+    We need to use the quiz_client_ip method to get the real IP of the user.
+  applies_to: RootAccount
+  shadow: true

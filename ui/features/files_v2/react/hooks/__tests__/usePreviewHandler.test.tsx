@@ -19,19 +19,18 @@
 import React from 'react'
 import {renderHook} from '@testing-library/react-hooks'
 import {act, waitFor} from '@testing-library/react'
-import fetchMock from 'fetch-mock'
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query'
 import {MemoryRouter} from 'react-router-dom'
 import {usePreviewHandler} from '../usePreviewHandler'
 import {FAKE_FILES} from '../../../fixtures/fakeData'
 
-const mockNavigate = jest.fn()
-jest.mock('react-router-dom', () => ({
-  ...jest.requireActual('react-router-dom'),
+const mockNavigate = vi.fn()
+vi.mock('react-router-dom', async () => ({
+  ...(await vi.importActual('react-router-dom')),
   useNavigate: () => mockNavigate,
 }))
 
-jest.mock('../useGetFile')
+vi.mock('../useGetFile')
 
 const createWrapper = (initialRoute = '/') => {
   const queryClient = new QueryClient({
@@ -50,22 +49,23 @@ const createWrapper = (initialRoute = '/') => {
   )
 }
 
-describe('usePreviewHandler', () => {
+describe('usePreviewHandler', async () => {
   const mockCollection = FAKE_FILES.slice(0, 3)
-  const mockUseGetFile = require('../useGetFile').useGetFile as jest.Mock
+  const {useGetFile: mockUseGetFile} = await import('../useGetFile')
+  const mockedUseGetFile = vi.mocked(mockUseGetFile)
 
   beforeEach(() => {
-    jest.clearAllMocks()
-    fetchMock.reset()
-    mockUseGetFile.mockReturnValue({
+    vi.clearAllMocks()
+    mockedUseGetFile.mockReturnValue({
       data: undefined,
       isLoading: false,
       error: null,
-    })
-  })
-
-  afterEach(() => {
-    fetchMock.reset()
+      isError: false,
+      isSuccess: false,
+      status: 'idle',
+      fetchStatus: 'idle',
+      refetch: vi.fn(),
+    } as any)
   })
 
   describe('when no preview parameter in URL', () => {
@@ -119,11 +119,16 @@ describe('usePreviewHandler', () => {
         context_asset_string: 'course_123',
       }
 
-      mockUseGetFile.mockReturnValue({
+      mockedUseGetFile.mockReturnValue({
         data: externalFile,
         isLoading: false,
         error: null,
-      })
+        isError: false,
+        isSuccess: true,
+        status: 'success',
+        fetchStatus: 'idle',
+        refetch: vi.fn(),
+      } as any)
 
       const {result} = renderHook(
         () =>
@@ -146,7 +151,7 @@ describe('usePreviewHandler', () => {
         expect(resultPreviewState.error).toBe(null)
       })
 
-      expect(mockUseGetFile).toHaveBeenCalledWith({
+      expect(mockedUseGetFile).toHaveBeenCalledWith({
         fileId: '999',
         contextType: 'course',
         contextId: '123',
@@ -154,11 +159,16 @@ describe('usePreviewHandler', () => {
     })
 
     it('shows error when file fetch fails', async () => {
-      mockUseGetFile.mockReturnValue({
-        data: null,
+      mockedUseGetFile.mockReturnValue({
+        data: undefined,
         isLoading: false,
         error: new Error('File not found'),
-      })
+        isError: true,
+        isSuccess: false,
+        status: 'error',
+        fetchStatus: 'idle',
+        refetch: vi.fn(),
+      } as any)
 
       const {result} = renderHook(() => usePreviewHandler({collection: mockCollection}), {
         wrapper: createWrapper('/?preview=999'),
@@ -174,11 +184,16 @@ describe('usePreviewHandler', () => {
     })
 
     it('shows error when file not found and not loading', async () => {
-      mockUseGetFile.mockReturnValue({
-        data: null,
+      mockedUseGetFile.mockReturnValue({
+        data: undefined,
         isLoading: false,
         error: null,
-      })
+        isError: false,
+        isSuccess: false,
+        status: 'success',
+        fetchStatus: 'idle',
+        refetch: vi.fn(),
+      } as any)
 
       const {result} = renderHook(() => usePreviewHandler({collection: mockCollection}), {
         wrapper: createWrapper('/?preview=999'),
@@ -280,7 +295,7 @@ describe('usePreviewHandler', () => {
         },
       )
 
-      expect(mockUseGetFile).toHaveBeenCalledWith({
+      expect(mockedUseGetFile).toHaveBeenCalledWith({
         fileId: '999',
         contextType: 'course',
         contextId: '456',
@@ -302,7 +317,7 @@ describe('usePreviewHandler', () => {
         },
       )
 
-      expect(mockUseGetFile).toHaveBeenCalledWith({
+      expect(mockedUseGetFile).toHaveBeenCalledWith({
         fileId: null,
         contextType: 'course',
         contextId: '456',

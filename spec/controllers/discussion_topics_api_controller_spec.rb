@@ -499,6 +499,101 @@ describe DiscussionTopicsApiController do
 
       expect(response).to be_unprocessable
     end
+
+    context "with discussion_summary_with_cedar feature flag" do
+      before do
+        @course.account.root_account.enable_feature!(:discussion_summary_with_cedar)
+
+        mock_response = Struct.new(:response, :input_tokens, :output_tokens, keyword_init: true).new(
+          response: "cedar summary",
+          input_tokens: 100,
+          output_tokens: 200
+        )
+        stub_const("CedarClient", Class.new do
+          define_singleton_method(:prompt) do |*|
+            mock_response
+          end
+        end)
+      end
+
+      it "routes to Cedar when feature flag is enabled" do
+        expect_any_instance_of(DiscussionTopic).to receive(:user_can_summarize?).and_return(true)
+        expect(LLMConfigs).to receive(:config_for).twice.and_return(
+          LLMConfig.new(
+            name: "raw-V1_A",
+            model_id: "model",
+            template: "<CONTENT_PLACEHOLDER>"
+          )
+        )
+
+        expect(@inst_llm).not_to receive(:chat)
+
+        post "find_or_create_summary", params: { topic_id: @topic.id, course_id: @course.id, user_id: @teacher.id }, format: "json"
+
+        expect(response).to be_successful
+      end
+
+      it "passes correct parameters to Cedar" do
+        calls = []
+        stub_const("CedarClient", Class.new do
+          define_singleton_method(:prompt) do |args|
+            calls << args
+            raise "Expected model to eq 'model'" unless args[:model] == "model"
+            raise "Expected feature_slug to eq 'discussion-summary'" unless args[:feature_slug] == "discussion-summary"
+            raise "Expected prompt to be present" unless args[:prompt].present?
+
+            Struct.new(:response, :input_tokens, :output_tokens, keyword_init: true).new(
+              response: "cedar summary",
+              input_tokens: 100,
+              output_tokens: 200
+            )
+          end
+        end)
+
+        expect_any_instance_of(DiscussionTopic).to receive(:user_can_summarize?).and_return(true)
+        expect(LLMConfigs).to receive(:config_for).twice.and_return(
+          LLMConfig.new(
+            name: "raw-V1_A",
+            model_id: "model",
+            template: "<CONTENT_PLACEHOLDER>"
+          )
+        )
+
+        post "find_or_create_summary", params: { topic_id: @topic.id, course_id: @course.id, user_id: @teacher.id }, format: "json"
+
+        expect(response).to be_successful
+        expect(calls.length).to eq(2)
+      end
+
+      it "falls back to Bedrock when feature flag is disabled" do
+        @course.account.root_account.disable_feature!(:discussion_summary_with_cedar)
+
+        expect_any_instance_of(DiscussionTopic).to receive(:user_can_summarize?).and_return(true)
+        expect(LLMConfigs).to receive(:config_for).twice.and_return(
+          LLMConfig.new(
+            name: "raw-V1_A",
+            model_id: "model",
+            template: "<CONTENT_PLACEHOLDER>"
+          )
+        )
+
+        expect(@inst_llm).to receive(:chat).twice.and_return(
+          InstLLM::Response::ChatResponse.new(
+            model: "model",
+            message: { role: :assistant, content: "bedrock summary" },
+            stop_reason: "stop_reason",
+            usage: {
+              input_tokens: 10,
+              output_tokens: 20,
+            }
+          )
+        )
+
+        post "find_or_create_summary", params: { topic_id: @topic.id, course_id: @course.id, user_id: @teacher.id }, format: "json"
+
+        expect(response).to be_successful
+      end
+    end
   end
 
   context "summary_feedback" do
@@ -1070,6 +1165,83 @@ describe DiscussionTopicsApiController do
         expect(Lti::AssetProcessorDiscussionNotifier).to receive(:notify_asset_processors_of_discussion)
 
         post "add_reply", params: { topic_id: @graded_topic.id, entry_id: @entry.id, course_id: @course.id, message: "reply message" }, format: "json"
+      end
+    end
+  end
+
+  describe "POST accessibility_scan" do
+    before :once do
+      course_with_teacher(active_all: true)
+      @student = student_in_course(active_all: true).user
+      @topic = @course.discussion_topics.create!(
+        title: "Test Discussion",
+        message: "<h1>Title</h1><p>Content</p>"
+      )
+    end
+
+    def accessibility_scan_request(user, topic_id, expected_status: 200)
+      user_session(user)
+      post "accessibility_scan",
+           params: {
+             course_id: @course.id,
+             topic_id:
+           },
+           format: "json"
+      expect(response).to have_http_status(expected_status)
+      response.parsed_body if response.successful?
+    end
+
+    context "when a11y_checker feature is enabled" do
+      before do
+        @course.account.enable_feature!(:a11y_checker)
+        @course.enable_feature!(:a11y_checker_eap)
+      end
+
+      it "requires manage course content permissions" do
+        accessibility_scan_request(@student, @topic.id, expected_status: 403)
+      end
+
+      it "runs a synchronous accessibility scan and returns scan results" do
+        json = accessibility_scan_request(@teacher, @topic.id)
+
+        expect(json["id"]).to be_present
+        expect(json["resource_type"]).to eq("DiscussionTopic")
+        expect(json["resource_name"]).to eq("Test Discussion")
+        expect(json["workflow_state"]).to eq("completed")
+        expect(json["issue_count"]).to be >= 0
+        expect(json["issues"]).to be_an(Array)
+      end
+
+      it "returns 404 for non-existent discussion topic" do
+        accessibility_scan_request(@teacher, 999_999, expected_status: 404)
+      end
+
+      it "calls ResourceScannerService with the discussion topic" do
+        service_double = instance_double(Accessibility::ResourceScannerService)
+        scan_double = instance_double(AccessibilityResourceScan,
+                                      id: 1,
+                                      context: @topic,
+                                      resource_name: "Test Discussion",
+                                      resource_workflow_state: "published",
+                                      resource_updated_at: Time.zone.now,
+                                      context_url: "/courses/#{@course.id}/discussion_topics/#{@topic.id}",
+                                      workflow_state: "completed",
+                                      error_message: nil,
+                                      issue_count: 1,
+                                      accessibility_issues: double(select: []))
+
+        expect(Accessibility::ResourceScannerService).to receive(:new)
+          .with(resource: @topic)
+          .and_return(service_double)
+        expect(service_double).to receive(:call_sync).and_return(scan_double)
+
+        accessibility_scan_request(@teacher, @topic.id)
+      end
+    end
+
+    context "when a11y_checker feature is disabled" do
+      it "returns 403 when feature is not enabled" do
+        accessibility_scan_request(@teacher, @topic.id, expected_status: 403)
       end
     end
   end

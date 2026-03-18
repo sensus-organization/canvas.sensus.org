@@ -21,9 +21,10 @@ import {
   type ProcessedTool,
 } from '../utils'
 import axios from '@canvas/axios'
+import {type Mocked} from 'vitest'
 
-jest.mock('@canvas/axios')
-const mockedAxios = axios as jest.Mocked<typeof axios>
+vi.mock('@canvas/axios')
+const mockedAxios = axios as Mocked<typeof axios>
 
 describe('utils.ts', () => {
   describe('getExternalApps', () => {
@@ -33,7 +34,7 @@ describe('utils.ts', () => {
     })
 
     afterEach(() => {
-      jest.resetAllMocks()
+      vi.resetAllMocks()
     })
 
     it('handles empty array response from the API', async () => {

@@ -23,10 +23,17 @@ import bridge from '../../../../bridge'
 import {asVideoElement} from '../../shared/ContentSelection'
 import {findMediaPlayerIframe} from '../../shared/iframeUtils'
 import VideoOptionsTray from '.'
-import {isStudioEmbeddedMedia, parseStudioOptions, updateStudioEmbedOptions, validateStudioEmbedOptions} from '../../shared/StudioLtiSupportUtils'
+import {
+  isStudioEmbeddedMedia,
+  parseStudioOptions,
+  updateStudioEmbedOptions,
+  validateStudioEmbedOptions,
+} from '../../shared/StudioLtiSupportUtils'
 import RCEGlobals from '../../../RCEGlobals'
+import formatMessage from '../../../../format-message'
 
 export const CONTAINER_ID = 'instructure-video-options-tray-container'
+export const ANNOUNCER_ID = 'instructure-video-options-tray-announcer'
 
 export const VIDEO_SIZE_DEFAULT = {height: '225px', width: '400px'} // AKA "LARGE"
 export const STUDIO_PLAYER_VIDEO_SIZE_DEFAULT = {height: '300px', width: '480px'}
@@ -54,6 +61,24 @@ export default class TrayController {
     this._isOpen = false
     this._shouldOpen = false
     this._renderId = 0
+    this._skipFocusOnExit = false
+    this._announcer = this.createAnnouncer()
+  }
+
+  createAnnouncer() {
+    let announcer = document.getElementById(ANNOUNCER_ID)
+
+    if (announcer !== null) {
+      return announcer
+    }
+
+    announcer = document.createElement('div')
+    announcer.id = ANNOUNCER_ID
+    announcer.setAttribute('role', 'status')
+    announcer.setAttribute('aria-live', 'polite')
+    announcer.setAttribute('aria-relevant', 'additions text')
+    document.body.appendChild(announcer)
+    return announcer
   }
 
   get $container() {
@@ -82,10 +107,12 @@ export default class TrayController {
 
     const trayProps = bridge.trayProps.get(editor)
     this._renderTray(trayProps)
+    this._announcer.textContent = ''
   }
 
-  hideTrayForEditor(editor) {
+  hideTrayForEditor(editor, skipFocusOnExit = false) {
     if (this._editor === editor) {
+      this._skipFocusOnExit = skipFocusOnExit
       this._dismissTray()
     }
   }
@@ -173,10 +200,11 @@ export default class TrayController {
       }
     }
     this._dismissTray()
+    this._announcer.textContent = formatMessage('Media options saved.')
   }
 
   _dismissTray() {
-    if (this.$videoContainer) {
+    if (this.$videoContainer && !this._skipFocusOnExit) {
       this._editor?.selection?.select(this.$videoContainer)
     }
     this._shouldOpen = false
@@ -226,7 +254,10 @@ export default class TrayController {
           this._isOpen = true
         }}
         onExited={() => {
-          bridge.focusActiveEditor(false)
+          if (!this._skipFocusOnExit) {
+            bridge.focusActiveEditor(false)
+          }
+          this._skipFocusOnExit = false
           this._isOpen = false
           this._subtitleListener?.abort()
         }}

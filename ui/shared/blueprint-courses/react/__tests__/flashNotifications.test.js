@@ -26,23 +26,23 @@ const createMockStore = state => ({
     this.subs.push(cb)
   },
   getState: () => state,
-  dispatch: jest.fn(),
+  dispatch: vi.fn(),
   mockStateChange() {
     this.subs.forEach(sub => sub())
   },
 })
 
-jest.mock('@canvas/alerts/react/FlashAlert', () => ({
-  showFlashAlert: jest.fn(),
-  destroyContainer: jest.fn(),
+vi.mock('@canvas/alerts/react/FlashAlert', () => ({
+  showFlashAlert: vi.fn(),
+  destroyContainer: vi.fn(),
 }))
 
 describe('Blueprint Course FlashNotifications', () => {
   afterEach(() => {
-    jest.clearAllMocks()
+    vi.clearAllMocks()
   })
 
-  test('subscribes to a store and calls showFlashAlert for each notification in state', done => {
+  test('subscribes to a store and calls showFlashAlert for each notification in state', async () => {
     const mockStore = createMockStore({
       notifications: [
         {id: '1', message: 'hello'},
@@ -53,15 +53,14 @@ describe('Blueprint Course FlashNotifications', () => {
     FlashNotifications.subscribe(mockStore)
     mockStore.mockStateChange()
 
-    setTimeout(() => {
-      expect(showFlashAlert).toHaveBeenCalledTimes(2)
-      expect(showFlashAlert).toHaveBeenCalledWith({id: '1', message: 'hello'})
-      expect(showFlashAlert).toHaveBeenCalledWith({id: '2', message: 'world'})
-      done()
-    }, 1)
+    await new Promise(resolve => setTimeout(resolve, 10))
+
+    expect(showFlashAlert).toHaveBeenCalledTimes(2)
+    expect(showFlashAlert).toHaveBeenCalledWith({id: '1', message: 'hello'})
+    expect(showFlashAlert).toHaveBeenCalledWith({id: '2', message: 'world'})
   })
 
-  test('subscribes to a store and dispatches clearNotifications for each notification in state', done => {
+  test('subscribes to a store and dispatches clearNotifications for each notification in state', async () => {
     const mockStore = createMockStore({
       notifications: [
         {id: '1', message: 'hello'},
@@ -73,11 +72,10 @@ describe('Blueprint Course FlashNotifications', () => {
     FlashNotifications.subscribe(mockStore)
     mockStore.mockStateChange()
 
-    setTimeout(() => {
-      expect(dispatchSpy).toHaveBeenCalledTimes(2)
-      expect(dispatchSpy).toHaveBeenCalledWith(actions.clearNotification('1'))
-      expect(dispatchSpy).toHaveBeenCalledWith(actions.clearNotification('2'))
-      done()
-    }, 1)
+    await new Promise(resolve => setTimeout(resolve, 10))
+
+    expect(dispatchSpy).toHaveBeenCalledTimes(2)
+    expect(dispatchSpy).toHaveBeenCalledWith(actions.clearNotification('1'))
+    expect(dispatchSpy).toHaveBeenCalledWith(actions.clearNotification('2'))
   })
 })

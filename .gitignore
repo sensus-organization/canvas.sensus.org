@@ -15,6 +15,7 @@
 .swc
 .idea/
 /.claude/
+CLAUDE.local.md
 /.yardoc/
 /.ruby-version
 /app/views/info/styleguide.html.erb
@@ -56,6 +57,7 @@ dump.rdb
 .eslintcache
 tsconfig.tsbuildinfo
 .sentryclirc
+.irbrc.local
 
 # canvas-gems
 /gems/*/coverage

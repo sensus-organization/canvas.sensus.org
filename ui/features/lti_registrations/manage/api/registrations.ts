@@ -66,6 +66,7 @@ export type AppsSortProperty =
   | 'installed_by'
   | 'updated_by'
   | 'on'
+  | 'status'
 
 export type AppsSortDirection = 'asc' | 'desc'
 
@@ -155,6 +156,29 @@ export const refreshRegistrationWithAllInfo = (
   })
 }
 
+const createRegistrationWithConfigQueryKey = (
+  ltiRegistrationId: LtiRegistrationId,
+  accountId: AccountId,
+) => [accountId, 'lti_registrations', ltiRegistrationId, 'withConfig']
+
+export const useRegistrationWithConfig = (
+  ltiRegistrationId: LtiRegistrationId,
+  accountId: AccountId,
+) => {
+  return useQuery({
+    queryKey: createRegistrationWithConfigQueryKey(ltiRegistrationId, accountId),
+    queryFn: () => {
+      return doFetchWithSchema(
+        {
+          path: `/api/v1/accounts/${accountId}/lti_registrations/${ltiRegistrationId}?include[]=configuration&include[]=overlay`,
+        },
+        ZLtiRegistrationWithConfiguration,
+      )
+    },
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  })
+}
+
 export type FetchLtiRegistrationWithLegacyConfiguration = (
   accountId: AccountId,
   registrationId: LtiRegistrationId,
@@ -188,7 +212,7 @@ export const useResetLtiRegistration = () => {
           path: `/api/v1/accounts/${accountId}/lti_registrations/${ltiRegistrationId}/reset`,
           method: 'PUT',
         },
-        ZLtiRegistrationWithConfiguration,
+        z.unknown(),
       ),
     onSettled: (_, __, {ltiRegistrationId, accountId}) => {
       refreshRegistrationWithAllInfo(ltiRegistrationId, accountId)
@@ -281,7 +305,7 @@ export type CreateRegistration = (
   overlay?: LtiConfigurationOverlay,
   unifiedToolId?: string,
   adminNickname?: string,
-) => Promise<ApiResult<unknown>>
+) => Promise<ApiResult<LtiRegistrationWithConfiguration>>
 
 /**
  * Creates an LTI registration
@@ -289,7 +313,7 @@ export type CreateRegistration = (
  * @param internalConfig The internal configuration to use
  * @param overlay An overlay to apply to the internal configuration
  * @param unifiedToolId The unified tool id for the registration
- * @returns An ApiResult with an unknown value. The value should be ignored.
+ * @returns An ApiResult with the created registration including its ID
  */
 export const createRegistration: CreateRegistration = (
   accountId,
@@ -298,7 +322,7 @@ export const createRegistration: CreateRegistration = (
   unifiedToolId,
   adminNickname,
 ) =>
-  parseFetchResult(z.unknown())(
+  parseFetchResult(ZLtiRegistrationWithConfiguration)(
     fetch(`/api/v1/accounts/${accountId}/lti_registrations`, {
       ...defaultFetchOptions({
         headers: {

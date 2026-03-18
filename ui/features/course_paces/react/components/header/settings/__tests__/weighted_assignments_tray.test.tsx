@@ -26,10 +26,10 @@ import WeightedAssignmentsTray from './../WeightedAssignmentsTray'
 import {StoreState} from '../../../../types'
 import {BLACKOUT_DATES, DEFAULT_STORE_STATE, PRIMARY_PACE} from '../../../../__tests__/fixtures'
 
-jest.mock('../../../../actions/ui', () => ({
-  ...jest.requireActual('../../../../actions/ui'),
+vi.mock('../../../../actions/ui', async () => ({
+  ...(await vi.importActual('../../../../actions/ui')),
   actions: {
-    hideWeightedAssignmentsTray: jest
+    hideWeightedAssignmentsTray: vi
       .fn()
       .mockReturnValue({type: 'UI/HIDE_WEIGHTING_ASSIGNMENTS_MODAL', payload: {}}),
   },

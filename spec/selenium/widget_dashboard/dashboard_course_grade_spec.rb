@@ -31,6 +31,7 @@ describe "student dashboard Course grade widget", :ignore_js_errors do
     dashboard_course_submission_setup
     dashboard_course_grade_setup
     set_widget_dashboard_flag(feature_status: true)
+    enable_widget_dashboard_for(@student)
   end
 
   before do
@@ -78,6 +79,14 @@ describe "student dashboard Course grade widget", :ignore_js_errors do
       expect(course_gradebook_link(@course1.id)).to be_displayed
       course_gradebook_link(@course1.id).click
       expect(driver.current_url).to include("/courses/#{@course1.id}/grades")
+    end
+
+    it "navigates to the course when clicking go to course link" do
+      go_to_dashboard
+
+      expect(course_grades_go_to_course_link(@course1.id)).to be_displayed
+      course_grades_go_to_course_link(@course1.id).click
+      expect(driver.current_url).to include("/courses/#{@course1.id}")
     end
 
     it "displays last updated timestamp from course score" do

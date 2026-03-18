@@ -24,10 +24,18 @@ import {
   mockSiteAdminRegistration,
 } from '../../manage/__tests__/helpers'
 import {BrowserRouter} from 'react-router-dom'
-import fetchMock from 'fetch-mock'
+import {http, HttpResponse} from 'msw'
+import {setupServer} from 'msw/node'
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query'
+import {ZDeveloperKeyId} from '../../../model/developer_key/DeveloperKeyId'
+
+const server = setupServer()
 
 describe('ToolDetailsInner', () => {
+  beforeAll(() => server.listen())
+  afterAll(() => server.close())
+  afterEach(() => server.resetHandlers())
+
   const renderToolDetailsInner = (
     registration = mockRegistrationWithAllInformation({n: 'test', i: 1}),
   ) => {
@@ -48,10 +56,18 @@ describe('ToolDetailsInner', () => {
   })
 
   it('calls the delete API endpoint when the delete button is clicked', async () => {
-    fetchMock.delete('/api/v1/accounts/1/lti_registrations/1', {
-      __type: 'Success',
-      data: {},
-    })
+    let capturedUrl = ''
+    let capturedMethod = ''
+    server.use(
+      http.delete('/api/v1/accounts/:accountId/lti_registrations/:registrationId', ({request}) => {
+        capturedUrl = request.url
+        capturedMethod = request.method
+        return HttpResponse.json({
+          __type: 'Success',
+          data: {},
+        })
+      }),
+    )
 
     const wrapper = renderToolDetailsInner()
     const deleteBtn = await wrapper.getByText('Delete App').closest('button')
@@ -59,13 +75,8 @@ describe('ToolDetailsInner', () => {
     const confirmationModalAcceptBtn = await wrapper.getByText('Delete').closest('button')
     await clickOrFail(confirmationModalAcceptBtn)
 
-    const response = fetchMock.calls()[0]
-    const responseUrl = response[0]
-    const responseHeaders = response[1]
-    expect(responseUrl).toBe('/api/v1/accounts/1/lti_registrations/1')
-    expect(responseHeaders).toMatchObject({
-      method: 'DELETE',
-    })
+    expect(capturedUrl).toContain('/api/v1/accounts/1/lti_registrations/1')
+    expect(capturedMethod).toBe('DELETE')
   })
 
   it('shows the delete button on a site admin registration', async () => {
@@ -80,5 +91,84 @@ describe('ToolDetailsInner', () => {
     const wrapper = renderToolDetailsInner(registration)
     const deleteButton = wrapper.getByTestId('delete-app')
     expect(deleteButton).toHaveAttribute('disabled')
+  })
+
+  it('shows the "Migrate from LTI 2.0" button when turnitinAPClientId matches developer_key_id', async () => {
+    const registration = mockRegistrationWithAllInformation({
+      n: 'test',
+      i: 1,
+      registration: {
+        developer_key_id: ZDeveloperKeyId.parse('12345'),
+      },
+    })
+    window.ENV.turnitinAPClientId = '12345'
+
+    const wrapper = renderToolDetailsInner(registration)
+
+    expect(wrapper.queryByText('Migrate from LTI 2.0')).toBeInTheDocument()
+
+    delete window.ENV.turnitinAPClientId
+  })
+
+  it('does not show the "Migrate from LTI 2.0" button when turnitinAPClientId does not match', async () => {
+    const registration = mockRegistrationWithAllInformation({
+      n: 'test',
+      i: 1,
+      registration: {
+        developer_key_id: ZDeveloperKeyId.parse('12345'),
+      },
+    })
+    window.ENV.turnitinAPClientId = '99999'
+
+    const wrapper = renderToolDetailsInner(registration)
+
+    expect(wrapper.queryByText('Migrate from LTI 2.0')).not.toBeInTheDocument()
+
+    delete window.ENV.turnitinAPClientId
+  })
+
+  it('shows the "Reinstall App" button when dynamic_registration_url is present and reinstall is not disabled', async () => {
+    const registration = mockRegistrationWithAllInformation({
+      n: 'test',
+      i: 1,
+      registration: {
+        dynamic_registration_url: 'https://example.com/register',
+        reinstall_disabled: false,
+      },
+    })
+
+    const wrapper = renderToolDetailsInner(registration)
+
+    expect(wrapper.queryByText('Reinstall App')).toBeInTheDocument()
+  })
+
+  it('does not show the "Reinstall App" button when reinstall_disabled is true', async () => {
+    const registration = mockRegistrationWithAllInformation({
+      n: 'test',
+      i: 1,
+      registration: {
+        dynamic_registration_url: 'https://example.com/register',
+        reinstall_disabled: true,
+      },
+    })
+
+    const wrapper = renderToolDetailsInner(registration)
+
+    expect(wrapper.queryByText('Reinstall App')).not.toBeInTheDocument()
+  })
+
+  it('does not show the "Reinstall App" button when dynamic_registration_url is not present', async () => {
+    const registration = mockRegistrationWithAllInformation({
+      n: 'test',
+      i: 1,
+      registration: {
+        dynamic_registration_url: null,
+        reinstall_disabled: false,
+      },
+    })
+
+    const wrapper = renderToolDetailsInner(registration)
+
+    expect(wrapper.queryByText('Reinstall App')).not.toBeInTheDocument()
   })
 })

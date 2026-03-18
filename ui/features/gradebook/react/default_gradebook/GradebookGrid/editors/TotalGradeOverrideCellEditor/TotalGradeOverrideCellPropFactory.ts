@@ -18,7 +18,7 @@
 
 import GradeOverrideEntry from '@canvas/grading/GradeEntry/GradeOverrideEntry'
 import type Gradebook from '../../../Gradebook'
-import {htmlDecode} from '../../../Gradebook.utils'
+import {htmlDecode} from '@canvas/util/TextHelper'
 import useStore from '../../../stores'
 import {gradeOverrideCustomStatus} from '../../../FinalGradeOverrides/FinalGradeOverride.utils'
 
@@ -40,7 +40,6 @@ export default class TotalGradeOverrideCellPropFactory {
 
     const gradeEntry = new GradeOverrideEntry({
       gradingScheme: this._gradebook.getCourseGradingScheme(),
-      // @ts-expect-error
       restrictPointsBasedInput: true,
     })
 
@@ -66,7 +65,6 @@ export default class TotalGradeOverrideCellPropFactory {
         gradeEntry,
         isFirstStudent,
         isLastStudent,
-        // @ts-expect-error
         studentInfo,
       },
     })

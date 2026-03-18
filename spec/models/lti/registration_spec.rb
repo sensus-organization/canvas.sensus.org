@@ -40,6 +40,27 @@ RSpec.describe Lti::Registration do
       registration.account = account_model(parent_account: registration.account)
       expect(subject).to be false
     end
+
+    it "requires template registrations to be in site admin" do
+      non_site_admin_template = lti_registration_model(account: account_model)
+      registration.template_registration = non_site_admin_template
+      expect(subject).to be false
+      expect(registration.errors[:template_registration]).to include("must be inherited from Site Admin")
+    end
+
+    it "allows site admin template registrations" do
+      site_admin_template = lti_registration_model(account: Account.site_admin)
+      registration.template_registration = site_admin_template
+      expect(subject).to be true
+    end
+
+    it "does not allow a site admin registration to have a template" do
+      registration.account = Account.site_admin
+      site_admin_template = lti_registration_model(account: Account.site_admin)
+      registration.template_registration = site_admin_template
+      expect(subject).to be false
+      expect(registration.errors[:template_registration]).to include("Site Admin registrations cannot inherit from a template")
+    end
   end
 
   describe "#lti_version" do
@@ -344,6 +365,16 @@ RSpec.describe Lti::Registration do
         expect(subject).to be_nil
       end
     end
+
+    context "when the icon_url is overlaid" do
+      let(:icon_url) { "https://a.different.icon.example.com/icon.png" }
+      let(:registration) { lti_registration_with_tool(overlay_params: { icon_url: }) }
+
+      it "returns the overlaid icon_url" do
+        registration
+        expect(subject).to eql(icon_url)
+      end
+    end
   end
 
   describe "#account_binding_for" do
@@ -516,16 +547,44 @@ RSpec.describe Lti::Registration do
     let(:registration) { lti_registration_model(account: context) }
     let(:context) { account_model }
 
-    context "when account matches registration account" do
-      let(:account) { context }
+    context "when flag is disabled" do
+      before do
+        context.disable_feature! :lti_registrations_templates
+      end
 
-      it { is_expected.to be false }
+      context "when account matches registration account" do
+        let(:account) { context }
+
+        it { is_expected.to be false }
+      end
+
+      context "when account does not match registration account" do
+        let(:account) { account_model }
+
+        it { is_expected.to be true }
+      end
     end
 
-    context "when account does not match registration account" do
-      let(:account) { account_model }
+    it { is_expected.to be false }
+
+    context "when template registration is present" do
+      let(:template_registration) { lti_registration_model(account: Account.site_admin) }
+      let(:account) { context }
+
+      before do
+        registration.template_registration = template_registration
+        registration.save!
+      end
 
       it { is_expected.to be true }
+
+      context "and flag is disabled" do
+        before do
+          context.disable_feature! :lti_registrations_templates
+        end
+
+        it { is_expected.to be false }
+      end
     end
   end
 
@@ -751,6 +810,114 @@ RSpec.describe Lti::Registration do
 
         it "sets context control to unavailable" do
           expect(subject.primary_context_control.available).to be false
+        end
+      end
+    end
+
+    context "when context control creation fails" do
+      let_once(:developer_key) { lti_developer_key_model(account:) }
+      let_once(:tool_configuration) { lti_tool_configuration_model(developer_key:, lti_registration: registration) }
+      let_once(:registration) { lti_registration_model(account:, developer_key:) }
+
+      before do
+        allow(Lti::ContextControlService).to receive(:create_or_update).and_raise(
+          Lti::ContextControlErrors.new(ActiveModel::Errors.new(Lti::ContextControl.new))
+        )
+      end
+
+      it "rolls back the tool creation" do
+        initial_tool_count = ContextExternalTool.count
+        initial_control_count = Lti::ContextControl.count
+
+        expect do
+          registration.new_external_tool(account)
+        end.to raise_error(Lti::ContextControlErrors)
+
+        expect(ContextExternalTool.count).to eq(initial_tool_count)
+        expect(Lti::ContextControl.count).to eq(initial_control_count)
+      end
+
+      it "does not leave any leftover tools" do
+        expect do
+          expect do
+            registration.new_external_tool(account)
+          end.to raise_error(Lti::ContextControlErrors)
+        end.not_to change { ContextExternalTool.count }
+      end
+
+      it "does not leave any leftover context controls" do
+        expect do
+          expect do
+            registration.new_external_tool(account)
+          end.to raise_error(Lti::ContextControlErrors)
+        end.not_to change { Lti::ContextControl.count }
+      end
+    end
+
+    context "with sharding" do
+      specs_require_sharding
+
+      let_once(:shard2_root_account) { @shard2.activate { account_model } }
+      let_once(:shard2_registration) do
+        @shard2.activate do
+          lti_tool_configuration_model(account: shard2_root_account).lti_registration
+        end
+      end
+
+      it "creates the tool on the context's shard" do
+        tool = shard2_registration.new_external_tool(shard2_root_account)
+        expect(tool.shard).to eq(@shard2)
+      end
+
+      it "creates the context control on the context's shard" do
+        tool = shard2_registration.new_external_tool(shard2_root_account)
+        expect(tool.primary_context_control.shard).to eq(@shard2)
+      end
+
+      it "creates the registration history entry on the context's shard" do
+        initial_shard2_count = @shard2.activate { Lti::RegistrationHistoryEntry.count }
+        initial_default_count = Shard.default.activate { Lti::RegistrationHistoryEntry.count }
+
+        shard2_registration.new_external_tool(shard2_root_account)
+
+        @shard2.activate do
+          expect(Lti::RegistrationHistoryEntry.count).to eq(initial_shard2_count + 1)
+        end
+
+        Shard.default.activate do
+          expect(Lti::RegistrationHistoryEntry.count).to eq(initial_default_count)
+        end
+      end
+
+      context "with subaccount" do
+        let_once(:shard2_subaccount) do
+          @shard2.activate { account_model(parent_account: shard2_root_account) }
+        end
+
+        it "creates the tool on the subaccount's shard" do
+          tool = shard2_registration.new_external_tool(shard2_subaccount)
+          expect(tool.shard).to eq(@shard2)
+        end
+
+        it "creates the context control on the subaccount's shard" do
+          tool = shard2_registration.new_external_tool(shard2_subaccount)
+          expect(tool.primary_context_control.shard).to eq(@shard2)
+        end
+      end
+
+      context "with course" do
+        let_once(:shard2_course) do
+          @shard2.activate { course_model(account: shard2_root_account) }
+        end
+
+        it "creates the tool on the course's shard" do
+          tool = shard2_registration.new_external_tool(shard2_course)
+          expect(tool.shard).to eq(@shard2)
+        end
+
+        it "creates the context control on the course's shard" do
+          tool = shard2_registration.new_external_tool(shard2_course)
+          expect(tool.primary_context_control.shard).to eq(@shard2)
         end
       end
     end

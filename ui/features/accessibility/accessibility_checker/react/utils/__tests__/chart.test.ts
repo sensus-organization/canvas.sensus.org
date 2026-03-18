@@ -26,7 +26,7 @@ import {
   processIssuesToChartData,
 } from '../chart'
 
-jest.mock('@canvas/i18n', () => ({
+vi.mock('@canvas/i18n', () => ({
   useScope: () => ({
     t: (text: string) => text, // mock translation
   }),
@@ -41,7 +41,7 @@ const sampleData: IssueDataPoint[] = [
 const parsedIssueDataPoints: IssueDataPoint[] = [
   {
     id: 'heading-order',
-    issue: 'Heading order',
+    issue: 'Skipped heading level',
     count: 1,
     severity: 'Low',
   },

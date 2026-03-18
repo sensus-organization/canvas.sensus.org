@@ -68,13 +68,13 @@ describe('NavigationView', () => {
     view.render()
     view.afterRender()
 
-    $.screenReaderFlashMessage = jest.fn()
+    $.screenReaderFlashMessage = vi.fn()
   })
 
   afterEach(() => {
     view.remove()
     $container.remove()
-    jest.clearAllMocks()
+    vi.clearAllMocks()
   })
 
   describe('keyboard navigation without drag mode', () => {
@@ -166,7 +166,7 @@ describe('NavigationView', () => {
       const $item = $('.navitem.enabled').eq(1)
       $item.focus()
       $item.trigger($.Event('keydown', {key: ' '}))
-      jest.clearAllMocks()
+      vi.clearAllMocks()
     })
 
     it('moves item up when up arrow is pressed', () => {
@@ -256,7 +256,7 @@ describe('NavigationView', () => {
       $item.focus()
       $item.trigger($.Event('keydown', {key: ' '}))
       $item.trigger($.Event('keydown', {key: 'ArrowDown'}))
-      jest.clearAllMocks()
+      vi.clearAllMocks()
 
       $item.trigger($.Event('keydown', {key: ' '}))
 
@@ -270,7 +270,7 @@ describe('NavigationView', () => {
 
       $item.focus()
       $item.trigger($.Event('keydown', {key: ' '}))
-      jest.clearAllMocks()
+      vi.clearAllMocks()
 
       $item.trigger($.Event('keydown', {key: ' '}))
 
@@ -324,7 +324,7 @@ describe('NavigationView', () => {
 
       $item.focus()
       $item.trigger($.Event('keydown', {key: ' '}))
-      jest.clearAllMocks()
+      vi.clearAllMocks()
 
       $item.trigger($.Event('keydown', {key: 'Escape'}))
 

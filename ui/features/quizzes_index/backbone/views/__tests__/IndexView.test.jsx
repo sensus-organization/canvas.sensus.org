@@ -26,7 +26,7 @@ import fakeENV from '@canvas/test-utils/fakeENV'
 import '@canvas/jquery/jquery.simulate'
 import ReactDOM from 'react-dom'
 
-jest.useFakeTimers()
+vi.useFakeTimers()
 
 describe('IndexView', () => {
   let fixtures
@@ -113,7 +113,7 @@ describe('IndexView', () => {
   afterEach(() => {
     fakeENV.teardown()
     document.body.removeChild(fixtures)
-    jest.resetAllMocks()
+    vi.resetAllMocks()
   })
 
   it('has no quizzes if assignment and open quizzes are empty', () => {
@@ -170,9 +170,10 @@ describe('IndexView', () => {
 
   it('renders choose quiz engine modal', () => {
     ENV.flags.quiz_lti_enabled = true
-    const mockRender = jest.spyOn(ReactDOM, 'render').mockImplementation(() => {})
+    const mockRender = vi.spyOn(ReactDOM, 'render').mockImplementation(() => {})
     view = createIndexView()
-    view.$('.choose-quiz-engine').simulate('click')
+    // Use native DOM click instead of simulate
+    view.$('.choose-quiz-engine')[0].click()
     expect(mockRender.mock.calls[0][0].props.setOpen).toBe(true)
     mockRender.mockRestore()
   })

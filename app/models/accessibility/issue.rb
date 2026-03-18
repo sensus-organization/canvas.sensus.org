@@ -22,6 +22,7 @@ module Accessibility
     include WikiPageIssues
     include AssignmentIssues
     include AttachmentIssues
+    include DiscussionTopicIssues
     include ContentChecker
 
     attr_reader :context
@@ -35,6 +36,7 @@ module Accessibility
       {
         pages: generate_wiki_page_resources(skip_scan:),
         assignments: generate_assignment_resources(skip_scan:),
+        discussion_topics: generate_discussion_topic_resources(skip_scan:),
         # TODO: Disable PDF Accessibility Checks Until Post-InstCon
         # attachments: generate_attachment_resources(skip_scan:),
         attachments: {},
@@ -50,6 +52,7 @@ module Accessibility
       {
         pages: filter_resources(data[:pages], query),
         assignments: filter_resources(data[:assignments], query),
+        discussion_topics: filter_resources(data[:discussion_topics], query),
         attachments: filter_resources(data[:attachments], query),
         last_checked: data[:last_checked],
         accessibility_scan_disabled: data[:accessibility_scan_disabled]
@@ -57,32 +60,34 @@ module Accessibility
     end
 
     def update_content(rule_id, resource_type, resource_id, path, value)
-      resource = find_resource(resource_type, resource_id)
+      resource = self.class.find_resource(context, resource_type, resource_id)
       HtmlFixer.new(rule_id, resource, path, value).apply_fix!
     end
 
     def update_preview(rule_id, resource_type, resource_id, path, value)
-      resource = find_resource(resource_type, resource_id)
+      resource = self.class.find_resource(context, resource_type, resource_id)
       HtmlFixer.new(rule_id, resource, path, value).preview_fix(element_only: path.present?)
     end
 
     def generate_fix(rule_id, resource_type, resource_id, path, value)
-      resource = find_resource(resource_type, resource_id)
+      resource = self.class.find_resource(context, resource_type, resource_id)
       HtmlFixer.new(rule_id, resource, path, value).generate_fix
     end
 
-    private
-
-    def find_resource(resource_type, resource_id)
+    def self.find_resource(context, resource_type, resource_id)
       case resource_type
       when "Page"
         context.wiki_pages.find(resource_id)
       when "Assignment"
         context.assignments.find(resource_id)
+      when "DiscussionTopic"
+        context.discussion_topics.find(resource_id)
       else
         raise ArgumentError, "Unsupported resource type: #{resource_type}"
       end
     end
+
+    private
 
     def filter_resources(resources, query)
       resources.values&.select do |resource|
@@ -96,6 +101,13 @@ module Accessibility
 
     def polymorphic_path(args)
       Rails.application.routes.url_helpers.polymorphic_url(args, only_path: true)
+    end
+
+    def resource_urls(resource)
+      {
+        url: polymorphic_path([context, resource]),
+        edit_url: polymorphic_path([:edit, context, resource])
+      }
     end
 
     def course_files_url(context, options)

@@ -38,6 +38,8 @@ import {ContextSearchOption} from './ContextSearchOption'
 import {Spinner} from '@instructure/ui-spinner'
 import {ContextBrowse} from './ContextBrowse'
 import {LtiRegistrationId} from '../../../../model/LtiRegistrationId'
+import {showFlashAlert} from '@canvas/alerts/react/FlashAlert'
+import {Tooltip} from '@instructure/ui-tooltip'
 
 const I18n = createI18nScope('lti_registrations')
 
@@ -115,7 +117,25 @@ export const ExceptionModal = ({
   const [browserOpen, setBrowserOpen] = React.useState(false)
 
   return (
-    <Modal open={openState.open} label={I18n.t('Add Availability and Exceptions')} size="medium">
+    <Modal
+      open={openState.open}
+      label={I18n.t('Add Availability and Exceptions')}
+      size="medium"
+      onExited={() => {
+        // We have to do the flash alert here and it must be polite, otherwise Modal's
+        // built-in focus management will trample over our alert and it won't get
+        // read out.
+        if (confirmHandler.isSuccess) {
+          showFlashAlert({
+            message: I18n.t('%{count} exception(s) were successfully added.', {
+              count: contextControlForm.length,
+            }),
+            type: 'success',
+            politeness: 'polite',
+          })
+        }
+      }}
+    >
       <Modal.Header>
         <CloseButton placement="end" offset="small" onClick={close} screenReaderLabel="Close" />
         <Heading>{I18n.t('Add Availability and Exceptions')}</Heading>
@@ -197,17 +217,31 @@ export const ExceptionModal = ({
                           </SimpleSelect>
                         </Flex.Item>
                         <Flex.Item>
-                          <IconButton
-                            screenReaderLabel={I18n.t('Delete exception for %{context_name}', {
-                              context_name: control.context.context.name,
-                            })}
-                            onClick={() => {
-                              // Remove the context from the context control form
-                              setContextControlForm(prev => prev.filter((_c, i) => i !== index))
-                            }}
+                          <Tooltip
+                            renderTip={
+                              <Text
+                                dangerouslySetInnerHTML={{
+                                  __html: I18n.t('Delete exception for *%{context_name}*', {
+                                    context_name: control.context.context.name,
+                                    wrapper: ['<strong>$1</strong>'],
+                                  }),
+                                }}
+                              />
+                            }
+                            on={['hover', 'focus']}
                           >
-                            <IconTrashLine />
-                          </IconButton>
+                            <IconButton
+                              screenReaderLabel={I18n.t('Delete exception for %{context_name}', {
+                                context_name: control.context.context.name,
+                              })}
+                              onClick={() => {
+                                // Remove the context from the context control form
+                                setContextControlForm(prev => prev.filter((_c, i) => i !== index))
+                              }}
+                            >
+                              <IconTrashLine />
+                            </IconButton>
+                          </Tooltip>
                         </Flex.Item>
                       </Flex>
                     </List.Item>

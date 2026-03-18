@@ -228,6 +228,14 @@ RSpec.describe CanvasOperations::BaseOperation do
       operation_instance.run(progress)
     end
 
+    it "manually sets workflow_state to completed when progress.complete returns false" do
+      allow(progress).to receive(:complete).and_return(false)
+
+      operation_instance.run(progress)
+
+      expect(progress.workflow_state).to eq("completed")
+    end
+
     it "emits an event notifying the run is starting and completing" do
       expect(InstStatsd::Statsd).to receive(:event).with(
         "my_operation started",
@@ -291,6 +299,12 @@ RSpec.describe CanvasOperations::BaseOperation do
           operation_instance.run(progress)
         end.not_to raise_error
       end
+
+      it "stores the error message in results" do
+        operation_instance.run(progress)
+
+        expect(operation_instance.results[:error]).to eq("Invalid target")
+      end
     end
   end
 
@@ -336,6 +350,16 @@ RSpec.describe CanvasOperations::BaseOperation do
         }.from(0).to(1)
       end
 
+      it "configures job to call fail_with_error! on permanent failure" do
+        run_later
+
+        job = Delayed::Job.find_by(
+          singleton: "operations/no_progress_operation/shards/#{Shard.current.id}",
+          tag: "NoProgressOperation#run"
+        )
+        expect(job.payload_object.permanent_fail_cb).to eq(:fail_with_error!)
+      end
+
       it "does not create a Progress record" do
         expect { run_later }.not_to change(Progress, :count)
       end
@@ -355,6 +379,40 @@ RSpec.describe CanvasOperations::BaseOperation do
         run_later
 
         expect { run_jobs }.not_to change(Progress, :count)
+      end
+    end
+  end
+
+  describe "#job_options" do
+    context "when progress tracking is enabled" do
+      include_context "simple operation"
+
+      let(:operation_instance) { MyOperation.new }
+
+      it "does not include on_permanent_failure" do
+        options = operation_instance.send(:job_options)
+
+        expect(options).to eq({
+                                singleton: "shards/#{Shard.current.id}",
+                                on_conflict: :overwrite
+                              })
+        expect(options).not_to have_key(:on_permanent_failure)
+      end
+    end
+
+    context "when progress tracking is disabled" do
+      include_context "no progress operation"
+
+      let(:operation_instance) { NoProgressOperation.new }
+
+      it "includes on_permanent_failure" do
+        options = operation_instance.send(:job_options)
+
+        expect(options).to eq({
+                                singleton: "shards/#{Shard.current.id}",
+                                on_conflict: :overwrite,
+                                on_permanent_failure: :fail_with_error!
+                              })
       end
     end
   end

@@ -37,7 +37,8 @@ RSpec.describe PeerReview::PeerReviewSubmitterService do
   let(:peer_review_sub_assignment) do
     PeerReviewSubAssignment.create!(
       parent_assignment:,
-      peer_review_count: 2
+      peer_review_count: 2,
+      submission_types: PeerReviewSubAssignment::PEER_REVIEW_SUBMISSION_TYPE
     )
   end
 
@@ -47,7 +48,7 @@ RSpec.describe PeerReview::PeerReviewSubmitterService do
   let(:service) { described_class.new(parent_assignment:, assessor:) }
 
   before do
-    course.enable_feature!(:peer_review_grading)
+    course.enable_feature!(:peer_review_allocation_and_grading)
     create_enrollment(course, assessor, enrollment_state: "active")
     create_enrollment(course, student1, enrollment_state: "active")
     create_enrollment(course, student2, enrollment_state: "active")
@@ -254,7 +255,7 @@ RSpec.describe PeerReview::PeerReviewSubmitterService do
       end
 
       it "returns nil when feature is disabled" do
-        course.disable_feature!(:peer_review_grading)
+        course.disable_feature!(:peer_review_allocation_and_grading)
         expect(service.call).to be_nil
       end
     end
@@ -383,7 +384,7 @@ RSpec.describe PeerReview::PeerReviewSubmitterService do
       end
 
       it "returns false when feature is disabled" do
-        course.disable_feature!(:peer_review_grading)
+        course.disable_feature!(:peer_review_allocation_and_grading)
         expect(service.send(:feature_enabled?)).to be false
       end
     end
@@ -424,7 +425,7 @@ RSpec.describe PeerReview::PeerReviewSubmitterService do
       end
 
       it "returns false when feature is disabled" do
-        course.disable_feature!(:peer_review_grading)
+        course.disable_feature!(:peer_review_allocation_and_grading)
         expect(service.send(:peer_review_submission_supported?)).to be false
       end
     end
@@ -437,8 +438,7 @@ RSpec.describe PeerReview::PeerReviewSubmitterService do
       it "returns false when a submitted submission exists" do
         peer_review_sub_assignment.submit_homework(
           assessor,
-          submission_type: "online_text_entry",
-          body: "Peer reviews submitted"
+          submission_type: PeerReviewSubAssignment::PEER_REVIEW_SUBMISSION_TYPE
         )
         expect(service.send(:peer_review_unsubmitted?)).to be false
       end
@@ -707,8 +707,7 @@ RSpec.describe PeerReview::PeerReviewSubmitterService do
         expect(peer_review_sub_assignment).to receive(:submit_homework).with(
           assessor,
           hash_including(
-            submission_type: PeerReview::PeerReviewSubmitterService::PEER_REVIEW_SUBMISSION_TYPE,
-            body: PeerReview::PeerReviewSubmitterService::PEER_REVIEW_SUBMISSION_BODY,
+            submission_type: PeerReviewSubAssignment::PEER_REVIEW_SUBMISSION_TYPE,
             submitted_at: submitted_time
           )
         )
@@ -724,6 +723,22 @@ RSpec.describe PeerReview::PeerReviewSubmitterService do
         expect(result).to be_a(Submission)
         expect(result.assignment).to eq(peer_review_sub_assignment)
         expect(result.user).to eq(assessor)
+      end
+
+      it "creates submission with 'peer_review' submission_type" do
+        submitted_time = 1.hour.ago
+        allow(service).to receive(:peer_reviews_submitted_at).and_return(submitted_time)
+
+        result = service.send(:create_peer_review_submission, assessor)
+        expect(result.submission_type).to eq(PeerReviewSubAssignment::PEER_REVIEW_SUBMISSION_TYPE)
+      end
+
+      it "creates submission without body" do
+        submitted_time = 1.hour.ago
+        allow(service).to receive(:peer_reviews_submitted_at).and_return(submitted_time)
+
+        result = service.send(:create_peer_review_submission, assessor)
+        expect(result.body).to be_nil
       end
     end
   end

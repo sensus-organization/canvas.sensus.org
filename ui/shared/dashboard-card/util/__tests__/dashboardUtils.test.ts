@@ -28,8 +28,8 @@ import {CourseDashboardCard as CourseDashboardCardType} from '../../graphql/Cour
 import {ActivityStreamSummary as ActivityStreamSummaryType} from '../../graphql/ActivityStream'
 import {showFlashAlert} from '@canvas/alerts/react/FlashAlert'
 
-jest.mock('@canvas/alerts/react/FlashAlert', () => ({
-  showFlashAlert: jest.fn(() => jest.fn(() => {})),
+vi.mock('@canvas/alerts/react/FlashAlert', () => ({
+  showFlashAlert: vi.fn(() => vi.fn(() => {})),
 }))
 
 describe('sortByPosition', () => {

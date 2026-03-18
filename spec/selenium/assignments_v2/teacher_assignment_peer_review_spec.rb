@@ -29,7 +29,7 @@ describe "as a teacher" do
     before(:once) do
       @course = course_factory(name: "course", active_course: true)
       @course.enable_feature!(:assignment_enhancements_teacher_view)
-      @course.enable_feature!(:peer_review_allocation)
+      @course.enable_feature!(:peer_review_allocation_and_grading)
       @teacher = teacher_in_course(name: "teacher", course: @course, enrollment_state: :active).user
       @student1 = student_in_course(name: "Student 1", course: @course, enrollment_state: :active).user
       @student2 = student_in_course(name: "Student 2", course: @course, enrollment_state: :active).user
@@ -1191,12 +1191,18 @@ describe "as a teacher" do
 
           driver.action.send_keys(:escape).perform
           wait_for_ajaximations
+          wait_for(method: nil, timeout: 3) do
+            !element_exists?("span[data-testid='create-rule-modal']")
+          end
 
           expect(element_exists?("span[data-testid='create-rule-modal']")).to be_falsey
           expect(TeacherViewPageV2.allocation_rules_tray).to be_displayed
 
           driver.action.send_keys(:escape).perform
           wait_for_ajaximations
+          wait_for(method: nil, timeout: 3) do
+            !element_exists?("div[role='dialog'][aria-label='Allocation Rules']")
+          end
 
           expect(element_exists?("div[role='dialog'][aria-label='Allocation Rules']")).to be_falsey
         end

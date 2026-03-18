@@ -16,26 +16,28 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import React, {useState, useEffect, useCallback} from 'react'
-import {Text} from '@instructure/ui-text'
+import React, {useState, useEffect, useCallback, useMemo} from 'react'
 import {Button} from '@instructure/ui-buttons'
 import {Flex} from '@instructure/ui-flex'
 import {IconXLine} from '@instructure/ui-icons'
 import {View} from '@instructure/ui-view'
-import {Heading} from '@instructure/ui-heading'
 import {Responsive} from '@instructure/ui-responsive'
-
+import {Heading} from '@instructure/ui-heading'
 import CanvasDateInput2 from '@canvas/datetime/react/components/DateInput2'
 import {useScope as createI18nScope} from '@canvas/i18n'
 import useDateTimeFormat from '@canvas/use-date-time-format-hook'
 
 import {artifactTypeOptions, issueTypeOptions, stateOptions} from '../../../constants'
 import {AppliedFilter, FilterOption, Filters} from '../../../../../shared/react/types'
-import {getFilters} from '../../../utils'
+import {useDateFormatPattern} from '../../../../../shared/react/hooks/useDateFormatPattern'
+import {getAppliedFilters, getFilters} from '../../../utils'
 import {responsiveQuerySizes} from '@canvas/breakpoints'
 import FilterCheckboxGroup from './FilterCheckboxGroup'
 import AppliedFilters from './AppliedFilters'
 import CustomToggleGroup from './CustomToggleGroup'
+import {Alert} from '@instructure/ui-alerts'
+import getLiveRegion from '@canvas/instui-bindings/react/liveRegion'
+import {useAccessibilityScansStore} from '../../../../../shared/react/stores/AccessibilityScansStore'
 
 const I18n = createI18nScope('accessibility_checker')
 
@@ -59,8 +61,38 @@ const FiltersPanel: React.FC<FiltersPanelProps> = ({
   const [fromDate, setFromDate] = useState<FilterOption | null>(null)
   const [toDate, setToDate] = useState<FilterOption | null>(null)
   const [filterCount, setFilterCount] = useState(0)
+  const [alertMessage, setAlertMessage] = useState<string | null>(null)
+  const [toDateError, setToDateError] = useState<Array<{type: 'error'; text: string}>>([])
+  const toggleButtonRef = React.useRef<CustomToggleGroup | null>(null)
+
+  const additionalResourcesEnabled = useAccessibilityScansStore(
+    state => state.additionalResourcesEnabled,
+  )
+
+  const filteredArtifactTypeOptions = useMemo(() => {
+    return artifactTypeOptions.filter(
+      option => !option.requiresFeatureFlag || additionalResourcesEnabled,
+    )
+  }, [additionalResourcesEnabled])
 
   const dateFormatter = useDateTimeFormat('date.formats.medium_with_weekday')
+  const dateFormatHint = useDateFormatPattern()
+
+  const getDisabledDatesForFromDate = useCallback(
+    (isoDate: string) => {
+      if (!toDate?.value) return false
+      return new Date(isoDate) > new Date(toDate.value)
+    },
+    [toDate],
+  )
+
+  const getDisabledDatesForToDate = useCallback(
+    (isoDate: string) => {
+      if (!fromDate?.value) return false
+      return new Date(isoDate) < new Date(fromDate.value)
+    },
+    [fromDate],
+  )
 
   useEffect(() => {
     const filters = getFilters(appliedFilters)
@@ -72,6 +104,16 @@ const FiltersPanel: React.FC<FiltersPanelProps> = ({
     setFilterCount(appliedFilters.length)
   }, [appliedFilters])
 
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      if (alertMessage !== null) {
+        setAlertMessage(null)
+      }
+    }, 3000)
+
+    return () => clearTimeout(timeout)
+  }, [alertMessage, setAlertMessage])
+
   const getFilterSelections = useCallback((): Filters => {
     return {
       ruleTypes: selectedIssues,
@@ -82,6 +124,22 @@ const FiltersPanel: React.FC<FiltersPanelProps> = ({
     }
   }, [fromDate, toDate, selectedArtifactType, selectedIssues, selectedState])
 
+  const handleFilterChange = useCallback(
+    (filters: Filters | null) => {
+      onFilterChange(filters)
+
+      const appliedFilters = getAppliedFilters(filters || {})
+
+      const msg =
+        appliedFilters.length > 0
+          ? I18n.t('Filter updated. Showing matching resources.')
+          : I18n.t('Filters cleared. Showing all resources.')
+
+      setTimeout(() => setAlertMessage(msg), 3000)
+    },
+    [onFilterChange],
+  )
+
   const handleReset = useCallback(() => {
     setSelectedIssues([{label: 'all', value: 'all'}])
     setSelectedArtifactType([{label: 'all', value: 'all'}])
@@ -89,20 +147,41 @@ const FiltersPanel: React.FC<FiltersPanelProps> = ({
     setFromDate(null)
     setToDate(null)
     setFilterCount(0)
-    onFilterChange(null)
+    handleFilterChange(null)
     setIsOpen(false)
-  }, [onFilterChange])
+  }, [handleFilterChange])
 
   const handleApply = useCallback(() => {
+    if (fromDate?.value && toDate?.value) {
+      const from = new Date(fromDate.value)
+      const to = new Date(toDate.value)
+
+      if (from > to) {
+        setToDateError([
+          {
+            type: 'error',
+            text: I18n.t('End date must be after the start date.'),
+          },
+        ])
+        return
+      }
+    }
+
+    setToDateError([])
+
     const filters = getFilterSelections()
     setFilterCount(appliedFilters.length)
-    onFilterChange(filters)
+    handleFilterChange(filters)
     setIsOpen(false)
-  }, [appliedFilters, onFilterChange, getFilterSelections])
+    toggleButtonRef.current?.focus()
+  }, [fromDate, toDate, appliedFilters, handleFilterChange, getFilterSelections])
 
   const handleDateChange = useCallback(
     (dateFieldId: 'fromDate' | 'toDate') => (date: Date | null) => {
       const setDate = dateFieldId === 'fromDate' ? setFromDate : setToDate
+
+      setToDateError([])
+
       if (!date) {
         setDate(null)
         return
@@ -131,37 +210,57 @@ const FiltersPanel: React.FC<FiltersPanelProps> = ({
         size="small"
         border={false}
         toggleLabel={I18n.t('Filter resources')}
+        ref={e => (toggleButtonRef.current = e)}
         summary={
-          <Flex gap="small">
-            <Flex.Item shouldGrow={false} shouldShrink={false}>
-              <Heading level="h2" variant="label">
-                {I18n.t('Filter resources')}
-              </Heading>
-            </Flex.Item>
-            <Flex.Item shouldGrow={true} shouldShrink={true}>
-              <AppliedFilters appliedFilters={appliedFilters} setFilters={onFilterChange} />
-            </Flex.Item>
-            {filterCount > 0 && (
-              <Flex.Item shouldGrow={false} shouldShrink={false}>
-                <Button
-                  data-testid="clear-filters-button"
-                  size={isOpen ? 'medium' : 'small'}
-                  onClick={handleReset}
-                  renderIcon={<IconXLine />}
-                  color="secondary"
-                >
-                  {I18n.t('Clear filters')}
-                </Button>
-              </Flex.Item>
-            )}
-            {isOpen && (
-              <Flex.Item shouldGrow={false} shouldShrink={false}>
-                <Button data-testid="apply-filters-button" onClick={handleApply} color="primary">
-                  {I18n.t('Apply filters')}
-                </Button>
-              </Flex.Item>
-            )}
-          </Flex>
+          <Responsive
+            match="media"
+            query={responsiveQuerySizes({tablet: true, desktop: true})}
+            props={{
+              tablet: {
+                showTags: false,
+                buttonText:
+                  filterCount === 1
+                    ? I18n.t('Clear 1 filter')
+                    : I18n.t('Clear %{count} filters', {count: filterCount}),
+                wrap: 'wrap',
+              },
+              desktop: {showTags: true, buttonText: I18n.t('Clear filters'), wrap: 'no-wrap'},
+            }}
+            render={props => {
+              if (!props) return null
+              return (
+                <Flex gap="small" alignItems="start" wrap={props.wrap}>
+                  <Flex.Item shouldGrow={!props.showTags} shouldShrink={false}>
+                    <Heading level="h2" variant="label" margin="small 0">
+                      {I18n.t('Filter resources')}
+                    </Heading>
+                  </Flex.Item>
+                  {props.showTags && (
+                    <Flex.Item shouldGrow={true} shouldShrink={true}>
+                      <AppliedFilters
+                        appliedFilters={appliedFilters}
+                        setFilters={handleFilterChange}
+                      />
+                    </Flex.Item>
+                  )}
+                  {filterCount > 0 && (
+                    <Flex.Item shouldGrow={false} shouldShrink={false}>
+                      <Button
+                        data-testid="clear-filters-button"
+                        size="small"
+                        onClick={handleReset}
+                        renderIcon={<IconXLine />}
+                        color="secondary"
+                        margin="x-small 0 0 0"
+                      >
+                        {props.buttonText}
+                      </Button>
+                    </Flex.Item>
+                  )}
+                </Flex>
+              )
+            }}
+          />
         }
         onToggle={handleToggle}
         expanded={isOpen}
@@ -170,99 +269,145 @@ const FiltersPanel: React.FC<FiltersPanelProps> = ({
           match="media"
           query={responsiveQuerySizes({tablet: true, desktop: true})}
           props={{
-            tablet: {outerDirection: 'column', checkboxDirection: 'column'},
+            tablet: {outerDirection: 'column', checkboxDirection: 'row'},
             desktop: {outerDirection: 'row', checkboxDirection: 'row'},
           }}
           render={props => {
             if (!props) return null
             return (
-              <Flex
-                as="div"
-                direction={props.outerDirection}
-                gap="medium"
-                wrap="wrap"
-                alignItems="start"
-                padding="x-small"
-              >
-                {/* Date inputs group - always vertical */}
-                <Flex.Item height="auto" overflowY="visible">
-                  <Flex direction="column" gap="medium">
-                    <Flex.Item overflowY="visible" height="auto">
-                      <CanvasDateInput2
-                        placeholder={I18n.t('From')}
-                        width="100%"
-                        selectedDate={fromDate?.value ?? null}
-                        formatDate={dateFormatter}
-                        interaction="enabled"
-                        renderLabel={I18n.t('Last edited from')}
-                        screenReaderLabels={{
-                          calendarIcon: I18n.t('Choose a date for Last edited from'),
-                        }}
-                        onSelectedDateChange={handleDateChange('fromDate')}
-                      />
-                    </Flex.Item>
-                    <Flex.Item overflowY="visible" height="auto">
-                      <CanvasDateInput2
-                        placeholder={I18n.t('To')}
-                        width="100%"
-                        selectedDate={toDate?.value ?? null}
-                        interaction="enabled"
-                        formatDate={dateFormatter}
-                        renderLabel={I18n.t('Last edited to')}
-                        screenReaderLabels={{
-                          calendarIcon: I18n.t('Choose a date for Last edited to'),
-                        }}
-                        onSelectedDateChange={handleDateChange('toDate')}
-                      />
-                    </Flex.Item>
-                  </Flex>
-                </Flex.Item>
+              <>
+                <Flex
+                  as="div"
+                  direction={props.outerDirection}
+                  gap="medium"
+                  wrap="wrap"
+                  alignItems="start"
+                  padding="x-small"
+                >
+                  {/* Date inputs group - always vertical */}
+                  <Flex.Item height="auto" overflowY="visible">
+                    <Flex direction="column" gap="medium">
+                      <Flex.Item overflowY="visible" height="auto">
+                        <CanvasDateInput2
+                          placeholder={I18n.t('From')}
+                          messages={[
+                            {
+                              type: 'hint',
+                              text: I18n.t('Expected format: %{date_format}', {
+                                date_format: dateFormatHint,
+                              }),
+                            },
+                          ]}
+                          width="100%"
+                          selectedDate={fromDate?.value ?? null}
+                          formatDate={dateFormatter}
+                          interaction="enabled"
+                          renderLabel={I18n.t('Last edited from')}
+                          screenReaderLabels={{
+                            calendarIcon: I18n.t('Choose a date for Last edited from'),
+                          }}
+                          onSelectedDateChange={handleDateChange('fromDate')}
+                          disabledDates={getDisabledDatesForFromDate}
+                        />
+                      </Flex.Item>
+                      <Flex.Item overflowY="visible" height="auto">
+                        <CanvasDateInput2
+                          placeholder={I18n.t('To')}
+                          messages={[
+                            {
+                              type: 'hint',
+                              text: I18n.t('Expected format: %{date_format}', {
+                                date_format: dateFormatHint,
+                              }),
+                            },
+                            ...toDateError,
+                          ]}
+                          width="100%"
+                          selectedDate={toDate?.value ?? null}
+                          interaction="enabled"
+                          formatDate={dateFormatter}
+                          renderLabel={I18n.t('Last edited to')}
+                          screenReaderLabels={{
+                            calendarIcon: I18n.t('Choose a date for Last edited to'),
+                          }}
+                          onSelectedDateChange={handleDateChange('toDate')}
+                          disabledDates={getDisabledDatesForToDate}
+                        />
+                      </Flex.Item>
+                    </Flex>
+                  </Flex.Item>
 
-                {/* Checkbox group - responsive direction */}
-                <Flex.Item shouldGrow height="auto">
-                  <Flex
-                    direction={props.checkboxDirection}
-                    gap="medium"
-                    wrap="wrap"
-                    alignItems="start"
-                  >
-                    <Flex.Item>
-                      <FilterCheckboxGroup
-                        data-testid="resource-type-checkbox-group"
-                        name="resource-type-checkbox-group"
-                        description={I18n.t('Resource type')}
-                        options={artifactTypeOptions}
-                        selected={selectedArtifactType}
-                        onUpdate={setSelectedArtifactType}
-                      />
-                    </Flex.Item>
-                    <Flex.Item>
-                      <FilterCheckboxGroup
-                        data-testid="state-checkbox-group"
-                        name="state-checkbox-group"
-                        description={I18n.t('State')}
-                        options={stateOptions}
-                        selected={selectedState}
-                        onUpdate={setSelectedState}
-                      />
-                    </Flex.Item>
-                    <Flex.Item>
-                      <FilterCheckboxGroup
-                        data-testid="issue-type-checkbox-group"
-                        name="issue-type-checkbox-group"
-                        description={I18n.t('With issues of')}
-                        options={issueTypeOptions}
-                        selected={selectedIssues}
-                        onUpdate={setSelectedIssues}
-                      />
-                    </Flex.Item>
-                  </Flex>
-                </Flex.Item>
-              </Flex>
+                  {/* Checkbox group - responsive direction */}
+                  <Flex.Item shouldGrow height="auto">
+                    <Flex
+                      direction={props.checkboxDirection}
+                      gap="medium"
+                      wrap="wrap"
+                      alignItems="start"
+                    >
+                      <Flex.Item>
+                        <FilterCheckboxGroup
+                          data-testid="resource-type-checkbox-group"
+                          name="resource-type-checkbox-group"
+                          description={I18n.t('Resource type')}
+                          options={filteredArtifactTypeOptions}
+                          selected={selectedArtifactType}
+                          onUpdate={setSelectedArtifactType}
+                        />
+                      </Flex.Item>
+                      <Flex.Item>
+                        <FilterCheckboxGroup
+                          data-testid="state-checkbox-group"
+                          name="state-checkbox-group"
+                          description={I18n.t('State')}
+                          options={stateOptions}
+                          selected={selectedState}
+                          onUpdate={setSelectedState}
+                        />
+                      </Flex.Item>
+                      <Flex.Item>
+                        <FilterCheckboxGroup
+                          data-testid="issue-type-checkbox-group"
+                          name="issue-type-checkbox-group"
+                          description={I18n.t('With issues of')}
+                          options={issueTypeOptions}
+                          selected={selectedIssues}
+                          onUpdate={setSelectedIssues}
+                        />
+                      </Flex.Item>
+                    </Flex>
+                  </Flex.Item>
+                </Flex>
+
+                {/* Apply filters button - separate Flex */}
+                <Flex direction="row" justifyItems="end" padding="x-small">
+                  <Flex.Item>
+                    <Button
+                      data-testid="apply-filters-button"
+                      data-pendo="apply-filters-button"
+                      size="medium"
+                      onClick={handleApply}
+                      color="primary"
+                    >
+                      {I18n.t('Apply filters')}
+                    </Button>
+                  </Flex.Item>
+                </Flex>
+              </>
             )
           }}
         />
       </CustomToggleGroup>
+      {alertMessage && (
+        <Alert
+          liveRegion={getLiveRegion}
+          liveRegionPoliteness="assertive"
+          isLiveRegionAtomic
+          screenReaderOnly
+        >
+          {alertMessage}
+        </Alert>
+      )}
     </View>
   )
 }

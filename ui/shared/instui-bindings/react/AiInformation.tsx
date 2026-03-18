@@ -104,6 +104,8 @@ export default function CanvasAiInformation(props: Props) {
   const data = [
     {
       featureName: props.featureName,
+      privacyNoticeText: I18n.t('Privacy Notice'),
+      privacyNoticeUrl: 'https://www.instructure.com/policies/privacy',
       permissionLevelText: I18n.t('Permission Level'),
       permissionLevel: permissionLevel.level,
       description: permissionLevel.description,
@@ -125,7 +127,7 @@ export default function CanvasAiInformation(props: Props) {
             'The foundational AI on which further training and customizations are built.',
           ),
           value: props.modelName,
-          valueDescription: props.modelDescription,
+          ...(props.modelDescription && {valueDescription: props.modelDescription}),
         },
         {
           segmentTitle: I18n.t('Trained with User Data'),
@@ -140,7 +142,9 @@ export default function CanvasAiInformation(props: Props) {
             'Indicates which training or operational content was given to the model.',
           ),
           value: props.dataSharedWithModel,
-          valueDescription: props.dataSharedWithModelDescription,
+          ...(props.dataSharedWithModelDescription && {
+            valueDescription: props.dataSharedWithModelDescription,
+          }),
         },
       ],
     },
@@ -170,7 +174,7 @@ export default function CanvasAiInformation(props: Props) {
           segmentTitle: I18n.t('PII'),
           description: I18n.t('Sensitive data that can be used to identify an individual.'),
           value: props.isPIIExposed ? I18n.t('Exposed') : I18n.t('Not Exposed'),
-          valueDescription: props.isPIIExposedDescription,
+          ...(props.isPIIExposedDescription && {valueDescription: props.isPIIExposedDescription}),
         },
       ],
     },
@@ -192,7 +196,7 @@ export default function CanvasAiInformation(props: Props) {
           description: I18n.t(
             'Preventative safety mechanisms or limitations built into the AI model.',
           ),
-          value: props.guardrails,
+          value: props.guardrails ?? '',
         },
         {
           segmentTitle: I18n.t('Expected Risks'),

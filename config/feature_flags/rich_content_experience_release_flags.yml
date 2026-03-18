@@ -203,6 +203,19 @@ media_links_use_attachment_id:
     development:
       state: allowed_on
 
+mcc_specific_error_message:
+  state: hidden
+  applies_to: SiteAdmin
+  display_name: 'Manually Created Courses Error Message'
+  description: |-
+    When enabled, provides a specific error message when users try to create or copy
+    a course in a restricted account and should use the Manually Created Courses sub-account instead.
+  environments:
+    ci:
+      state: allowed_on
+    development:
+      state: allowed_on
+
 permanent_page_links:
   state: hidden
   display_name: 'Permanent Page Links'
@@ -231,6 +244,13 @@ rce_a11y_resize:
   description: |-
     Enable the Rich Content Editor to resize editor's size in a way that is accessible.
     This will allow users to resize editor without losing accessibility features.
+
+rce_asr_captioning_improvements:
+  state: hidden
+  applies_to: SiteAdmin
+  display_name: RCE ASR Captioning Improvements
+  description: |-
+    Enable RCE ASR Captioning improvements to embedded content from Media Tray.
 
 rce_studio_embed_improvements:
   state: hidden
@@ -341,26 +361,51 @@ youtube_overlay:
 a11y_checker:
   applies_to: Account
   state: hidden
-  display_name: Accessibility Checker
+  display_name: Accessibility Checker Account EAP enabler
   description: |-
-    Enable the new Accessibility Checker.
+    Course level content accessibility report and remediation wizard.
   shadow: true
 
 a11y_checker_eap:
   applies_to: Course
   state: allowed
-  display_name: Accessibility Checker EAP
+  display_name: Accessibility Checker EAP 2
   description: |-
-    Enable the new Accessibility Checker in EAP. The flag is allowed only for root account admins.
+    Enable the new Accessibility Checker in EAP. The flag is allowed only for Account Admins.
   visible_on: a11y_checker_flag_enabled
   custom_transition_proc: only_admins_can_enable_a11y_checker_during_eap
 
-a11y_checker_ai_generation:
+a11y_checker_ai_alt_text_generation:
   applies_to: SiteAdmin
   state: hidden
-  display_name: Accessibility Checker AI Generation
+  display_name: Accessibility Checker AI Alt Text Generation
   description: |-
-    If enabled, the AI feature for generating text for the relevant rule such as alt text missing, table captions missing is displayed at the wizard.
+    If enabled, the AI feature for generating missing alt text will be displayed in the wizard.
+  shadow: true
+
+a11y_checker_ai_table_caption_generation:
+  applies_to: SiteAdmin
+  state: hidden
+  display_name: Accessibility Checker AI Table Caption Generation
+  description: |-
+    If enabled, the AI feature for generating missing table captions is displayed in the wizard.
+  shadow: true
+
+a11y_checker_additional_resources:
+  applies_to: SiteAdmin
+  state: hidden
+  display_name: Accessibility Checker Additional Resources
+  description: |-
+    If enabled, the Accessibility checker will include additional resources during the course scan. It will include Announcements, Discussion Topics (Graded and Ungraded) and Syllabus.
+  shadow: true
+
+a11y_checker_close_issues:
+  applies_to: SiteAdmin
+  state: hidden
+  display_name: |-
+    Accessibility Checker: closing remediation
+  description: |-
+    Enable closing accessibility remediation on individual resources in the Course Accessibility Checker, excluding any remaining errors on them from statistics.
   shadow: true
 
 ux_list_concluded_courses_in_bp:
@@ -383,3 +428,26 @@ fix_bp_folder_unsynced_issue:
     When Folders get synchronised during BP sync, do not update the original Folder with cloned_item_id to trigger 'Unsynced Changes'
   applies_to: SiteAdmin
   shadow: true
+
+a11y_checker_account_statistics:
+  applies_to: SiteAdmin
+  state: hidden
+  display_name: Accessibility Checker Account Statistics
+  description: |-
+    If enabled, the a11y statistics will start calculate on accounts where a11y_checker FF is enabled.
+  shadow: true
+
+a11y_checker_course_scan_conditional_resource_scan:
+  applies_to: SiteAdmin
+  state: hidden
+  display_name: Accessibility Checker Course Scan Conditional Resource Scan
+  description: |-
+    During a11y checker course scan, if enabled, resources will only be scanned if they have been updated since the last scan. When disabled, all resources within a course will be scanned regardless of update timestamps.
+  shadow: true
+
+a11y_checker_ga1:
+  applies_to: Account
+  state: hidden
+  display_name: Accessibility Checker
+  description: |-
+    Enable the new Accessibility Checker.

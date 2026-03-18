@@ -19,13 +19,12 @@
 import {useScope as createI18nScope} from '@canvas/i18n'
 import $ from 'jquery'
 import setDefaultGradeDialogTemplate from '../jst/SetDefaultGradeDialog.handlebars'
-import {isString, values, filter, chain, includes} from 'lodash'
+import {isString, values, filter, includes, uniqBy} from 'es-toolkit/compat'
 import '@canvas/jquery/jquery.disableWhileLoading'
 import '@canvas/jquery/jquery.instructure_forms'
 import 'jqueryui/dialog'
 import '@canvas/jquery/jquery.instructure_misc_plugins'
 import 'jquery-tinypubsub'
-import '@canvas/util/jquery/fixDialogButtons'
 import React from 'react'
 import {createRoot} from 'react-dom/client'
 import {windowAlert} from '@canvas/util/globalUtils'
@@ -203,7 +202,7 @@ SetDefaultGradeDialog.prototype.show = function (onClose) {
   })(this)
   getParams = (function (_this) {
     return function (page, grade) {
-      return chain(page)
+      const pairs = page
         .map(function (s) {
           const prefix = 'submissions[submission_' + s.id + ']'
           const params = [
@@ -218,9 +217,8 @@ SetDefaultGradeDialog.prototype.show = function (onClose) {
           }
           return params
         })
-        .flatten()
-        .fromPairs()
-        .value()
+        .flat()
+      return Object.fromEntries(pairs)
     }
   })(this)
 
@@ -251,25 +249,13 @@ SetDefaultGradeDialog.prototype.show = function (onClose) {
   // # return all submission in a group assignment leading to duplicates
   return (getSubmissions = (function (_this) {
     return function (responses) {
-      return chain(responses)
+      const submissions = responses
         .map(function (arg) {
-          let s
           const response = arg[0]
-          return [
-            (function () {
-              let i, len
-              const results = []
-              for (i = 0, len = response.length; i < len; i++) {
-                s = response[i]
-                results.push(s.submission)
-              }
-              return results
-            })(),
-          ]
+          return response.map(s => s.submission)
         })
-        .flattenDeep()
-        .uniqBy('id')
-        .value()
+        .flat()
+      return uniqBy(submissions, item => item.id)
     }
   })(this))
 }

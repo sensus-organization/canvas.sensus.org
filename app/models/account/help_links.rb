@@ -18,6 +18,8 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
 class Account::HelpLinks
+  USER_TYPES = %w[user student teacher admin observer unenrolled].freeze
+
   attr_reader :account
 
   def initialize(account)
@@ -29,7 +31,7 @@ class Account::HelpLinks
       {
         available_to: ["student"],
         text: -> { I18n.t("#help_dialog.instructor_question", "Ask Your Instructor a Question") },
-        subtext: -> { I18n.t("#help_dialog.instructor_question_sub", "Questions are submitted to your instructor") },
+        subtext: -> { I18n.t("#help_dialog.instructor_question_sub", "Questions are submitted to your instructor.") },
         url: "#teacher_feedback",
         type: "default",
         id: :instructor_question,
@@ -40,7 +42,7 @@ class Account::HelpLinks
       {
         available_to: %w[user student teacher admin observer unenrolled],
         text: -> { I18n.t("#help_dialog.search_the_canvas_guides", "Search the Canvas Guides") },
-        subtext: -> { I18n.t("#help_dialog.canvas_help_sub", "Find answers to common questions") },
+        subtext: -> { I18n.t("#help_dialog.canvas_help_sub", "Find answers to common questions.") },
         url: I18n.t(:"community.guides_home"),
         type: "default",
         id: :search_the_canvas_guides,
@@ -51,7 +53,7 @@ class Account::HelpLinks
       {
         available_to: %w[user student teacher admin observer unenrolled],
         text: -> { I18n.t("#help_dialog.report_problem", "Report a Problem") },
-        subtext: -> { I18n.t("#help_dialog.report_problem_sub", "If Canvas misbehaves, tell us about it") },
+        subtext: -> { I18n.t("#help_dialog.report_problem_sub", "If Canvas misbehaves, tell us about it.") },
         url: "#create_ticket",
         type: "default",
         id: :report_a_problem,
@@ -65,7 +67,7 @@ class Account::HelpLinks
       defaults << {
         available_to: %w[user student teacher admin observer unenrolled],
         text: -> { I18n.t("#help_dialog.ada_chatbot", "Ask Panda Bot") },
-        subtext: -> { I18n.t("#help_dialog.ada_chatbot_sub", "Get instant help from our Virtual Assistant") },
+        subtext: -> { I18n.t("#help_dialog.ada_chatbot_sub", "Get instant help from our Virtual Assistant.") },
         url: "#ada_chatbot",
         type: "default",
         id: :ada_chatbot,
@@ -128,6 +130,7 @@ class Account::HelpLinks
     links.each do |link|
       link[:is_featured] = Canvas::Plugin.value_to_boolean(link[:is_featured])
       link[:is_new] = Canvas::Plugin.value_to_boolean(link[:is_new])
+      link[:available_to] = link[:available_to] & USER_TYPES if link[:available_to].is_a?(Array)
     end
 
     links.map do |link|

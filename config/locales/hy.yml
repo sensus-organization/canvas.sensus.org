@@ -439,7 +439,9 @@ hy:
     report_header_term_id: "ժամանակահատվածի id"
     report_header_term_sis: "ժամանակահատվածի sis"
     report_header_token_hint: "token hint"
+    report_header_token_id: նույնականացուցիչ
     report_header_token_last_used: "Օգտագործվել է վերջին անգամ"
+    report_header_token_status: կարգավիճակ
     report_header_user__id: օգտատիրոջ_նույնականացուցիչ
     report_header_user_id: "օգտատիրոջ նույնականացուցիչ"
     report_header_user_name: "օգտատիրոջ անուն"
@@ -1752,6 +1754,7 @@ hy:
       recipients_required: "Առնվազն մեկ ստացող է պահանջվում"
       threshold_should_be_numeric: "Սա պետք է դրական թիվ լինի"
   alerts_6b871b71: Զգուշացումներ
+  aligned_outcomes_d0a0c159: "Համապատասխանեցված արդյունքներ"
   all_4321c3a1: Բոլորը
   all_account_types_e83c1516: "Բոլոր տեսակի հաշիվներ"
   all_accounts_3bafc860: "Բոլոր հաշիվներ"
@@ -2912,6 +2915,7 @@ hy:
   big_blue_button_conference: 
     recording_setting: Ձայնագրում
     recording_setting_enabled_description: "Միացնել այս կոնֆերանսի ձայնագրման ֆունկցիան"
+  bio_a519d807: "Կենսագրական տվյալներ"
   blackboard: 
     no_manifest: "Blackboard համակարգի zip արխիվը արմատային կատալոգում չունի imsmanifest.xml ֆայլ:"
   blue_daf8fea9: Կապույտ
@@ -3565,6 +3569,8 @@ hy:
   close_d634289d: Փակել
   close_for_comments_37783f56: "Փակ է մեկնաբանությունների համար"
   close_for_comments_ce0e5d00: "Մեկնաբանությունների համար փակել"
+  close_rubric_a0fc8166: "Փակել ռուբրիկը"
+  closed_983a96fe: "Փակված է"
   closed_for_comments_e395b42f: "Փակ է մեկնաբանությունների համար"
   collaboration: 
     default_title: "Առանց անվանման համատեղ աշխատանք"
@@ -3858,6 +3864,7 @@ hy:
   confirmation_code_required_22984955: "Հաստատման ծածկագիր (պարտադիր է)"
   confirmation_failed_please_try_again_ae566d37: "Չհաջողվեց հաստատել: Փորձեք կրկին:"
   confirming_2df4b68f: "Հաստատում է..."
+  confirming_course_name_5a509f48: "%{course_name} հաստատում... "
   consumer_key_57d9fcf1: "Օգտատիրոջ բանալի"
   consumer_key_6f94ba11: "Օգտատիրոջ բանալի"
   content_exports: 
@@ -4854,6 +4861,7 @@ hy:
   course_home_4c4c0107: "Դասընթացի սկիզբ"
   course_home_sub_navigation_b1ee6b03: "Դասընթացի հիմնական էջի ենթանավարկման ֆունկցիա"
   course_id_8bd2a21c: "Դասընթացի նույնականացուցիչ"
+  course_id_course_id_2841413a: "\"%{course_id}\" դասընթացի նույնականացուցիչ"
   course_id_f8640bb8: "դասընթացի նույնականացուցիչ"
   course_implemented_apps_fa658f5a: "Դասընթացի իրականացված հավելվածները"
   course_list: 
@@ -4937,8 +4945,16 @@ hy:
   course_name_45175338: "դասընթացի անվանում"
   course_name_63b973d1: "Դասընթացի անվանում"
   course_name_is_required_90919349: "Դասընթացի անվանումը պարտադիր է "
+  course_name_not_authorized_for_cross_listing_353e500f: "%{course_name}-ի խաչաձև ցուցակներում ընդգրկումը թույլատրված չէ"
   course_name_successfully_added_48116a50: "%{course_name} դասընթացը հաջողությամբ ավելացվել է:"
   course_navigation_dd035109: "Նավարկում դասընթացում"
+  course_navigation_settings: 
+    buttons: 
+      save: Պահպանել
+    drag_details: "Էջերի մեծ մասի անջատման արդյունքում այդ էջերը այցելած ունկնդիրները համար կբացվի դասընթացի հիմնական էջը: "
+    drag_to_hide: "Քաշելով տեղափոխեք տարրերն այստեղ՝ ունկնդիրներից դրանք թաքցնելու համար: "
+    help: 
+      edit_navigation: "Դասընթացի նավարկման մեջ տարրերի վերադասավորման համար անհրաժեշտ է քաշել եւ տեղափոխել դրանք: "
   course_outcomes_7dc1cbc7: "Դասընթացի արդյունքներ"
   course_pages_449f1dd4: "Դասընթացի էջեր"
   course_people_3058c948: "Դասընթացն անցնող մարդիկ"
@@ -5162,6 +5178,13 @@ hy:
       select_student: "Ընտրել ունկնդրին"
     links: 
       student_progress: "Դիտել կատարման ընթացքը"
+    navigation_form: 
+      drag_details: "Էջերի մեծ մասի անջատման արդյունքում այդ էջերը այցելած ունկնդիրները համար կբացվի դասընթացի հիմնական էջը: "
+      drag_to_hide: "Քաշելով տեղափոխեք տարրերն այստեղ՝ ունկնդիրներից դրանք թաքցնելու համար: "
+      help: 
+        edit_navigation: "Դասընթացի նավարկման մեջ տարրերի վերադասավորման համար անհրաժեշտ է քաշել եւ տեղափոխել դրանք: "
+      titles: 
+        edit_navigation: "Խմբագրել դասընթացում նավարկումը"
     notices: 
       backup_restored: "Պահուստային տարբերակը հաջողությամբ վերականգնվել է:"
       concluded: "Դասընթացը հաջողությամբ ավարտված է "
@@ -5567,6 +5590,9 @@ hy:
   creative_commons_license_725584ae: "\"Creative Commons\" լիցենզիա"
   criteria_9fac648: Չափանիշեր
   criterion_ratings_3eed22e2: "Վարկանիշերի չափանիշը"
+  cross_list_section_27801ec9: "Բաժինն ընդգրկել խաչաձև ցուցակում "
+  cross_list_this_section_889f7287: "Այս բաժինը ընդգրկել խաչաձև ցուցակում"
+  cross_list_this_section_90aea97f: "Այս բաժինը ընդգրկել խաչաձև ցուցակում"
   crowdsourced: true
   crumbs: 
     access_report: "Հասանելիության մասին հաշվետվություն"
@@ -7368,6 +7394,7 @@ hy:
   generate_44e33e72: Ստեղծել
   generate_epub_80e89ea4: "Գեներացնել ePub-ը"
   generate_token_393ab5b4: "Ստեղծել token"
+  generated_e71c6622: "Ստեղծված է"
   generated_f26ee56b: Գեներացված.
   generating_5b5e20f8: "Գեներացվում է."
   generating_c2aabc02: "Գեներացվում է..."
@@ -7412,6 +7439,7 @@ hy:
       warning: Նախազգուշացում
   grade_distribution_e52c9256: "Գնահատականների բաշխում"
   grade_export_title: "Գնահատականների արտահանում"
+  grade_f949a691: "%{grade}%"
   grade_grade_7e52dd1c: "Գնահատական՝  %{grade}"
   grade_summary: 
     graph_title: "Միջին %{mean}, բարձր %{high}, ցածր %{low}"
@@ -8522,6 +8550,7 @@ hy:
   hide_courses_without_enrollments_6df4dfad: "Թաքցնել գրանցում չունեցող դասընթացները"
   hide_e057ff36: Թաքցնել
   hide_notes_column_7749f408: "Թաքցնել նշումների սյունակը"
+  hide_rubric_27903c8: "Թաքցնել ռուբրիկը"
   hide_score_total_for_assessment_results_d0ef117f: "Անտեսանելի դարձնել ընդհանուր միավորները ստուգման արդյունքների համար"
   hide_student_names_3e59e862: "Թաքցնել ունկնդիրների անունները"
   high_score_267b6641: "Բարձր գնահատական"
@@ -11468,6 +11497,7 @@ hy:
   no_grade_assigned_90e531f5: "Նշանակված գնահատակններ չկան:"
   no_grading_schemes_to_display_8b0e92e7: "Ցուցադրման համար բացակայում են գնահատման սխեմաները"
   no_icon_1f6ea5f4: "պատկեր չկա"
+  no_items_20cde5bf: "Տարրերը բացակայում են:"
   no_items_found_870b2d0d: "Ոչինչ չի գտնվել"
   no_items_in_module_21f111a2: "Ոչ արարկա չկա  մոդուլում"
   no_marks_5e7d2b59: "Գնահատականներ չկան"
@@ -11496,12 +11526,14 @@ hy:
   not_a_number: "պետք է դրական թիվ լինի "
   not_all_sections_will_be_assigned_this_item_4e2b8eaa: "Այս տարրը կնշանակվի ոչ բոլոր բաժինների համար "
   not_available_487d3648: "Հասանելի չէ"
+  not_available_until_14e61f1e: "Հասանելի չէ մինչև "
   not_available_until_next_submission_2175158: "Հասանելի չէ մինչև հաջորդ հանձնարարության հանձնումը"
   not_completed_d70acea3: "Ավարտված չէ"
   not_deleted_2a7f63ef: "(Հեռացված չէ)"
   not_graded_e027c866: "Գնահատված չէ"
   not_installed_37a21a76: "Տեղադրված չէ"
   not_now_97efd947: "Ոչ հիմա"
+  not_yet_available_9aa23a77: "առայժմ հասանելի չէ"
   not_yet_completed_345a0bca: "Դեռեւս ավարտված չէ"
   not_yet_graded_8b655a7: "Դեռևս գնահատված չէ"
   note_length_cannot_exceed_maxlength_characters_82798b1: "Նշումը չի կարող գերազանցել %{maxLength} նիշը"
@@ -11896,6 +11928,7 @@ hy:
   options_3ab0ea65: Տարբերակներ
   or_a01eec62: ԿԱՄ
   or_ef4e808: կամ
+  or_enter_the_course_s_id_46e0792a: "Կամ մուտքագրել դասընթացի նույնականացուցիչը"
   orange_81386a62: Նարնջագույն
   orbis_report_header_assignment_id: "Հանձնարարության մուտքանուն"
   orbis_report_header_assignment_title: "հանձնարարության անվանում"
@@ -12683,6 +12716,7 @@ hy:
   primary_color_button_disabled_9081ddff: "Առաջնային գույնի կոճակը անջատվել է"
   priority_dd4381ee: Առաջնահերթություն
   privacy_290109ea: Գաղտնիություն
+  privacy_notice_7eff08fe: "Գաղտնիության նշում"
   privacy_policy_c68f482a: "Գաղտնիության պահպանման քաղաքականություն"
   private_copyrighted_3cac9686: "Մասնավոր (պաշտպանված է հեղինակային իրավունքով)"
   process_as_ui_changes_8e34ed2a: "Մշակվում են  որպես UI փոփոխություններ "
@@ -14547,6 +14581,7 @@ hy:
   range_name_90614433: "Դիապազոնի անվանումը"
   ratings_2433172b: Վարկանիշեր
   re_activate_user_f7d77c9a: "Կրկին ակտիվացնել օգտատիրոջ կարգավիճակը"
+  re_cross_list_this_section_faf7df4d: "Այս բաժինը կրկին ընդգրկել խաչաձև ցուցակում"
   re_send_confirmation_bcc66940: "Կրկին ուղարկել հաստատումը"
   re_sending_379a8580: "Կրկին ուղարկվում է..."
   re_submit_assignment_b3e2bd28: "Հանձնարարությունը կրկին ուղարկել"
@@ -15147,6 +15182,7 @@ hy:
   search_for_a_course_58fdc7a6: "Փնտրել դասընթացը"
   search_for_a_deleted_course_by_id_f553398d: "Հեռացված դասընթացի որոնում ըստ նույնականացուցչի"
   search_for_assignment_8149cb1: "Հանձնարարությունների որոնում"
+  search_for_course_e1a1dfc6: "Դասընթացի որոնում"
   search_for_files_7541fb28: "Որոնել ֆայլեր"
   search_for_people_by_id_or_name_36107593: "Մարդկանց որոնում ըստ նույնականացուցչի կամ անվան"
   search_groups_or_people_6c15d6ad: "Որոնել խմբեր կամ մարդկանց"
@@ -15188,6 +15224,7 @@ hy:
   section_name_is_too_long_9cec2a30: "Բաժնի անվանումը չափազանց երկար է"
   section_sis_id_6f989834: "sis բաժնի id"
   section_starts_at_65eaed1: "Բաժինը սկսվում է "
+  section_successfully_cross_listed_86eb2765: "Բաժինը հաջողությամբ ընդգրկված է խաչաձև ցուցակում:"
   section_successfully_de_cross_listed_df3b64e: "Բաժինը հաջողությամբ ջնջվել է խաչաձև ցուցակներից:"
   sections: 
     section_created: "Բաժինը հաջողությամբ ստեղծված է: "
@@ -15300,6 +15337,7 @@ hy:
   select_the_file_you_want_to_associate_with_this_mo_c88fcd46: "Ընտրեք այն ֆայլը, որը ցանկանում եք կապակցել կամ ավելացրեք ֆայլըն, ընտրելով \"Նոր ֆայլ\": "
   select_video_file_35b61d4e: "Ընտրել վիդեո ֆայլ"
   selected_answer: "Դուք ընտրել եք այս պատասխանը:"
+  selected_course_9bf57f33: "Ընտրված դասընթաց"
   selected_subtree_a7693937: "Ընտրված %{subtree}"
   self_enrollments: 
     already_enrolled: 
@@ -16326,6 +16364,7 @@ hy:
   starred_5a9efa8a: "Նշված է աստղիկով"
   start_5a4cfcd6: Սկսել
   start_a_new_course_57ae2480: "Սկսել նոր դասընթաց"
+  start_at_c29f35f1: Սկսել
   start_date_e937be8a: "Մեկնարկման ամսաթիվ"
   start_date_field_for_styleguide_8a8ab1d6: "Սկզբնական ամսաթվի դաշտը Էջերի ձեւավորման ուղեցույցի համար"
   start_from_a_template_380d4e8: "Սկսել շաբլոնից..."
@@ -16566,6 +16605,7 @@ hy:
       teachers_notified_of_comments: "Դասավանդողները և ուղարկողը կծանուցվեն բոլոր մեկնաբանությունների մասին: "
     show_preview: 
       anonymous_username: "Այս ունկնդիրը"
+      assignment_locked: "Այս հանձնարարությունը ներկայումս արգելափակված է:"
       discussion_submission_description: "Այս հանձնարարության հետ կապված ուղարկված աշխատանքները  տեղադրված են հանձնարարության քննարկման մեջ: Ստորև բերված են %{user}-ի համար քննարկումները կամ էլ դուք կարող եք *դիտել ամբողջ քննարկումը*: "
       discussion_submission_description_without_link: "Այս հանձնարարության հետ կապված ուղարկված աշխատանքները  տեղադրված են հանձնարարության քննարկման մեջ: Ստորև բերված են %{user}-ի համար քննարկումները: "
       entry_no_image: "Հիշեք, որ այս էջը կարող է փոխված լինել սկզբնական ուղարկման օրվանից: "

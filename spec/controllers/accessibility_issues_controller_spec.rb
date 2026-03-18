@@ -38,27 +38,6 @@ describe AccessibilityIssuesController do
     allow_any_instance_of(described_class).to receive(:check_authorized_action).and_return(true)
   end
 
-  describe "GET #show" do
-    render_views
-    before do
-      allow(controller).to receive(:js_bundle)
-      get :show, params: { course_id: course.id, id: issue.id }
-    end
-
-    it "returns a 200 status" do
-      expect(response).to have_http_status(:ok)
-    end
-
-    it "renders the accessibility issues page container" do
-      expect(response.body).to include('<div id="accessibility-issues-page-container"')
-    end
-
-    it "includes the correct data attributes" do
-      expect(response.body).to include("data-course-id=\"#{course.id}\"")
-      expect(response.body).to include("data-issue-id=\"#{issue.id}\"")
-    end
-  end
-
   describe "PATCH #update" do
     context "when issue cannot be found" do
       before do
@@ -191,6 +170,39 @@ describe AccessibilityIssuesController do
         end
       end
 
+      context "when value is nil for ImgAltFilenameRule" do
+        let(:img_wiki_page) do
+          wiki_page_model(course:, title: "Image Wiki Page", body: "<div><img src='test.jpg' alt='test.jpg' /></div>")
+        end
+        let(:img_scan) { accessibility_resource_scan_model(course:, context: img_wiki_page, issue_count: 1) }
+        let(:img_issue) do
+          accessibility_issue_model(
+            course:,
+            accessibility_resource_scan: img_scan,
+            rule_type: Accessibility::Rules::ImgAltFilenameRule.id,
+            node_path: ".//img"
+          )
+        end
+
+        before do
+          patch :update,
+                params: {
+                  course_id: course.id,
+                  id: img_issue.id
+                },
+                body: { workflow_state: "resolved", value: nil }.to_json,
+                as: :json
+        end
+
+        it "updates the workflow_state" do
+          expect(img_issue.reload.workflow_state).to eq "resolved"
+        end
+
+        it "returns a no content status" do
+          expect(response).to have_http_status(:no_content)
+        end
+      end
+
       context "when value is provided" do
         context "when applying the fix fails" do
           before do
@@ -220,7 +232,7 @@ describe AccessibilityIssuesController do
                     course_id: course.id,
                     id: issue.id,
                     workflow_state: "resolved",
-                    value: "Change it to Heading 2"
+                    value: "Change heading level to Heading 2"
                   },
                   format: :json
           end
@@ -236,6 +248,34 @@ describe AccessibilityIssuesController do
           it "updates the issue count" do
             expect(scan.reload.issue_count).to eq 0
           end
+        end
+      end
+
+      context "with linked files, no user (happens after content migration), and no attachment associations" do
+        before do
+          user_session(@teacher)
+        end
+
+        let(:attachment) { attachment_model(context: course, uploaded_data: fixture_file_upload("cn_image.jpg")) }
+        let(:img_wiki_page) do
+          body = <<~HTML
+            <div><img src='/courses/#{course.id}/files/#{attachment.id}/preview' /></div>
+          HTML
+          wiki_page_model(course:, title: "Image Wiki Page", body:, skip_attachment_association_update: true)
+        end
+        let(:img_scan) { accessibility_resource_scan_model(course:, context: img_wiki_page, issue_count: 1) }
+        let(:img_issue) do
+          accessibility_issue_model(
+            course:,
+            accessibility_resource_scan: img_scan,
+            rule_type: Accessibility::Rules::ImgAltFilenameRule.id,
+            node_path: ".//img"
+          )
+        end
+
+        it "successfully applies the fix" do
+          patch :update, params: { course_id: course.id, id: img_issue.id }, body: { workflow_state: "resolved", value: nil }.to_json, as: :json
+          expect(response).to have_http_status(:no_content)
         end
       end
     end

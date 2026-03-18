@@ -16,20 +16,14 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import React, {
-  forwardRef,
-  useCallback,
-  useEffect,
-  useImperativeHandle,
-  useRef,
-  useState,
-} from 'react'
+import React, {forwardRef, useCallback, useImperativeHandle, useRef, useState} from 'react'
 
-import ColorPickerForm from './ColorPicker'
-import TextInputForm from './TextInput'
+import ColorPickerForm from './ColorPickerForm'
+import TextInputForm from './TextInputForm'
 import RadioInputGroupForm from './RadioInputGroupForm'
 import CheckboxTextInputForm from './CheckboxTextInput'
 import {AccessibilityIssue, FormType, FormValue} from '../../../types'
+import {PreviewHandle} from '../Preview'
 
 export interface FormHandle {
   getValue: () => FormValue
@@ -41,15 +35,9 @@ export interface FormComponentHandle {
   getValue?: () => FormValue
 }
 
-export interface FormComponentProps {
-  issue: AccessibilityIssue
-  value: FormValue
-  error?: string | null
+export interface FormComponentProps extends FormProps {
   onChangeValue: (formValue: FormValue) => void
-  onReload?: (formValue: FormValue) => void
-  onValidationChange?: (isValid: boolean, errorMessage?: string) => void
-  actionButtons?: React.ReactNode
-  isDisabled?: boolean
+  value: FormValue
 }
 
 interface FormProps {
@@ -58,9 +46,9 @@ interface FormProps {
   onReload?: (formValue: FormValue) => void
   onClearError?: () => void
   onValidationChange?: (isValid: boolean, errorMessage?: string) => void
-  onFormValueChange?: (formValue: FormValue) => void
-  actionButtons?: React.ReactNode
   isDisabled?: boolean
+  previewRef?: React.RefObject<PreviewHandle>
+  onGenerateLoadingChange?: (loading: boolean) => void
 }
 
 const FormTypeMap = {
@@ -81,9 +69,9 @@ const Form: React.FC<FormProps & React.RefAttributes<FormHandle>> = forwardRef<
       onReload,
       onClearError,
       onValidationChange,
-      onFormValueChange,
-      actionButtons,
       isDisabled,
+      previewRef,
+      onGenerateLoadingChange,
     }: FormProps,
     ref,
   ) => {
@@ -93,16 +81,11 @@ const Form: React.FC<FormProps & React.RefAttributes<FormHandle>> = forwardRef<
     const handleChange = useCallback(
       (formValue: FormValue) => {
         setValue(formValue)
-        onFormValueChange?.(formValue)
 
         if (error) onClearError?.()
       },
-      [setValue, error, onClearError, onFormValueChange],
+      [setValue, error, onClearError],
     )
-
-    useEffect(() => {
-      setValue(issue.form.value || null)
-    }, [issue])
 
     useImperativeHandle(ref, () => ({
       getValue: () => {
@@ -129,8 +112,9 @@ const Form: React.FC<FormProps & React.RefAttributes<FormHandle>> = forwardRef<
         onChangeValue={handleChange}
         onReload={onReload}
         onValidationChange={onValidationChange}
-        actionButtons={actionButtons}
         isDisabled={isDisabled}
+        previewRef={previewRef}
+        onGenerateLoadingChange={onGenerateLoadingChange}
       />
     )
   },

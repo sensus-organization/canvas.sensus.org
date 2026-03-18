@@ -136,7 +136,7 @@
 #           "value": { "type": "boolean" }
 #         },
 #         "users": {
-#           "description": "optional: A list of users that are members in the group. Returned only if include[]=users. WARNING: this collection's size is capped (if there are an extremely large number of users in the group (thousands) not all of them will be returned).  If you need to capture all the users in a group with certainty consider using the paginated /api/v1/groups/<group_id>/memberships endpoint.",
+#           "description": "optional: A list of users that are members in the group. Returned only if include[]=users. WARNING: this collection's size is capped (if there are an extremely large number of users in the group (thousands) not all of them will be returned). If you need to capture all the users in a group with certainty or experiencing slow response consider using the paginated /api/v1/groups/<group_id>/users endpoint.",
 #           "type": "array",
 #           "items": { "$ref": "User" }
 #         },
@@ -323,19 +323,13 @@ class GroupsController < ApplicationController
     @groups = all_groups = @groups.order(GroupCategory::Bookmarker.order_by, Group::Bookmarker.order_by)
                                   .eager_load(:group_category).preload(:root_account)
 
-    # run this only for students
-    if params[:section_restricted] && @context.is_a?(Course) && @context.user_is_student?(@current_user)
-      is_current_user_section_restricted = @context.membership_for_user(@current_user)&.limit_privileges_to_course_section
-      if is_current_user_section_restricted
-        # Gets all groups in the context
-        group_scope = @context.groups.active.eager_load(:group_category).preload(:root_account)
-        # Find all groups from that scope that can be limited from the section restriction parameter
-        groups_with_restricted_categories_or_teacher_assigned = group_scope.where(group_categories: { self_signup: nil }).or(group_scope.where(group_categories: { self_signup: "restricted" }))
-        # Find all groups that have users with different sections than the current user and DONT have the current_user in them
-        groups_with_no_common_section_with_current_user = groups_with_restricted_categories_or_teacher_assigned.reject { |g| g.has_common_section_with_user?(@current_user) || g.includes_user?(@current_user) }
-        # Remove the groups found above from the groups returned by the api
-        @groups = all_groups -= groups_with_no_common_section_with_current_user
-      end
+    if params[:section_restricted] && @context.is_a?(Course) && @context.user_is_student?(@current_user) && @context.membership_for_user(@current_user)&.limit_privileges_to_course_section
+      candidate_ids = all_groups
+                      .where(group_categories: { self_signup: [nil, "restricted"] })
+                      .pluck(:id)
+
+      hidden_ids = Group.ids_hidden_by_section_restriction(candidate_ids, @current_user, @context)
+      @groups = all_groups = all_groups.where.not(id: hidden_ids)
     end
 
     unless api_request?
@@ -819,7 +813,11 @@ class GroupsController < ApplicationController
                     else
                       User.where(id: user_ids)
                     end
+            # Capture users being removed before set_users destroys their memberships
+            removed_user_ids = @group.group_memberships.where.not(user_id: user_ids).pluck(:user_id)
             @memberships = @group.set_users(users)
+            # Invalidate visibility caches for removed users (set_users uses destroy_all which bypasses callbacks)
+            GroupMembership.invalidate_visibility_caches_for_group(@group, removed_user_ids) if removed_user_ids.any?
           end
         end
 
@@ -948,7 +946,7 @@ class GroupsController < ApplicationController
   #
   # @argument search_term [String]
   #   The partial name or full ID of the users to match and return in the
-  #   results list. Must be at least 3 characters.
+  #   results list. Must be at least 2 characters.
   #
   # @argument include[] [String, "avatar_url"]
   #   "avatar_url": Include users' avatar_urls.
@@ -1032,7 +1030,7 @@ class GroupsController < ApplicationController
   # Upload a file to the group.
   #
   # This API endpoint is the first step in uploading a file to a group.
-  # See the {file:file_uploads.html File Upload Documentation} for details on
+  # See the {file:file.file_uploads.html File Upload Documentation} for details on
   # the file upload workflow.
   #
   # Only those with the "Manage Files" permission on a group can upload files

@@ -350,22 +350,22 @@ class CoursePacesController < ApplicationController
                     .is_pending
                     .select('DISTINCT ON ("context_id") *')
                     .map do |progress|
-      pace = progress.context
-      if pace&.workflow_state == "active"
-        pace_context = context_for(pace)
-        # If the pace context is nil, then the context was deleted and we should destroy the progress
-        if pace_context.nil?
-          progress.destroy
-          next
-        end
+                      pace = progress.context
+                      if pace&.workflow_state == "active"
+                        pace_context = context_for(pace)
+                        # If the pace context is nil, then the context was deleted and we should destroy the progress
+                        if pace_context.nil?
+                          progress.destroy
+                          next
+                        end
 
-        {
-          pace_context: CoursePacing::PaceContextsPresenter.as_json(pace_context),
-          progress_context_id: progress.context_id
-        }
-      else
-        nil
-      end
+                        {
+                          pace_context: CoursePacing::PaceContextsPresenter.as_json(pace_context),
+                          progress_context_id: progress.context_id
+                        }
+                      else
+                        nil
+                      end
     end
     jobs_progress.compact
   end
@@ -513,7 +513,7 @@ class CoursePacesController < ApplicationController
         progress: @progress.present? ? progress_json(@progress, @current_user, session) : nil
       }
     else
-      render json: { success: false, errors: @course_pace.errors.full_messages }, status: :unprocessable_entity
+      render json: { success: false, errors: @course_pace.errors.full_messages }, status: :unprocessable_content
     end
   end
 
@@ -582,7 +582,7 @@ class CoursePacesController < ApplicationController
         progress: @progress.present? ? progress_json(@progress, @current_user, session) : nil
       }
     else
-      render json: { success: false, errors: @course_pace.errors.full_messages }, status: :unprocessable_entity
+      render json: { success: false, errors: @course_pace.errors.full_messages }, status: :unprocessable_content
     end
   end
 
@@ -599,22 +599,23 @@ class CoursePacesController < ApplicationController
     end
 
     unless @course_pace.valid?
-      return render json: { success: false, errors: @course_pace.errors.full_messages }, status: :unprocessable_entity
+      return render json: { success: false, errors: @course_pace.errors.full_messages }, status: :unprocessable_content
     end
 
     @course_pace.course = @course
     start_date = params.dig(:course_pace, :start_date).present? ? Date.parse(params.dig(:course_pace, :start_date)) : @course_pace.start_date
 
     if @course_pace.end_date && start_date && @course_pace.end_date < start_date
-      return render json: { success: false, errors: "End date cannot be before start date" }, status: :unprocessable_entity
+      return render json: { success: false, errors: "End date cannot be before start date" }, status: :unprocessable_content
     end
 
-    compressed_module_items = @course_pace.compress_dates(save: false, start_date:)
-                                          .sort_by { |ppmi| ppmi.module_item.position }
-                                          .group_by { |ppmi| ppmi.module_item.context_module }
-                                          .sort_by { |context_module, _items| context_module.position }
-                                          .to_h.values.flatten
-    compressed_dates = CoursePaceDueDatesCalculator.new(@course_pace).get_due_dates(compressed_module_items, start_date:)
+    # Wrap date calculations in the course timezone to match the publish path
+    compressed_dates = Time.use_zone(@course.time_zone) do
+      # Compressor handles sorting internally, so no need to sort after
+      compressed_module_items = @course_pace.compress_dates(save: false, start_date:)
+
+      CoursePaceDueDatesCalculator.new(@course_pace).get_due_dates(compressed_module_items, start_date:)
+    end
 
     render json: compressed_dates.to_json
   end
@@ -639,7 +640,7 @@ class CoursePacesController < ApplicationController
     return unless authorized_action(@course, @current_user, :manage_course_content_delete)
 
     if @course_pace.primary? && @course_pace.published?
-      return render json: { success: false, errors: t("You cannot delete the default course pace.") }, status: :unprocessable_entity
+      return render json: { success: false, errors: t("You cannot delete the default course pace.") }, status: :unprocessable_content
     end
 
     was_published = @course_pace.published?

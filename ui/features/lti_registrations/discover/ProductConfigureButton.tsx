@@ -39,6 +39,7 @@ import {
   type JsonFetchStatus,
 } from '../manage/registration_wizard/RegistrationWizardModalState'
 import type {LtiRegistrationWithConfiguration} from '../manage/model/LtiRegistration'
+import {LtiRegistrationId} from '../manage/model/LtiRegistrationId'
 
 export type ConfigureButtonProps = {
   buttonWidth: 'block' | 'inline-block'
@@ -73,13 +74,24 @@ export const findLtiVersion = (
 export const ProductConfigureButton = ({buttonWidth, product, accountId}: ConfigureButtonProps) => {
   const navigate = useNavigate()
 
-  const onSuccessfulInstall = React.useCallback(() => {
-    navigate('/manage')
-  }, [navigate])
+  const onSuccessfulInstall = React.useCallback(
+    (registrationId: LtiRegistrationId) => {
+      if (window.ENV.FEATURES.lti_registrations_next) {
+        navigate(`/manage/${registrationId}`)
+      } else {
+        navigate('/manage')
+      }
+    },
+    [navigate],
+  )
 
   const onSuccessfulInstallForInheritedKey = React.useCallback(
     (config: LtiRegistrationWithConfiguration) => {
-      navigate(`/manage?q=${config.admin_nickname || config.name}`)
+      if (window.ENV.FEATURES.lti_registrations_next) {
+        navigate(`/manage/${config.id}`)
+      } else {
+        navigate(`/manage?q=${config.admin_nickname || config.name}`)
+      }
     },
     [navigate],
   )

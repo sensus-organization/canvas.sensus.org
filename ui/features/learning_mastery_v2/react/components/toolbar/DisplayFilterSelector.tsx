@@ -18,7 +18,7 @@
 import React from 'react'
 import {useScope as createI18nScope} from '@canvas/i18n'
 import {Checkbox, CheckboxGroup} from '@instructure/ui-checkbox'
-import {DisplayFilter} from '../../utils/constants'
+import {DisplayFilter} from '@canvas/outcomes/react/utils/constants'
 
 const I18n = createI18nScope('LearningMasteryGradebook')
 
@@ -35,6 +35,14 @@ export const DisplayFilterSelector: React.FC<DisplayFilterSelectorProps> = ({val
       defaultValue={values}
       onChange={values => onChange(values as DisplayFilter[])}
     >
+      <Checkbox
+        label={I18n.t('Unpublished Assignments')}
+        value={DisplayFilter.SHOW_UNPUBLISHED_ASSIGNMENTS}
+      />
+      <Checkbox
+        label={I18n.t('Outcomes with no results')}
+        value={DisplayFilter.SHOW_OUTCOMES_WITH_NO_RESULTS}
+      />
       <Checkbox
         label={I18n.t('Students with no results')}
         value={DisplayFilter.SHOW_STUDENTS_WITH_NO_RESULTS}

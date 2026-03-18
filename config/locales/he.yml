@@ -493,7 +493,9 @@ he:
     report_header_token_dev_key_id: "מפתח מזהה dev"
     report_header_token_dev_key_name: "שם מפתח key"
     report_header_token_hint: "רמז לשחזור האסימון"
+    report_header_token_id: מזהה
     report_header_token_last_used: "שומש לאחרונה"
+    report_header_token_status: מצב
     report_header_user__id: user_id
     report_header_user_id: "מזהה משתמש"
     report_header_user_name: "שם משתמש"
@@ -2119,6 +2121,7 @@ he:
   alerts_6b871b71: התראות
   alerts_add_edit_delete_d71091c6: "אתראות - הוספה / עדכון / ביטול"
   alerts_course_settings_53551794: "אתראות (הגדרות קורס)"
+  aligned_outcomes_d0a0c159: "תוצאות למידה מעומדות"
   all_4321c3a1: הכל
   all_account_types_e83c1516: "כל סוגי החשבון"
   all_accounts_3bafc860: "כל החשבונות"
@@ -3531,6 +3534,7 @@ he:
   big_blue_button_conference: 
     recording_setting: מקליט
     recording_setting_enabled_description: "הפעלת אפשרות הקלטה בשיחת ועידה זו"
+  bio_a519d807: "קורות חיים"
   blackboard: 
     no_manifest: "קובץ ה Blackboard בפורמט zip הזה אינו כולל את הקבץ imsmanifest.xml  בתיקית הבסיס."
   blank_38df4238: "תו ריק"
@@ -4355,8 +4359,10 @@ he:
   close_grade_info_58ef5a20: "סגור/י את המידע על ציונים"
   close_move_tray_8609e988: "סגירת העברת תיבה"
   close_opportunity_center_popup_9907d981: "חלון קופץ של סגירת מרכז ההזדמנויות"
+  close_rubric_a0fc8166: "סגירת רובריקה"
   close_sidebar_10b0fbb4: "סגירת סרגל-צד"
   close_submission_tray_c4988fa8: "סגירת תיבת הגשות"
+  closed_983a96fe: סגור
   closed_for_comments_e395b42f: "סגור להערות"
   closes_5c6b4367: "מסתיים:"
   code_is_case_sensitive_d8175cad: "הקוד הנו רגיש לסוג אות"
@@ -4715,6 +4721,7 @@ he:
   confirmation_code_required_22984955: "קוד אישור (נדרש)"
   confirmation_failed_please_try_again_ae566d37: "אישור נכשל. יש לנסות שוב."
   confirming_2df4b68f: "מאשר... "
+  confirming_course_name_5a509f48: "מאשר את %{course_name}..."
   consumer_key_57d9fcf1: "מפתח מערכת הלקוח"
   consumer_key_6f94ba11: "מפתח מערכת הלקוח"
   contact_a6e7f6da: התקשרות
@@ -5847,6 +5854,7 @@ he:
   course_id_8bd2a21c: "מזהה קורס"
   course_id_a7c924d5: "מזהה קורס"
   course_id_b0bc82d4: "מזהה קורס"
+  course_id_course_id_2841413a: "מזהה קורס \"%{course_id}\""
   course_id_f8640bb8: course_id
   course_image_for_course_cfbb08df: "תמונת קורס עבור %{course}"
   course_image_settings_eba3ec55: "עריכת תמונת הקורס"
@@ -5933,8 +5941,16 @@ he:
   course_name_45175338: "שם קורס"
   course_name_63b973d1: "שם קורס"
   course_name_is_required_90919349: "נדרש שם קורס"
+  course_name_not_authorized_for_cross_listing_353e500f: "%{course_name} אינו מורשה לרישום צולב"
   course_name_successfully_added_48116a50: "%{course_name} נתווסף בהצלחה!"
   course_navigation_dd035109: "ניווט בקורס"
+  course_navigation_settings: 
+    buttons: 
+      save: "שמירה "
+    drag_details: "הפיכת רוב הדפים ללא פעילים יגרום לתלמידים אשר ביקרו בדפים אלו להתנתב לדף הבית של הקורס."
+    drag_to_hide: "גרור/י פריטים לכאן כדי להסתירם מתלמידים"
+    help: 
+      edit_navigation: "גרור ושחרר פריטים כדי לארגנם מחדש בסרגל ניווט של הקורס."
   course_not_found_c248a721: "הקורס לא נמצא"
   course_option_links_a79d263d: "קישורי אפשרויות הקורס"
   course_outcomes_7dc1cbc7: "תוצאות מצופות בקורס"
@@ -6173,6 +6189,13 @@ he:
         content: תוכן
         due_dates: "תאריכי יעד"
         points: ניקוד
+    navigation_form: 
+      drag_details: "הפיכת רוב הדפים ללא פעילים יגרום לתלמידים אשר ביקרו בדפים אלו להתנתב לדף הבית של הקורס."
+      drag_to_hide: "גרור/י פריטים לכאן כדי להסתירם מתלמידים"
+      help: 
+        edit_navigation: "גרור ושחרר פריטים כדי לארגנם מחדש בסרגל ניווט של הקורס."
+      titles: 
+        edit_navigation: "עריכת ניווט הקורס"
     notices: 
       backup_restored: "השיחזור מגיבוי נסתיים בהצלחה!"
       concluded: "הקורס נסתיים וסוכם בהצלחה"
@@ -6598,6 +6621,9 @@ he:
   criterion_long_description_e9a97247: "תאור מלא של הקריטריון"
   criterion_ratings_3eed22e2: "דירוגי קריטריון "
   criterion_updated_36c0b3dc: "קריטריון עודכן"
+  cross_list_section_27801ec9: "רישום צולב של הקבצה"
+  cross_list_this_section_889f7287: "הכנת רישום צולב להקבצה זו"
+  cross_list_this_section_90aea97f: "ביצוע רישום צולב להקבצה זו"
   crowdsourced: true
   crumbs: 
     access_report: "דוח התחברויות "
@@ -8791,6 +8817,7 @@ he:
   generate_item_analysis_report_statuslabel_16e02c8: "הפקת דוח ניתוח פריטים %{statusLabel}"
   generate_student_analysis_report_statuslabel_aecdc4dc: "הפקת דוח ניתוח תלמידים %{statusLabel}"
   generate_token_393ab5b4: "יצירת אסימון "
+  generated_e71c6622: חולל
   generated_f26ee56b: "נוצר:"
   generating_5b5e20f8: "מייצר:"
   generating_c2aabc02: "מייצר:"
@@ -8855,6 +8882,7 @@ he:
       warning: אזהרה
   grade_distribution_e52c9256: "התפלגות ציונים"
   grade_export_title: "ייצוא ציונים"
+  grade_f949a691: "%{grade}%"
   grade_for_name_b9df168a: "הערכה של: %{name}"
   grade_grade_7e52dd1c: "ציון: %{grade}"
   grade_high_to_low_1cea0381: "הערכה - מהגבוה לנמוך"
@@ -10208,6 +10236,7 @@ he:
   hide_groups_navigation_menu_62e8b3d0: "הסתרת תפריט ניווט קבוצות"
   hide_navigation_menu_f0b3e90: "הסתרת תפריט ניווט"
   hide_notes_column_7749f408: "הסתרת עמודת ההערות"
+  hide_rubric_27903c8: "הסתרת רובריקה"
   hide_score_total_for_assessment_results_d0ef117f: "הסתרת הציון הכולל של תוצאות ההערכה"
   hide_sidebar_2b5b3776: "הסתרת ניווט צידי"
   hide_student_names_3e59e862: "הסתרת שמות תלמידים"
@@ -13503,6 +13532,7 @@ he:
   no_graded_submissions_e40c957a: "אין הגשות שהוערכו"
   no_grading_periods_configured_for_this_term_ca22393e: "לתקופה זו לא הוגדרו מועדי הערכה"
   no_grading_schemes_to_display_8b0e92e7: "אין סכימת הערכה להצגה"
+  no_items_20cde5bf: "אין פריטים"
   no_items_found_870b2d0d: "לא נמצאו פריטים"
   no_items_in_module_21f111a2: "אין פריטים במודול"
   no_ltis_configured_f4b9bc6b: "אף LTI אל קונפג"
@@ -13545,6 +13575,7 @@ he:
   not_a_number: "הערך חייב להיות מספר חיובי"
   not_all_sections_will_be_assigned_this_item_4e2b8eaa: "פריט זה יוקצה לכל ההקבצות ."
   not_available_487d3648: "לא זמין"
+  not_available_until_14e61f1e: "אינו זמין לפני"
   not_available_until_next_submission_2175158: "לא זמין עד ההגשה הבאה"
   not_completed_d70acea3: "טרם הושלם"
   not_deleted_2a7f63ef: "(לא בוצע ביטול)"
@@ -13558,6 +13589,7 @@ he:
   not_starred_no_subject_click_to_star_dc91380: "'לא הודגש בכוכבית \"(אין נושא)\", הקלק/י להדגיש."
   not_starred_subject_click_to_star_4ea6eb64: "'לא הודגש בכוכבית \"%{subject}\", הקלק/י להדגיש."
   not_submitted_7d05fdb4: "לא הוגש"
+  not_yet_available_9aa23a77: "עדיין לא זמין"
   not_yet_completed_345a0bca: "טרם הושלם"
   not_yet_graded_8b655a7: "טרם בוצעה הערכה"
   note_8b73ce09: הערה
@@ -14011,6 +14043,7 @@ he:
   options_3ab0ea65: אפשרויות
   or_a01eec62: או
   or_ef4e808: או
+  or_enter_the_course_s_id_46e0792a: "או הקלדת מזהה הקורס"
   orange_81386a62: כתום
   orbis_report_header_assignment_id: "מזהה משימה"
   orbis_report_header_assignment_title: "כותרת משימה"
@@ -14961,6 +14994,7 @@ he:
   print_d0e3d53f: הדפסה
   priority_dd4381ee: עדיפות
   privacy_290109ea: פרטיות
+  privacy_notice_7eff08fe: "הערת צנעת הפרט"
   privacy_policy_c68f482a: "מדיניות פרטיות"
   private_copyrighted_3cac9686: "פרטי (מוגן בזכויות יוצרים)"
   process_as_ui_changes_8e34ed2a: "עבד כשינויי UI"
@@ -16867,6 +16901,7 @@ he:
   ratio_answered_correctly_b0c1e7d: "%{ratio}% ענו נכונה"
   ratio_responded_correctly_6d890107: "%{ratio}% הגיבו נכונה"
   re_activate_user_f7d77c9a: "החזרת משתמש למצב פעיל"
+  re_cross_list_this_section_faf7df4d: "רישום צולב מחודש של להקבצה זו"
   re_reported_b9671073: "דווח מחדש"
   re_send_confirmation_bcc66940: "שליחה מחדש של האישור "
   re_sending_379a8580: "שולח שוב..."
@@ -17556,6 +17591,7 @@ he:
   search_for_a_course_58fdc7a6: "חיפוש קורס"
   search_for_a_deleted_course_by_id_f553398d: "חיפוש על פי מזהה של קורסים שבוטלו"
   search_for_assignment_8149cb1: "חיפוש משימה"
+  search_for_course_e1a1dfc6: "חיפוש קורס"
   search_for_files_7541fb28: "חיפוש קבצים"
   search_for_people_by_id_or_name_36107593: "חפש אנשים לפי מזהה או שם"
   search_grading_periods_e947a3e9: "חיפוש תקופות הערכה..."
@@ -17611,6 +17647,7 @@ he:
   section_sis_94511bcd: "הקבצה במערכת הבית ספרית SIS"
   section_sis_id_6f989834: "מזהה הקבצה במערכת הבית ספרית"
   section_starts_at_65eaed1: "ההקבצה מתחילה ב"
+  section_successfully_cross_listed_86eb2765: "רישום צולב של ההקבצה נוצרה בהצלחה"
   section_successfully_de_cross_listed_df3b64e: "רישום צולב של ההקבצה בוטל בהצלחה"
   sections: 
     section_created: "ההקבצה נוצרה בהצלחה"
@@ -17755,6 +17792,7 @@ he:
   select_video_file_35b61d4e: "בחירת קובץ וידאו"
   selected_274ce24f: נבחר
   selected_answer: "בחרת תשובה זו"
+  selected_course_9bf57f33: "קורס נבחר"
   selected_subtree_a7693937: "%{subtree} נבחר"
   self_enrollments: 
     already_enrolled: 
@@ -18900,6 +18938,7 @@ he:
   starred_subject_click_to_unstar_6aafcddc: "סומן \"%{subject}\", הקלק/י להסרת הסימון."
   start_5a4cfcd6: התחלה
   start_a_new_course_57ae2480: "תחילת קורס חדש"
+  start_at_c29f35f1: "מתחיל ב"
   start_date_c41cb23a: "תאריך התחלה"
   start_date_e937be8a: "תאריך תחילה"
   start_date_end_date_d809dd93: "%{start_date} - %{end_date}"
@@ -19186,6 +19225,7 @@ he:
       teachers_notified_of_comments: "כמורים והמגיש יקבלו הודעה על כל ההערות"
     show_preview: 
       anonymous_username: "תלמיד זה"
+      assignment_locked: "משימה זו נעולה כעת"
       discussion_submission_description: "ההגשות למשימה זו הנן הפרסומים בקבוצת הדיון של המשימה. להלן הפרסומים בדיון של %{user}, וכן ניתן *לעיין בדיון בכללותו*."
       discussion_submission_description_without_link: "ההגשות למשימה זו הנן הפרסומים בקבוצת הדיון של המשימה. להלן הפרסומים בדיון של %{user}."
       entry_no_image: "יש לזכור שיתכן שדף זה השתנה מאז ההגשה המקורית."

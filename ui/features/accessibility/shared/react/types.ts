@@ -24,6 +24,7 @@ export enum ContentItemType {
   WikiPage = 'Page',
   Assignment = 'Assignment',
   Attachment = 'attachment',
+  DiscussionTopic = 'DiscussionTopic',
 }
 
 /* export const ContentTypeToKey = {
@@ -45,6 +46,7 @@ export interface IssueForm {
   label?: string
   undoText?: string
   canGenerateFix?: boolean
+  isCanvasImage?: boolean
   generateButtonLabel?: string
   value?: string
   options?: string[]
@@ -81,10 +83,12 @@ export enum ResourceType {
   WikiPage = 'WikiPage',
   Assignment = 'Assignment',
   Attachment = 'Attachment',
+  DiscussionTopic = 'DiscussionTopic',
 }
 
 export interface AccessibilityResourceScan extends HasId {
   id: number
+  courseId: number
   resourceId: number
   resourceType: ResourceType
   resourceName: string
@@ -95,6 +99,8 @@ export interface AccessibilityResourceScan extends HasId {
   errorMessage?: string
   issueCount: number
   issues?: AccessibilityIssue[]
+  closedAt?: string | null
+  closedIssueCount?: number
 }
 
 export interface AccessibilityIssue {
@@ -133,6 +139,11 @@ export interface PreviewResponse {
   path?: string
 }
 
+export interface ColorContrastPreviewResponse extends PreviewResponse {
+  background: string
+  foreground: string
+}
+
 export type FormValue = any
 
 export type Severity = 'High' | 'Medium' | 'Low'
@@ -160,6 +171,7 @@ export type GenerateResponse = {
 export type FilterOption = {
   label: string
   value: string
+  requiresFeatureFlag?: boolean
 }
 
 export type Filters = {
@@ -202,15 +214,6 @@ export type IssueRuleType =
   | 'has-lang-entry'
   | 'img-alt-filename'
   | 'paragraphs-for-headings'
-
-// Used in the GroupedIssueSummary, merges multiple IssueRuleTypes per group
-export type IssueSummaryGroup =
-  | 'headings'
-  | 'links'
-  | 'img-alt-text'
-  | 'tables'
-  | 'lists'
-  | 'low-contrast'
 
 export type FilterGroupMapping = {
   'alt-text': IssueRuleType[]

@@ -18,13 +18,14 @@
 
 import React from 'react'
 import {render} from '@testing-library/react'
-import fetchMock from 'fetch-mock'
+import {setupServer} from 'msw/node'
+import {http, HttpResponse} from 'msw'
 
 import {destroyContainer} from '@canvas/alerts/react/FlashAlert'
 
 import {Footer} from '../Footer'
 
-const VISIBLE_CALENDARS_COUNT_MATCHER = /\/api\/v1\/accounts\/1\/visible_calendars_count.*/
+const server = setupServer()
 
 const defaultProps = {
   originAccountId: 1,
@@ -33,23 +34,30 @@ const defaultProps = {
     {id: 2, visible: false},
     {id: 10, visible: true},
   ],
-  onApplyClicked: jest.fn(),
+  onApplyClicked: vi.fn(),
   enableSaveButton: true,
   showConfirmation: false,
 }
 
 describe('Footer', () => {
+  beforeAll(() => server.listen())
+  afterAll(() => server.close())
+
   beforeEach(() => {
-    fetchMock.get(VISIBLE_CALENDARS_COUNT_MATCHER, {count: 27})
+    server.use(
+      http.get('/api/v1/accounts/1/visible_calendars_count', () => {
+        return HttpResponse.json({count: 27})
+      }),
+    )
   })
 
   afterEach(() => {
-    fetchMock.restore()
+    server.resetHandlers()
     destroyContainer()
   })
 
   it('calls onApplyClicked when apply button is pressed', () => {
-    const onApplyClicked = jest.fn()
+    const onApplyClicked = vi.fn()
     const {getByRole} = render(<Footer {...defaultProps} onApplyClicked={onApplyClicked} />)
     getByRole('button', {name: 'Apply Changes'}).click()
     expect(onApplyClicked).toHaveBeenCalledTimes(1)
@@ -69,13 +77,17 @@ describe('Footer', () => {
   })
 
   it('displays an error if the count fails to fetch', async () => {
-    fetchMock.get(VISIBLE_CALENDARS_COUNT_MATCHER, 500, {overwriteRoutes: true})
+    server.use(
+      http.get('/api/v1/accounts/1/visible_calendars_count', () => {
+        return new HttpResponse(null, {status: 500})
+      }),
+    )
     const {findAllByText} = render(<Footer {...defaultProps} />)
     expect((await findAllByText('Unable to load calendar count'))[0]).toBeInTheDocument()
   })
 
   it('displays the confirmation modal if showConfirmation is enabled', async () => {
-    const onApplyClicked = jest.fn()
+    const onApplyClicked = vi.fn()
     const {getByRole} = render(
       <Footer {...defaultProps} showConfirmation={true} onApplyClicked={onApplyClicked} />,
     )

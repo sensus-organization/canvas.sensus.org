@@ -21,9 +21,17 @@ import {render, waitFor} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import ReportAction from '../components/ReportAction'
 import {AccountReportInfo, AccountReport} from '@canvas/account_reports/types'
-import fetchMock from 'fetch-mock'
+import {setupServer} from 'msw/node'
+import {http, HttpResponse} from 'msw'
 import {QueryClient} from '@tanstack/react-query'
 import {MockedQueryClientProvider} from '@canvas/test-utils/query'
+import {showFlashError} from '@canvas/alerts/react/FlashAlert'
+
+vi.mock('@canvas/alerts/react/FlashAlert', () => ({
+  showFlashError: vi.fn(() => vi.fn()),
+}))
+
+const server = setupServer()
 
 function renderWithQueryClient(ui: React.ReactElement) {
   const client = new QueryClient()
@@ -80,20 +88,25 @@ const canceledReport: AccountReport = {
   },
 }
 describe('ReportAction', () => {
+  beforeAll(() => server.listen())
+  afterAll(() => server.close())
+
   afterEach(() => {
-    fetchMock.restore()
+    server.resetHandlers()
+    vi.clearAllMocks()
   })
 
   describe('report not running', () => {
     beforeEach(() => {
-      fetchMock.post('/api/v1/accounts/123/reports/report_1', {
-        body: completeReport,
-        status: 200,
-      })
+      server.use(
+        http.post('/api/v1/accounts/123/reports/report_1', () => {
+          return HttpResponse.json(completeReport)
+        }),
+      )
     })
 
     it('configures and runs a report with parameters', async () => {
-      const spy = jest.fn()
+      const spy = vi.fn()
       const user = userEvent.setup()
 
       const {getByText, getByLabelText} = renderWithQueryClient(
@@ -115,7 +128,7 @@ describe('ReportAction', () => {
     })
 
     it('runs a report without parameters', async () => {
-      const spy = jest.fn()
+      const spy = vi.fn()
       const user = userEvent.setup()
 
       const {getByText} = renderWithQueryClient(
@@ -133,17 +146,18 @@ describe('ReportAction', () => {
   })
 
   it('shows progress for a running report', async () => {
-    fetchMock.get('/api/v1/accounts/123/reports/report_1/101', {
-      body: runningReport,
-      status: 200,
-    })
+    server.use(
+      http.get('/api/v1/accounts/123/reports/report_1/101', () => {
+        return HttpResponse.json(runningReport)
+      }),
+    )
 
     const {container} = renderWithQueryClient(
       <ReportAction
         accountId="123"
         report={reportWithParameters}
         reportRun={runningReport}
-        onStateChange={jest.fn()}
+        onStateChange={vi.fn()}
       />,
     )
     const progressBar = container.querySelector('progress')
@@ -153,17 +167,17 @@ describe('ReportAction', () => {
 
   it('cancels a running report', async () => {
     const user = userEvent.setup()
-    const spy = jest.fn()
-    fetchMock.get('/api/v1/accounts/123/reports/report_1/101', {
-      body: runningReport,
-      status: 200,
-    })
-    fetchMock.put('/api/v1/accounts/123/reports/report_1/101/abort', {
-      body: canceledReport,
-      status: 200,
-    })
+    const spy = vi.fn()
+    server.use(
+      http.get('/api/v1/accounts/123/reports/report_1/101', () => {
+        return HttpResponse.json(runningReport)
+      }),
+      http.put('/api/v1/accounts/123/reports/report_1/101/abort', () => {
+        return HttpResponse.json(canceledReport)
+      }),
+    )
 
-    const {getByText} = renderWithQueryClient(
+    const {getByTestId} = renderWithQueryClient(
       <ReportAction
         accountId="123"
         report={reportWithParameters}
@@ -172,10 +186,70 @@ describe('ReportAction', () => {
       />,
     )
 
-    const cancelButton = getByText('Cancel report').closest('button')
+    const cancelButton = getByTestId('cancel-report-button')
     await user.click(cancelButton!)
     await waitFor(() => {
       expect(spy).toHaveBeenCalledWith(canceledReport)
     })
+  })
+
+  it('shows an error if canceling fails', async () => {
+    const user = userEvent.setup()
+    server.use(
+      http.get('/api/v1/accounts/123/reports/report_1/101', () => {
+        return HttpResponse.json(runningReport)
+      }),
+      http.put('/api/v1/accounts/123/reports/report_1/101/abort', () => {
+        return HttpResponse.json({message: 'Internal server error'}, {status: 500})
+      }),
+    )
+
+    const {getByTestId} = renderWithQueryClient(
+      <ReportAction
+        accountId="123"
+        report={reportWithParameters}
+        reportRun={runningReport}
+        onStateChange={vi.fn()}
+      />,
+    )
+
+    const cancelButton = getByTestId('cancel-report-button')
+    await user.click(cancelButton!)
+
+    await waitFor(() => {
+      expect(showFlashError).toHaveBeenCalledWith('Error canceling report')
+    })
+  })
+
+  it('does not show an error if canceling 404s because the report finished already', async () => {
+    const user = userEvent.setup()
+    const abortRequestReceived = vi.fn()
+    server.use(
+      http.get('/api/v1/accounts/123/reports/report_1/101', () => {
+        return HttpResponse.json(runningReport)
+      }),
+      http.put('/api/v1/accounts/123/reports/report_1/101/abort', () => {
+        abortRequestReceived()
+        return HttpResponse.json({message: 'Not Found'}, {status: 404})
+      }),
+    )
+
+    const {getByTestId} = renderWithQueryClient(
+      <ReportAction
+        accountId="123"
+        report={reportWithParameters}
+        reportRun={runningReport}
+        onStateChange={vi.fn()}
+      />,
+    )
+
+    const cancelButton = getByTestId('cancel-report-button')
+    await user.click(cancelButton!)
+
+    // Wait for the fetch to complete, then verify no error was shown
+    await waitFor(() => {
+      expect(abortRequestReceived).toHaveBeenCalled()
+    })
+    expect(showFlashError).not.toHaveBeenCalled()
   })
 })

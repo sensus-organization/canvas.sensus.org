@@ -102,12 +102,12 @@ class GradebooksController < ApplicationController
                   .where(user_id: @presenter.student_id, assignment_id: @context.assignments.active)
                   .select(:cached_due_date, :grading_period_id, :assignment_id, :user_id)
                   .each_with_object({}) do |submission, hsh|
-          hsh[submission.assignment_id] = {
-            submission.user_id => {
-              due_at: submission.cached_due_date,
-              grading_period_id: submission.grading_period_id,
-            }
-          }
+                    hsh[submission.assignment_id] = {
+                      submission.user_id => {
+                        due_at: submission.cached_due_date,
+                        grading_period_id: submission.grading_period_id,
+                      }
+                    }
         end
     end
 
@@ -254,7 +254,7 @@ class GradebooksController < ApplicationController
       }
       assignment_order = allowed_orders.fetch(params.fetch(:assignment_order), :due_at)
       @current_user.set_preference(:course_grades_assignment_order, @context.id, assignment_order)
-      redirect_back(fallback_location: course_grades_url(@context))
+      redirect_back_or_to(course_grades_url(@context))
     end
   end
 
@@ -591,6 +591,7 @@ class GradebooksController < ApplicationController
       user_asset_string: @current_user&.asset_string,
       performance_improvements_for_gradebook: @context.feature_enabled?(:performance_improvements_for_gradebook) &&
                                               Services::PlatformServiceGradebook.use_graphql?(@context.account.global_id, @context.global_id),
+      use_queue_for_rate_limiting_gradebook_requests: Account.site_admin.feature_enabled?(:use_queue_for_rate_limiting_gradebook_requests),
       version: params.fetch(:version, nil),
       assignment_missing_shortcut: Account.site_admin.feature_enabled?(:assignment_missing_shortcut),
       grading_periods_filter_dates_enabled: Account.site_admin.feature_enabled?(:grading_periods_filter_dates),
@@ -599,7 +600,8 @@ class GradebooksController < ApplicationController
     js_env({
              EMOJIS_ENABLED: @context.feature_enabled?(:submission_comment_emojis),
              EMOJI_DENY_LIST: @context.root_account.settings[:emoji_deny_list],
-             GRADEBOOK_OPTIONS: gradebook_options
+             GRADEBOOK_OPTIONS: gradebook_options,
+             PEER_REVIEW_ALLOCATION_AND_GRADING_ENABLED: @context.feature_enabled?(:peer_review_allocation_and_grading),
            })
   end
 
@@ -856,7 +858,7 @@ class GradebooksController < ApplicationController
       user_ids = submissions.pluck(:user_id)
       assignment_ids = submissions.pluck(:assignment_id)
       users = @context.admin_visible_students.distinct.find(user_ids).index_by(&:id)
-      assignments = @context.assignments.active.find(assignment_ids).index_by(&:id)
+      assignments = assignment_scope.active.find(assignment_ids).index_by(&:id)
       # `submissions` is not a collection of ActiveRecord Submission objects,
       # so we pull the records here in order to check hide_grade_from_student?
       # on each submission below.
@@ -913,7 +915,12 @@ class GradebooksController < ApplicationController
             if params.key?(:sub_assignment_tag) && @context.discussion_checkpoints_enabled?
               submission[:sub_assignment_tag] = params[:sub_assignment_tag]
             end
-            subs = @assignment.grade_student(@user, submission.merge(skip_grader_check: is_default_grade_for_missing))
+
+            opts = submission.merge(
+              skip_grader_check: is_default_grade_for_missing,
+              async_grade_group: value_to_boolean(params.fetch(:async_grade_group, false))
+            )
+            subs = @assignment.grade_student(@user, opts)
             apply_provisional_grade_filters!(submissions: subs, final: submission[:final]) if submission[:provisional]
             @submissions += subs
           end
@@ -1065,13 +1072,18 @@ class GradebooksController < ApplicationController
     @assignment = if params[:assignment_id].blank?
                     nil
                   else
-                    @context.assignments.active.find(params[:assignment_id])
+                    assignment_scope.active.find(params[:assignment_id])
                   end
 
     platform_speedgrader_param_enabled = query_params_allow_platform_service_speedgrader?(params)
     platform_speedgrader_feature_enabled = platform_service_speedgrader_enabled?
     track_speedgrader_metrics(platform_speedgrader_param_enabled, platform_speedgrader_feature_enabled)
     platform_service_speedgrader_enabled = platform_speedgrader_param_enabled && platform_speedgrader_feature_enabled
+
+    # peer review sub assignments are only supported in the platform service speedgrader
+    if @assignment.is_a?(PeerReviewSubAssignment) && !platform_service_speedgrader_enabled
+      raise ActiveRecord::RecordNotFound
+    end
 
     if @assignment.moderated_grading? && !@assignment.user_is_moderation_grader?(@current_user)
       @assignment.create_moderation_grader(@current_user, occupy_slot: false)
@@ -1081,7 +1093,13 @@ class GradebooksController < ApplicationController
       @page_title = t("SpeedGrader")
       @body_classes << "full-width padless-content"
 
-      remote_env(speedgrader: Services::PlatformServiceSpeedgrader.launch_url)
+      remote_env(
+        speedgrader: Services::PlatformServiceSpeedgrader.launch_url,
+        ams: {
+          launch_url: Services::Ams.launch_url,
+          api_url: Services::Ams.api_url
+        }
+      )
 
       env = {
         A2_STUDENT_ENABLED: @assignment&.a2_enabled? || false,
@@ -1097,6 +1115,10 @@ class GradebooksController < ApplicationController
         GRADE_BY_STUDENT_ENABLED: @context.root_account.feature_enabled?(:speedgrader_grade_by_student),
         STICKERS_ENABLED_FOR_ASSIGNMENT: @assignment.present? && @assignment.stickers_enabled?(@current_user),
         FILTER_SPEEDGRADER_BY_STUDENT_GROUP_ENABLED: @context.filter_speed_grader_by_student_group?,
+        # create_tc_warning is provided by instructure_misc_plugin (separate repo)
+        # Check defensively if available
+        fixed_warnings: [respond_to?(:create_tc_warning, true) ? create_tc_warning : nil].compact,
+        context_url: named_context_url(@context, :context_grades_url),
         course_id: @context.id,
         late_policy: @context.late_policy&.as_json(include_root: false),
         gradebook_group_filter_id: @current_user.get_latest_preference_setting_by_key(:gradebook_settings, @context.global_id, "filter_rows_by", "student_group_ids"),
@@ -1107,6 +1129,8 @@ class GradebooksController < ApplicationController
         MULTISELECT_FILTERS_ENABLED: multiselect_filters_enabled?,
         gradebook_section_filter_id: filtered_sections,
         COMMENT_BANK_PER_ASSIGNMENT_ENABLED: Account.site_admin.feature_enabled?(:comment_bank_per_assignment),
+        PEER_REVIEW_ALLOCATION_AND_GRADING_ENABLED: @context.feature_enabled?(:peer_review_allocation_and_grading),
+        IS_PEER_REVIEW_SUB_ASSIGNMENT: @assignment.is_a?(PeerReviewSubAssignment),
         show_inactive_enrollments: gradebook_settings(@context.global_id)&.[]("show_inactive_enrollments") == "true",
         show_concluded_enrollments: @context.completed? || gradebook_settings(@context.global_id)&.[]("show_concluded_enrollments") == "true",
       }
@@ -1149,6 +1173,13 @@ class GradebooksController < ApplicationController
 
     enhanced_rubrics_enabled = @context.feature_enabled?(:enhanced_rubrics)
 
+    remote_env(
+      ams: {
+        launch_url: Services::Ams.launch_url,
+        api_url: Services::Ams.api_url
+      }
+    )
+
     respond_to do |format|
       format.html do
         grading_role_for_user = @assignment.grading_role(@current_user)
@@ -1167,6 +1198,7 @@ class GradebooksController < ApplicationController
           READ_AS_ADMIN: @context.grants_right?(@current_user, session, :read_as_admin),
           CONTEXT_ACTION_SOURCE: :speed_grader,
           can_view_audit_trail: @assignment.can_view_audit_trail?(@current_user),
+          context_url: named_context_url(@context, :context_grades_url),
           settings_url: speed_grader_settings_course_gradebook_path,
           force_anonymous_grading: force_anonymous_grading?(@assignment),
           anonymous_identities: @assignment.anonymous_grader_identities_by_anonymous_id,
@@ -1560,6 +1592,14 @@ class GradebooksController < ApplicationController
   end
 
   private
+
+  def assignment_scope
+    @assignment_scope ||= if @context.feature_enabled?(:peer_review_allocation_and_grading)
+                            AbstractAssignment.assignment_or_peer_review.where(context: @context)
+                          else
+                            @context.assignments
+                          end
+  end
 
   def multiselect_filters_enabled?
     return @multiselect_filters_enabled if defined?(@multiselect_filters_enabled)

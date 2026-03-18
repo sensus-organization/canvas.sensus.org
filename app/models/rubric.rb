@@ -523,10 +523,7 @@ class Rubric < ActiveRecord::Base
   def self.process_llm_criteria_with_error_handling(progress, operation_name)
     yield
     progress.complete!
-  rescue InstLLM::ServiceQuotaExceededError, InstLLM::ThrottlingError
-    progress.set_results({ error: t("There was an error with generation capacity. Please try again later.") })
-    progress.fail!
-  rescue InstLLMHelper::RateLimitExceededError
+  rescue InstructureMiscPlugin::Extensions::CedarClient::CedarLimitReachedError
     progress.set_results({ error: t("You have made too many criteria generation requests. Please try again later.") })
     progress.fail!
   rescue => e
@@ -543,12 +540,12 @@ class Rubric < ActiveRecord::Base
     end
   end
 
-  def self.process_regenerate_criteria_via_llm(progress, course, user, association_object, regenerate_options, orig_generate_options)
+  def self.process_regenerate_criteria_via_llm(progress, course, user, association_object, regenerate_options, generate_options)
     rubric = course.rubrics.build(user:)
     return unless rubric.grants_right?(user, :update)
 
     process_llm_criteria_with_error_handling(progress, "regeneration") do
-      criteria = RubricLLMService.new(rubric).regenerate_criteria_via_llm(association_object, regenerate_options, orig_generate_options)
+      criteria = RubricLLMService.new(rubric).regenerate_criteria_via_llm(association_object, regenerate_options, generate_options)
       progress.set_results({ criteria: })
     end
   end

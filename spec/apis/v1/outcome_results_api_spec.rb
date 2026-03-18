@@ -527,6 +527,51 @@ describe "Outcome Results API", type: :request do
             CSV
           end
 
+          context "outcomes without results" do
+            before do
+              # Create an additional outcome with no results
+              outcome_model(context: outcome_course, title: "unassessed outcome")
+            end
+
+            it "doesn't display outcomes without result when exclude[]=missing_outcome_results is present" do
+              user_session @user
+              get "/courses/#{@course.id}/outcome_rollups.csv?exclude[]=missing_outcome_results"
+              expect(response).to be_successful
+              expect(response.body).to eq <<~CSV
+                Student name,Student ID,Student SIS ID,new outcome result,new outcome mastery points
+                #{@concluded_student.name},#{@concluded_student.id},N/A,3.0,3.0
+                #{@inactive_student.name},#{@inactive_student.id},N/A,3.0,3.0
+                #{outcome_student.name},#{outcome_student.id},N/A,3.0,3.0
+                #{@no_results_student.name},#{@no_results_student.id},N/A,,3.0
+              CSV
+            end
+
+            it "displays outcomes without result when exclude[]=missing_outcome_results is not present" do
+              user_session @user
+              get "/courses/#{@course.id}/outcome_rollups.csv"
+              expect(response).to be_successful
+              expect(response.body).to eq <<~CSV
+                Student name,Student ID,Student SIS ID,new outcome result,new outcome mastery points,unassessed outcome result,unassessed outcome mastery points
+                #{@concluded_student.name},#{@concluded_student.id},N/A,3.0,3.0,,3.0
+                #{@inactive_student.name},#{@inactive_student.id},N/A,3.0,3.0,,3.0
+                #{outcome_student.name},#{outcome_student.id},N/A,3.0,3.0,,3.0
+                #{@no_results_student.name},#{@no_results_student.id},N/A,,3.0,,3.0
+              CSV
+            end
+
+            it "displays outcomes without result when exclude[]=missing_user_rollups is present" do
+              user_session @user
+              get "/courses/#{@course.id}/outcome_rollups.csv?exclude[]=missing_user_rollups"
+              expect(response).to be_successful
+              expect(response.body).to eq <<~CSV
+                Student name,Student ID,Student SIS ID,new outcome result,new outcome mastery points,unassessed outcome result,unassessed outcome mastery points
+                #{@concluded_student.name},#{@concluded_student.id},N/A,3.0,3.0,,3.0
+                #{@inactive_student.name},#{@inactive_student.id},N/A,3.0,3.0,,3.0
+                #{outcome_student.name},#{outcome_student.id},N/A,3.0,3.0,,3.0
+              CSV
+            end
+          end
+
           context "users with multiple enrollments" do
             before do
               @section1 = add_section "s1", course: outcome_course
@@ -912,27 +957,6 @@ describe "Outcome Results API", type: :request do
           expect(alignments[1]["id"]).to eq live_assessment.asset_string
           expect(alignments[1]["name"]).to eq live_assessment.title
           expect(alignments[1]["html_url"]).to eq ""
-        end
-      end
-
-      describe "contributing_scores parameter" do
-        it "contributing_scores are included in rollups" do
-          outcome_assessment
-          api_call(:get,
-                   outcome_rollups_url(outcome_course, contributing_scores: true),
-                   controller: "outcome_results",
-                   action: "rollups",
-                   format: "json",
-                   course_id: outcome_course.id.to_s,
-                   contributing_scores: true)
-          json = JSON.parse(response.body)
-          score_links = json["rollups"][0]["scores"][0]["links"]
-          expect(score_links["outcome"]).to be_present
-          cs = score_links["contributing_scores"][0]
-          expect(cs["association_id"]).to be_present
-          expect(cs["association_type"]).to eq "RubricAssociation"
-          expect(cs["title"]).to eq "User, outcome assignment"
-          expect(cs["score"]).to be_present
         end
       end
     end

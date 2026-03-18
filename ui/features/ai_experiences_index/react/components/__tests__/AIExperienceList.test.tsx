@@ -46,16 +46,17 @@ const mockExperiences: AiExperience[] = [
 ]
 
 const defaultProps = {
+  canManage: true,
   experiences: mockExperiences,
-  onEdit: jest.fn(),
-  onTestConversation: jest.fn(),
-  onPublishToggle: jest.fn(),
-  onDelete: jest.fn(),
+  onEdit: vi.fn(),
+  onTestConversation: vi.fn(),
+  onPublishToggle: vi.fn(),
+  onDelete: vi.fn(),
 }
 
 describe('AIExperienceList', () => {
   beforeEach(() => {
-    jest.clearAllMocks()
+    vi.clearAllMocks()
   })
 
   it('renders all experiences passed as props', () => {

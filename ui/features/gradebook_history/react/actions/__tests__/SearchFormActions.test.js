@@ -46,16 +46,24 @@ const server = setupServer(
   }),
 )
 
-jest.mock('../../environment', () => ({
-  courseId: jest.fn(() => '123'),
-  courseIsConcluded: jest.fn(),
+vi.mock('../../environment', () => ({
+  default: {
+    courseId: vi.fn(() => '123'),
+    courseIsConcluded: vi.fn(),
+    timezone: vi.fn(),
+    overrideGradesEnabled: vi.fn(),
+  },
 }))
 
-jest.mock('../HistoryActions', () => ({
-  fetchHistoryStart: jest.fn(() => ({type: 'fetchHistoryStart'})),
-  fetchHistorySuccess: jest.fn(() => ({type: 'fetchHistorySuccess'})),
-  fetchHistoryFailure: jest.fn(() => ({type: 'fetchHistoryFailure'})),
-}))
+vi.mock('../HistoryActions', async (importOriginal) => {
+  const actual = await importOriginal()
+  return {
+    ...actual,
+    fetchHistoryStart: vi.fn(() => ({type: 'fetchHistoryStart'})),
+    fetchHistorySuccess: vi.fn(() => ({type: 'fetchHistorySuccess'})),
+    fetchHistoryFailure: vi.fn(() => ({type: 'fetchHistoryFailure'})),
+  }
+})
 
 describe('SearchFormActions', () => {
   beforeAll(() => {
@@ -160,14 +168,14 @@ describe('SearchFormActions', () => {
 
     beforeEach(() => {
       response = Fixtures.historyResponse()
-      getGradebookHistoryMock = jest
+      getGradebookHistoryMock = vi
         .spyOn(HistoryApi, 'getGradebookHistory')
         .mockResolvedValue(response)
-      dispatchMock = jest.fn()
+      dispatchMock = vi.fn()
     })
 
     afterEach(() => {
-      jest.clearAllMocks()
+      vi.clearAllMocks()
     })
 
     it('dispatches fetchHistoryStart', async () => {
@@ -208,24 +216,24 @@ describe('SearchFormActions', () => {
         data: Fixtures.userArray(),
         headers: {link: 'http://example.com/link-to-next-page'},
       }
-      getUsersByNameMock = jest.spyOn(UserApi, 'getUsersByName').mockResolvedValue(userResponse)
-      courseIsConcludedMock = jest.spyOn(environment, 'courseIsConcluded')
-      dispatchMock = jest.fn()
+      getUsersByNameMock = vi.spyOn(UserApi, 'getUsersByName').mockResolvedValue(userResponse)
+      courseIsConcludedMock = vi.spyOn(environment, 'courseIsConcluded')
+      dispatchMock = vi.fn()
     })
 
     afterEach(() => {
-      jest.clearAllMocks()
+      vi.clearAllMocks()
     })
 
     it('dispatches fetchRecordsStart', async () => {
-      const fetchSpy = jest.spyOn(SearchFormActions, 'fetchRecordsStart')
+      const fetchSpy = vi.spyOn(SearchFormActions, 'fetchRecordsStart')
       const thunk = SearchFormActions.getSearchOptions('assignments', '50 Page Essay')
       await thunk(dispatchMock)
       expect(fetchSpy).toHaveBeenCalledTimes(1)
     })
 
     it('dispatches fetchRecordsSuccess on success', async () => {
-      const fetchSpy = jest.spyOn(SearchFormActions, 'fetchRecordsSuccess')
+      const fetchSpy = vi.spyOn(SearchFormActions, 'fetchRecordsSuccess')
       const thunk = SearchFormActions.getSearchOptions('graders', 'Norval')
       await thunk(dispatchMock)
       expect(fetchSpy).toHaveBeenCalledWith(userResponse, 'graders')
@@ -234,7 +242,7 @@ describe('SearchFormActions', () => {
     it('dispatches fetchRecordsFailure on failure', async () => {
       const error = new Error('FAIL')
       getUsersByNameMock.mockRejectedValue(error)
-      const fetchSpy = jest.spyOn(SearchFormActions, 'fetchRecordsFailure')
+      const fetchSpy = vi.spyOn(SearchFormActions, 'fetchRecordsFailure')
       const thunk = SearchFormActions.getSearchOptions('students', 'Norval')
       await thunk(dispatchMock)
       expect(fetchSpy).toHaveBeenCalledTimes(1)

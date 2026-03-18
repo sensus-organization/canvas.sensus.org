@@ -77,6 +77,7 @@ describe Accessibility::CourseScanService do
       service_instance = instance_double(described_class)
       allow(described_class).to receive(:new).with(course:).and_return(service_instance)
       allow(service_instance).to receive(:scan_course)
+      allow(service_instance).to receive(:queue_course_statistics)
 
       described_class.scan(progress)
 
@@ -86,6 +87,24 @@ describe Accessibility::CourseScanService do
     it "completes the progress" do
       described_class.scan(progress)
       expect(progress.reload).to be_completed
+    end
+
+    context "when a11y_checker_account_statistics feature flag is enabled" do
+      before do
+        Account.site_admin.enable_feature!(:a11y_checker_account_statistics)
+      end
+
+      it "queues course statistics calculation after scan completes" do
+        expect(Accessibility::CourseStatisticCalculatorService).to receive(:queue_calculation).with(course)
+        described_class.scan(progress)
+      end
+    end
+
+    context "when a11y_checker_account_statistics feature flag is disabled" do
+      it "does not queue course statistics calculation" do
+        expect(Accessibility::CourseStatisticCalculatorService).not_to receive(:queue_calculation)
+        described_class.scan(progress)
+      end
     end
 
     context "when an error occurs" do
@@ -127,6 +146,14 @@ describe Accessibility::CourseScanService do
       let!(:assignment1) { assignment_model(course:) }
       let!(:assignment2) { assignment_model(course:) }
       let!(:quiz_lti_assignment) { new_quizzes_assignment(course:) }
+      let!(:classic_quiz) { course.quizzes.create!(title: "Classic Quiz", quiz_type: "assignment") }
+      let!(:classic_quiz_assignment) { classic_quiz.assignment }
+      let!(:external_tool_assignment) do
+        course.assignments.create!(
+          title: "External Tool Assignment",
+          submission_types: "external_tool"
+        )
+      end
 
       before do
         assignment2.destroy!
@@ -144,11 +171,63 @@ describe Accessibility::CourseScanService do
       it "does not scan the New Quizzes assignment" do
         expect(Accessibility::ResourceScannerService).not_to have_received(:call).with(resource: quiz_lti_assignment)
       end
+
+      it "does not scan the Classic Quiz assignment" do
+        expect(Accessibility::ResourceScannerService).not_to have_received(:call).with(resource: classic_quiz_assignment)
+      end
+
+      it "does not scan the external tool assignment" do
+        expect(Accessibility::ResourceScannerService).not_to have_received(:call).with(resource: external_tool_assignment)
+      end
+    end
+
+    context "when scanning discussion topics" do
+      let!(:discussion_topic1) { discussion_topic_model(context: course) }
+      let!(:discussion_topic2) { discussion_topic_model(context: course) }
+      let!(:discussion_topic3) { discussion_topic_model(context: course) }
+
+      before do
+        discussion_topic2.unpublish!
+        discussion_topic3.destroy!
+      end
+
+      context "when a11y_checker_additional_resources feature flag is enabled" do
+        before do
+          Account.site_admin.enable_feature!(:a11y_checker_additional_resources)
+          subject.scan_course
+        end
+
+        it "scans the published and unpublished discussion topics" do
+          expect(Accessibility::ResourceScannerService).to have_received(:call).with(resource: discussion_topic1)
+          expect(Accessibility::ResourceScannerService).to have_received(:call).with(resource: discussion_topic2)
+        end
+
+        it "does not scan the deleted discussion topic" do
+          expect(Accessibility::ResourceScannerService).not_to have_received(:call).with(resource: discussion_topic3)
+        end
+      end
+
+      context "when a11y_checker_additional_resources feature flag is disabled" do
+        before do
+          subject.scan_course
+        end
+
+        it "does not scan any discussion topics" do
+          expect(Accessibility::ResourceScannerService).not_to have_received(:call).with(resource: discussion_topic1)
+          expect(Accessibility::ResourceScannerService).not_to have_received(:call).with(resource: discussion_topic2)
+          expect(Accessibility::ResourceScannerService).not_to have_received(:call).with(resource: discussion_topic3)
+        end
+      end
     end
 
     context "when determining if resources need scanning" do
+      before do
+        Account.site_admin.enable_feature!(:a11y_checker_additional_resources)
+      end
+
       let!(:wiki_page) { wiki_page_model(course:) }
       let!(:assignment) { assignment_model(course:) }
+      let!(:discussion_topic) { discussion_topic_model(context: course) }
 
       context "when there is no previous scan" do
         it "scans the wiki page" do
@@ -160,10 +239,16 @@ describe Accessibility::CourseScanService do
           subject.scan_course
           expect(Accessibility::ResourceScannerService).to have_received(:call).with(resource: assignment)
         end
+
+        it "scans the discussion topic" do
+          subject.scan_course
+          expect(Accessibility::ResourceScannerService).to have_received(:call).with(resource: discussion_topic)
+        end
       end
 
       context "when resource has not been updated since last scan" do
         before do
+          Account.site_admin.enable_feature!(:a11y_checker_course_scan_conditional_resource_scan)
           Timecop.freeze(wiki_page.updated_at + 1.hour) do
             AccessibilityResourceScan.create!(
               course:,
@@ -182,6 +267,15 @@ describe Accessibility::CourseScanService do
               issue_count: 0
             )
           end
+          Timecop.freeze(discussion_topic.updated_at + 1.hour) do
+            AccessibilityResourceScan.create!(
+              course:,
+              context: discussion_topic,
+              workflow_state: :completed,
+              resource_workflow_state: :published,
+              issue_count: 0
+            )
+          end
         end
 
         it "does not scan the wiki page" do
@@ -193,10 +287,16 @@ describe Accessibility::CourseScanService do
           subject.scan_course
           expect(Accessibility::ResourceScannerService).not_to have_received(:call).with(resource: assignment)
         end
+
+        it "does not scan the discussion topic" do
+          subject.scan_course
+          expect(Accessibility::ResourceScannerService).not_to have_received(:call).with(resource: discussion_topic)
+        end
       end
 
       context "when resource has been updated since last scan" do
         before do
+          Account.site_admin.enable_feature!(:a11y_checker_course_scan_conditional_resource_scan)
           Timecop.freeze(wiki_page.updated_at - 1.hour) do
             AccessibilityResourceScan.create!(
               course:,
@@ -215,6 +315,15 @@ describe Accessibility::CourseScanService do
               issue_count: 0
             )
           end
+          Timecop.freeze(discussion_topic.updated_at - 1.hour) do
+            AccessibilityResourceScan.create!(
+              course:,
+              context: discussion_topic,
+              workflow_state: :completed,
+              resource_workflow_state: :published,
+              issue_count: 0
+            )
+          end
         end
 
         it "scans the wiki page" do
@@ -225,6 +334,89 @@ describe Accessibility::CourseScanService do
         it "scans the assignment" do
           subject.scan_course
           expect(Accessibility::ResourceScannerService).to have_received(:call).with(resource: assignment)
+        end
+
+        it "scans the discussion topic" do
+          subject.scan_course
+          expect(Accessibility::ResourceScannerService).to have_received(:call).with(resource: discussion_topic)
+        end
+      end
+
+      context "when a11y_checker_course_scan_conditional_resource_scan feature flag is disabled" do
+        before do
+          Account.site_admin.disable_feature!(:a11y_checker_course_scan_conditional_resource_scan)
+        end
+
+        context "when resource has not been updated since last scan" do
+          before do
+            Timecop.freeze(wiki_page.updated_at + 1.hour) do
+              AccessibilityResourceScan.create!(
+                course:,
+                context: wiki_page,
+                workflow_state: :completed,
+                resource_workflow_state: :published,
+                issue_count: 0
+              )
+            end
+            Timecop.freeze(assignment.updated_at + 1.hour) do
+              AccessibilityResourceScan.create!(
+                course:,
+                context: assignment,
+                workflow_state: :completed,
+                resource_workflow_state: :published,
+                issue_count: 0
+              )
+            end
+          end
+
+          it "scans the wiki page regardless of timestamp" do
+            subject.scan_course
+            expect(Accessibility::ResourceScannerService).to have_received(:call).with(resource: wiki_page)
+          end
+
+          it "scans the assignment regardless of timestamp" do
+            subject.scan_course
+            expect(Accessibility::ResourceScannerService).to have_received(:call).with(resource: assignment)
+          end
+        end
+      end
+
+      context "when a11y_checker_course_scan_conditional_resource_scan feature flag is enabled" do
+        before do
+          Account.site_admin.enable_feature!(:a11y_checker_course_scan_conditional_resource_scan)
+        end
+
+        context "when resource has not been updated since last scan" do
+          before do
+            Timecop.freeze(wiki_page.updated_at + 1.hour) do
+              AccessibilityResourceScan.create!(
+                course:,
+                context: wiki_page,
+                workflow_state: :completed,
+                resource_workflow_state: :published,
+                issue_count: 0
+              )
+            end
+            Timecop.freeze(assignment.updated_at + 1.hour) do
+              AccessibilityResourceScan.create!(
+                course:,
+                context: assignment,
+                workflow_state: :completed,
+                resource_workflow_state: :published,
+                issue_count: 0
+              )
+            end
+          end
+
+          it "does not scan the wiki page" do
+            subject.scan_course
+            expect(Accessibility::ResourceScannerService).not_to have_received(:call).with(resource: wiki_page)
+          end
+
+          it "does not scan the assignment" do
+            subject.scan_course
+            expect(Accessibility::ResourceScannerService).not_to have_received(:call).with(resource: assignment)
+          end
         end
       end
     end

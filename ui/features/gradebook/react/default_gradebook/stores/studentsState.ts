@@ -16,7 +16,14 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import {difference, chunk, keyBy, groupBy, cloneDeep, setWith as lodashSetWith} from 'lodash'
+import {
+  chunk,
+  cloneDeep,
+  difference,
+  groupBy,
+  keyBy,
+  setWith as lodashSetWith,
+} from 'es-toolkit/compat'
 import type {StoreApi} from 'zustand'
 import {useScope as createI18nScope} from '@canvas/i18n'
 import type {GradebookStore} from './index'
@@ -334,6 +341,7 @@ export default (
             queryParams: {userIds: userIdChunk, courseId},
             headers: {'Correlation-Id': get().correlationId},
             onError: flashSubmissionLoadError,
+            queue: get().returnQueueIfDefined(),
           })
           const submissionsByUserId = groupBy(data.map(transformSubmission), 'user_id')
 
@@ -356,6 +364,7 @@ export default (
         queryParams: {userIds: userIds, courseId},
         headers: {'Correlation-Id': get().correlationId},
         onError: flashStudentLoadError,
+        queue: get().returnQueueIfDefined(),
       })
       await onEnrollmentSuccess(users.course.usersConnection.nodes, enrollments)
     }
@@ -369,6 +378,7 @@ export default (
       headers: {'Correlation-Id': get().correlationId},
       onSuccess: onUserPageSuccess,
       onError: flashStudentLoadError,
+      queue: get().returnQueueIfDefined(),
     })
     await Promise.all([...onSuccessCallbacks, ...onErrorCallbacks])
 

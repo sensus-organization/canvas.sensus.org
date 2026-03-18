@@ -658,6 +658,8 @@ export default class SubmissionTray extends React.Component<
       this.props.assignment,
     )
 
+    const assignmentDisplayName = this.props.assignment.name
+
     return (
       <ApolloProvider client={createClient()}>
         <Tray
@@ -718,7 +720,7 @@ export default class SubmissionTray extends React.Component<
                     theme={{mediumPaddingHorizontal: '0', mediumHeight: 'normal'}}
                   >
                     <Link href={this.props.assignment.htmlUrl} isWithinText={false}>
-                      {this.props.assignment.name}
+                      {assignmentDisplayName}
                     </Link>
                   </InstUISettingsProvider>
                 </Carousel>

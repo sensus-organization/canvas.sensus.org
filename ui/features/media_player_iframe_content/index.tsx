@@ -17,17 +17,17 @@
  */
 
 import React from 'react'
-import { createRoot } from 'react-dom/client'
+import {render} from '@canvas/react'
 // TODO: use URL() in browser to parse URL
 // eslint-disable-next-line import/no-nodejs-modules
-import { parse } from 'url'
+import {parse} from 'url'
 import ready from '@instructure/ready'
-import { useScope as createI18nScope } from '@canvas/i18n'
+import {useScope as createI18nScope} from '@canvas/i18n'
 import CanvasMediaPlayer from '@canvas/canvas-media-player'
 import CanvasStudioPlayer from '@canvas/canvas-studio-player'
-import { MediaInfo } from '@canvas/canvas-studio-player/react/types'
-import { captionLanguageForLocale } from '@instructure/canvas-media'
-import type { GlobalEnv } from '@canvas/global/env/GlobalEnv.d'
+import {MediaInfo} from '@canvas/canvas-studio-player/react/types'
+import {captionLanguageForLocale} from '@instructure/canvas-media'
+import type {GlobalEnv} from '@canvas/global/env/GlobalEnv.d'
 
 declare const ENV: GlobalEnv & {
   media_object: MediaInfo
@@ -46,7 +46,6 @@ const isStandalone = () => {
 
 ready(() => {
   const container = document.getElementById('player_container')
-  const root = createRoot(container!)
   // get the media_id from something like
   //  `http://canvas.example.com/media_objects_iframe/m-48jGWTHdvcV5YPdZ9CKsqbtRzu1jURgu?type=video`
   // or
@@ -103,8 +102,8 @@ ready(() => {
         }))
         if (tracks)
           event?.source?.postMessage(
-            { subject: 'media_tracks_response', payload: tracks },
-            { targetOrigin: event.origin },
+            {subject: 'media_tracks_response', payload: tracks},
+            {targetOrigin: event.origin},
           )
       }
     },
@@ -128,7 +127,7 @@ ready(() => {
 
   const aria_label = !media_object.title ? undefined : media_object.title
   if (ENV.FEATURES?.consolidated_media_player_iframe) {
-    root.render(
+    render(
       <CanvasStudioPlayer
         media_id={media_id || ''}
         media_sources={href_source || media_object.media_sources}
@@ -140,28 +139,30 @@ ready(() => {
         kebabMenuElements={
           ENV.FEATURES?.rce_studio_embed_improvements
             ? [
-              {
-                id: 'expand-view',
-                text: I18n.t('Expand View'),
-                showInOverlay: true,
-                overlayText: I18n.t('Expand'),
-                icon: 'expand',
-                onClick: () => {
-                  if (window.top) {
-                    window.top.location.href = `/media_attachments/${attachment_id}/immersive_view`
-                  }
+                {
+                  id: 'expand-view',
+                  text: I18n.t('Expand View'),
+                  showInOverlay: true,
+                  overlayText: I18n.t('Expand'),
+                  ariaLabel: I18n.t('Open immersive view with all media tools'),
+                  icon: 'expand',
+                  onClick: () => {
+                    if (window.top) {
+                      window.top.location.href = `/media_attachments/${attachment_id}/immersive_view`
+                    }
+                  },
+                  order: 0,
                 },
-                order: 0,
-              },
-            ]
+              ]
             : []
         }
       />,
+      container,
     )
   } else {
-    root.render(
+    render(
       <CanvasMediaPlayer
-        media_id={media_id}
+        media_id={media_id || ''}
         media_sources={href_source || media_object.media_sources}
         media_tracks={mediaTracks}
         type={is_video ? 'video' : 'audio'}
@@ -169,6 +170,7 @@ ready(() => {
         is_attachment={is_attachment}
         attachment_id={attachment_id}
       />,
+      container,
     )
   }
 })

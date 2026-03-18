@@ -68,6 +68,12 @@
     "all_apps_a50dea49": {
         "message": "Tất Cả Ứng Dụng"
     },
+    "allow_media_download_16dcf2bd": {
+        "message": "Cho phép tải phương tiện"
+    },
+    "allow_transcript_download_3fa239f0": {
+        "message": "Cho phép tải bảng điểm"
+    },
     "alpha_15d59033": {
         "message": "Alpha"
     },
@@ -268,6 +274,9 @@
     },
     "change_text_color_1aecb912": {
         "message": "Thay đổi màu văn bản"
+    },
+    "changes_will_apply_after_you_save_this_page_fb324e9d": {
+        "message": "Thay đổi sẽ được áp dụng sau khi bạn lưu trang này."
     },
     "changes_you_made_may_not_be_saved_4e8db973": {
         "message": "Những thay đổi bạn đã thực hiện có thể không được lưu."
@@ -706,6 +715,9 @@
     },
     "embed_image_1080badc": {
         "message": "Nhúng Hình Ảnh"
+    },
+    "embed_options_44c4cba8": {
+        "message": "Tùy Chọn Nhúng"
     },
     "embed_video_a97a64af": {
         "message": "Nhúng Video"
@@ -1427,6 +1439,9 @@
     "loading_preview_9f077aa1": {
         "message": "Đang tải bản xem trước"
     },
+    "lock_speed_at_1x_57d4f815": {
+        "message": "Khóa tốc độ ở 1x"
+    },
     "locked_762f138b": {
         "message": "Bị Khóa"
     },
@@ -1471,6 +1486,9 @@
     },
     "media_file_is_processing_please_try_again_later_58a6d49": {
         "message": "Tập tin phương tiện đang xử lý. Vui lòng thử lại sau."
+    },
+    "media_options_saved_560c4ec8": {
+        "message": "Đã lưu các tùy chọn cho phương tiện."
     },
     "media_title_2112243b": {
         "message": "Tiêu Đề Phương Tiện"

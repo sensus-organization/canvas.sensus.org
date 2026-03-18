@@ -236,7 +236,13 @@ module Types
       scope = course.active_course_sections
 
       if filter[:assignment_id]
-        assignment = course.assignments.active.find(filter[:assignment_id])
+        assignment_scope = if course.feature_enabled?(:peer_review_allocation_and_grading)
+                             AbstractAssignment.assignment_or_peer_review.where(context: course)
+                           else
+                             course.assignments
+                           end
+
+        assignment = assignment_scope.active.find(filter[:assignment_id])
         scope = scope.where(id: assignment.sections_for_assigned_students) if assignment.only_visible_to_overrides?
       end
 
@@ -401,46 +407,47 @@ module Types
                required: false
     end
     def submissions_connection(student_ids: nil, order_by: [], filter: {})
-      allowed_user_ids = if course.grants_any_right?(current_user, session, :manage_grades, :view_all_grades)
-                           # TODO: make a preloader for this???
-                           course.apply_enrollment_visibility(course.all_student_enrollments, current_user).pluck(:user_id)
-                         elsif course.grants_right?(current_user, session, :read_grades)
-                           [current_user.id]
-                         else
-                           []
-                         end
+      allowed_user_ids_promise = if course.grants_any_right?(current_user, session, :manage_grades, :view_all_grades)
+                                   Loaders::CourseVisibleStudentUserIdsLoader.for(current_user:).load(course)
+                                 elsif course.grants_right?(current_user, session, :read_grades)
+                                   Promise.resolve([current_user.id])
+                                 else
+                                   Promise.resolve([])
+                                 end
 
-      if student_ids.present?
-        allowed_user_ids &= student_ids.map(&:to_i)
-      end
+      allowed_user_ids_promise.then do |allowed_user_ids|
+        if student_ids.present?
+          allowed_user_ids &= student_ids.map(&:to_i)
+        end
 
-      filter ||= {}
+        filter ||= {}
 
-      submissions = Submission.active.joins(:assignment).where(
-        user_id: allowed_user_ids,
-        assignment_id: course.assignments.published,
-        workflow_state: filter[:states] || DEFAULT_SUBMISSION_STATES
-      )
+        submissions = Submission.active.joins(:assignment).where(
+          user_id: allowed_user_ids,
+          assignment_id: course.assignments.published.reorder(nil).select(:id),
+          workflow_state: filter[:states] || DEFAULT_SUBMISSION_STATES
+        )
 
-      if filter[:submitted_since]
-        submissions = submissions.where("submitted_at > ?", filter[:submitted_since])
-      end
-      if filter[:graded_since]
-        submissions = submissions.where("graded_at > ?", filter[:graded_since])
-      end
-      if filter[:updated_since]
-        submissions = submissions.where("submissions.updated_at > ?", filter[:updated_since])
-      end
-      if (due_between = filter[:due_between])
-        submissions = submissions.where(cached_due_date: (due_between[:start])..(due_between[:end]))
-      end
+        if filter[:submitted_since]
+          submissions = submissions.where("submitted_at > ?", filter[:submitted_since])
+        end
+        if filter[:graded_since]
+          submissions = submissions.where("graded_at > ?", filter[:graded_since])
+        end
+        if filter[:updated_since]
+          submissions = submissions.where("submissions.updated_at > ?", filter[:updated_since])
+        end
+        if (due_between = filter[:due_between])
+          submissions = submissions.where(cached_due_date: (due_between[:start])..(due_between[:end]))
+        end
 
-      (order_by || []).each do |order|
-        direction = (order[:direction] == "descending") ? "DESC NULLS LAST" : "ASC"
-        submissions = submissions.order("#{order[:field]} #{direction}")
-      end
+        (order_by || []).each do |order|
+          direction = (order[:direction] == "descending") ? "DESC NULLS LAST" : "ASC"
+          submissions = submissions.order("#{order[:field]} #{direction}")
+        end
 
-      submissions
+        submissions
+      end
     end
 
     field :groups_connection, GroupType.connection_type, null: true do
@@ -585,21 +592,31 @@ module Types
     def submission_statistics(observed_user_id: nil)
       return nil unless course.grants_right?(current_user, :read)
 
-      # Check if current user is an observer with observed students
-      observed_students = ObserverEnrollment.observed_students(course, current_user, include_restricted_access: false).keys
+      Loaders::ObservedStudentsLoader.for(current_user:, include_restricted_access: false).load(course).then do |observed_students_hash|
+        observed_students = observed_students_hash.keys
 
-      # filter observed_students to only students with observed_user_id if provided
-      if observed_user_id.present?
-        observed_students.select! { |student| student.id.to_s == observed_user_id.to_s }
+        if observed_user_id.present?
+          observed_students.select! { |student| student.id.to_s == observed_user_id.to_s }
+        end
+
+        is_observer = !observed_students.empty?
+
+        if is_observer
+          Loaders::ObserverCourseSubmissionDataLoader.for(current_user:, request: context[:request], observed_user_id:).load(course)
+        elsif observed_user_id.nil?
+          Loaders::CourseSubmissionDataLoader.for(current_user:).load(course)
+        else
+          nil
+        end
       end
+    end
 
-      is_observer = !observed_students.empty?
+    field :module_progression_statistics, ModuleProgressionStatisticsType, "Returns module progression statistics for the current user", null: true
+    def module_progression_statistics
+      return nil unless course.grants_right?(current_user, :read)
+      return nil unless current_user
 
-      if is_observer
-        Loaders::ObserverCourseSubmissionDataLoader.for(current_user:, request: context[:request]).load(course)
-      elsif observed_user_id.nil?
-        Loaders::CourseSubmissionDataLoader.for(current_user:).load(course)
-      end
+      Loaders::CourseModuleProgressionDataLoader.for(current_user:).load(course)
     end
 
     field :allow_final_grade_override, Boolean, null: true

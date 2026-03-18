@@ -3089,6 +3089,32 @@ describe User do
         expect(events).to match_array([reply_to_topic, reply_to_entry])
       end
 
+      it "only shows checkpoints in the course they belong to, not in all courses" do
+        # Create two courses with the same teacher
+        course_a = @course
+        course_b = course_factory(active_all: true)
+        course_b.enroll_teacher(@user, enrollment_state: "active")
+
+        # Enable checkpoints in both courses
+        course_a.account.enable_feature!(:discussion_checkpoints)
+        course_b.account.enable_feature!(:discussion_checkpoints)
+
+        # Create discussion checkpoint in Course A only
+        reply_to_topic_a, reply_to_entry_a = graded_discussion_topic_with_checkpoints(context: course_a)
+
+        # When querying upcoming_events for Course B only, checkpoints from Course A should NOT appear
+        context_codes_b = [course_b.asset_string]
+        events_b = @user.upcoming_events(context_codes: context_codes_b)
+        expect(events_b).not_to include(reply_to_topic_a)
+        expect(events_b).not_to include(reply_to_entry_a)
+
+        # When querying upcoming_events for Course A, checkpoints from Course A SHOULD appear
+        context_codes_a = [course_a.asset_string]
+        events_a = @user.upcoming_events(context_codes: context_codes_a)
+        expect(events_a).to include(reply_to_topic_a)
+        expect(events_a).to include(reply_to_entry_a)
+      end
+
       it "doesn't include events for enrollments that are inactive due to date" do
         @enrollment.start_at = 1.day.ago
         @enrollment.end_at = 2.days.from_now
@@ -4160,6 +4186,31 @@ describe User do
     end
   end
 
+  describe "check_accounts_any_right?" do
+    it "returns false for empty rights array" do
+      user1 = user_factory
+      user2 = user_factory
+      expect(user1.check_accounts_any_right?(user2)).to be false
+    end
+
+    it "returns false when user is nil" do
+      user1 = user_factory
+      expect(user1.check_accounts_any_right?(nil, :manage_students)).to be false
+    end
+
+    it "returns true when any of multiple rights is granted" do
+      target = user_factory
+      seeker = account_admin_user_with_role_changes(role_changes: { view_user_logins: true, manage_user_logins: false })
+      expect(target.check_accounts_any_right?(seeker, :view_user_logins, :manage_user_logins)).to be true
+    end
+
+    it "returns false when none of multiple rights are granted" do
+      target = user_factory
+      seeker = account_admin_user_with_role_changes(role_changes: { view_user_logins: false, manage_user_logins: false })
+      expect(target.check_accounts_any_right?(seeker, :view_user_logins, :manage_user_logins)).to be false
+    end
+  end
+
   describe "cached_course_ids_for_observed_user" do
     before :once do
       @observer = user_factory(active_all: true)
@@ -4338,7 +4389,7 @@ describe User do
       expect(SubmissionLifecycleManager).to receive(:recompute_users_for_course).twice # sync_enrollments and destroy_enrollments
       test_student = @course.student_view_student
       test_student.destroy
-      test_student.reload.enrollments.each { |e| expect(e).to be_deleted }
+      expect(test_student.reload.enrollments).to all(be_deleted)
     end
   end
 
@@ -4679,6 +4730,72 @@ describe User do
     end
   end
 
+  describe "#active_non_student_enrollment?" do
+    let(:user) { User.create! }
+
+    it "returns false by default" do
+      expect(user.active_non_student_enrollment?).to be false
+    end
+
+    it "returns false when user has only student enrollment" do
+      course_with_student(user:, active_all: true)
+      expect(user.active_non_student_enrollment?).to be false
+    end
+
+    it "returns true when user has active teacher enrollment" do
+      course_with_teacher(user:, active_all: true)
+      expect(user.active_non_student_enrollment?).to be true
+    end
+
+    it "returns true when user has active TA enrollment" do
+      course_with_ta(user:, active_all: true)
+      expect(user.active_non_student_enrollment?).to be true
+    end
+
+    it "returns true when user has active designer enrollment" do
+      course_with_designer(user:, active_all: true)
+      expect(user.active_non_student_enrollment?).to be true
+    end
+
+    it "returns false when user has only observer enrollment" do
+      course_with_observer(user:, active_all: true)
+      expect(user.active_non_student_enrollment?).to be false
+    end
+
+    it "returns false when teacher enrollment is concluded" do
+      course_with_teacher(user:, active_all: true)
+      user.enrollments.find_by(type: "TeacherEnrollment").complete!
+      user.remove_instance_variable(:@_active_non_student_enrollment) if user.instance_variable_defined?(:@_active_non_student_enrollment)
+      expect(user.active_non_student_enrollment?).to be false
+    end
+
+    it "returns false when teacher enrollment is inactive" do
+      course_with_teacher(user:, active_all: true)
+      user.enrollments.find_by(type: "TeacherEnrollment").deactivate
+      user.remove_instance_variable(:@_active_non_student_enrollment) if user.instance_variable_defined?(:@_active_non_student_enrollment)
+      expect(user.active_non_student_enrollment?).to be false
+    end
+
+    it "returns false when teacher enrollment is deleted" do
+      course_with_teacher(user:, active_all: true)
+      user.enrollments.find_by(type: "TeacherEnrollment").destroy
+      user.remove_instance_variable(:@_active_non_student_enrollment) if user.instance_variable_defined?(:@_active_non_student_enrollment)
+      expect(user.active_non_student_enrollment?).to be false
+    end
+
+    it "returns false when user has concluded teacher enrollment and active student enrollment" do
+      course1 = course_factory(active_all: true)
+      course1.enroll_teacher(user).tap do |e|
+        e.accept!
+        e.complete!
+      end
+      course2 = course_factory(active_all: true)
+      course2.enroll_student(user).tap(&:accept!)
+      user.remove_instance_variable(:@_active_non_student_enrollment) if user.instance_variable_defined?(:@_active_non_student_enrollment)
+      expect(user.active_non_student_enrollment?).to be false
+    end
+  end
+
   describe "#participating_student_current_and_concluded_course_ids" do
     let(:user) { User.create! }
 
@@ -4866,6 +4983,54 @@ describe User do
       it "doesn't allow editing if only a deleted pseudonym's account allows this" do
         @user.pseudonyms.where(account_id: @other_account).first.destroy
         expect(@user.user_can_edit_profile?).to be false
+      end
+    end
+
+    describe "user_can_edit_bio?" do
+      it "returns false when users_can_edit_profile is false" do
+        @pseudonym.account.settings[:users_can_edit_profile] = false
+        @pseudonym.account.settings[:users_can_edit_bio] = true
+        @pseudonym.account.save!
+        expect(@user.user_can_edit_bio?).to be false
+      end
+
+      it "allows editing bio if both settings are true" do
+        @pseudonym.account.settings[:users_can_edit_profile] = true
+        @pseudonym.account.settings[:users_can_edit_bio] = true
+        @pseudonym.account.save!
+        expect(@user.user_can_edit_bio?).to be true
+      end
+    end
+
+    describe "user_can_edit_profile_links?" do
+      it "returns false when users_can_edit_profile is false" do
+        @pseudonym.account.settings[:users_can_edit_profile] = false
+        @pseudonym.account.settings[:users_can_edit_profile_links] = true
+        @pseudonym.account.save!
+        expect(@user.user_can_edit_profile_links?).to be false
+      end
+
+      it "allows editing profile links if both settings are true" do
+        @pseudonym.account.settings[:users_can_edit_profile] = true
+        @pseudonym.account.settings[:users_can_edit_profile_links] = true
+        @pseudonym.account.save!
+        expect(@user.user_can_edit_profile_links?).to be true
+      end
+    end
+
+    describe "user_can_edit_title?" do
+      it "returns false when users_can_edit_profile is false" do
+        @pseudonym.account.settings[:users_can_edit_profile] = false
+        @pseudonym.account.settings[:users_can_edit_title] = true
+        @pseudonym.account.save!
+        expect(@user.user_can_edit_title?).to be false
+      end
+
+      it "allows editing title if both settings are true" do
+        @pseudonym.account.settings[:users_can_edit_profile] = true
+        @pseudonym.account.settings[:users_can_edit_title] = true
+        @pseudonym.account.save!
+        expect(@user.user_can_edit_title?).to be true
       end
     end
   end
@@ -5057,8 +5222,8 @@ describe User do
         root_account.set_feature_flag!(:widget_dashboard, "allowed_on")
       end
 
-      it "returns true" do
-        expect(user.prefers_widget_dashboard?(root_account)).to be true
+      it "returns false (requires opt-in)" do
+        expect(user.prefers_widget_dashboard?(root_account)).to be false
       end
     end
 
@@ -5067,8 +5232,8 @@ describe User do
         root_account.enable_feature!(:widget_dashboard)
       end
 
-      it "returns true" do
-        expect(user.prefers_widget_dashboard?(root_account)).to be true
+      it "returns false (controller force_on logic handles locked state)" do
+        expect(user.prefers_widget_dashboard?(root_account)).to be false
       end
     end
 
@@ -5126,11 +5291,16 @@ describe User do
         domain_root_account.enable_feature!(:widget_dashboard)
       end
 
-      # Now should return true based on domain_root_account only
+      # Should still return false when preference is nil (requires explicit opt-in)
       # The cross-shard account's feature flag should be ignored
+      expect(user.prefers_widget_dashboard?(domain_root_account)).to be false
+
+      # Verify user preference override works (explicitly opt in)
+      user.preferences[:widget_dashboard_user_preference] = true
+      user.save!
       expect(user.prefers_widget_dashboard?(domain_root_account)).to be true
 
-      # Verify user preference override still works
+      # Verify user preference override works (explicitly opt out)
       user.preferences[:widget_dashboard_user_preference] = false
       user.save!
       expect(user.prefers_widget_dashboard?(domain_root_account)).to be false

@@ -23,7 +23,7 @@ import {Flex} from '@instructure/ui-flex'
 import {Heading} from '@instructure/ui-heading'
 import {Tabs} from '@instructure/ui-tabs'
 import {Tray} from '@instructure/ui-tray'
-import {cloneDeep, isEmpty, isEqual} from 'lodash'
+import {cloneDeep, isEqual, isEmpty} from 'es-toolkit/compat'
 import React, {useState} from 'react'
 import {confirmViewUngradedAsZero} from '../Gradebook.utils'
 import {setCoursePostPolicy as apiSetCoursePostPolicy} from '../PostPolicies/PostPolicyApi'
@@ -411,6 +411,12 @@ const GradebookSettingsModal = (props: GradebookSettingsModalProps) => {
                     checked: viewOptions.viewHiddenGradesIndicator,
                     onChange: (value: GradebookViewOptions['viewHiddenGradesIndicator']) => {
                       setViewOptions({...viewOptions, viewHiddenGradesIndicator: value})
+                    },
+                  }}
+                  viewStatusForColorblindness={{
+                    checked: viewOptions.viewStatusForColorblindness,
+                    onChange: (value: GradebookViewOptions['viewStatusForColorblindness']) => {
+                      setViewOptions({...viewOptions, viewStatusForColorblindness: value})
                     },
                   }}
                 />

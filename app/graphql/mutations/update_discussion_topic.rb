@@ -44,6 +44,7 @@ class Mutations::UpdateDiscussionTopic < Mutations::DiscussionBase
     discussion_topic = DiscussionTopic.find(input[:discussion_topic_id])
     raise GraphQL::ExecutionError, "insufficient permission" unless discussion_topic.grants_right?(current_user, :update)
 
+    discussion_topic.updating_user = current_user
     if input[:message] != discussion_topic.message && discussion_topic.editing_restricted?(:content)
       # editing is impossible frontwise, so we're just gonna ignore auto formatting
       input[:message] = discussion_topic.message
@@ -55,8 +56,8 @@ class Mutations::UpdateDiscussionTopic < Mutations::DiscussionBase
       return validation_error(I18n.t("Anonymity settings are locked due to a posted reply"))
     end
 
-    if !discussion_topic.checkpoints? && input.dig(:assignment, :for_checkpoints) && (discussion_topic.discussion_entries&.active&.any? || discussion_topic.assignment&.has_student_submissions?)
-      return validation_error(I18n.t("If there are replies, checkpoints cannot be enabled."))
+    if !discussion_topic.checkpoints? && input.dig(:assignment, :for_checkpoints) && !discussion_topic.can_group?
+      return validation_error(I18n.t("Checkpoints cannot be enabled after replies have been made."))
     end
 
     unless input[:anonymous_state].nil?
@@ -84,7 +85,7 @@ class Mutations::UpdateDiscussionTopic < Mutations::DiscussionBase
       if input[:published] && !was_published
         discussion_topic.publish!
       elsif input[:published] && was_published
-        discussion_topic.edit!
+        discussion_topic.last_reply_at = Time.zone.now
       else
         discussion_topic.unpublish!
       end
@@ -126,8 +127,6 @@ class Mutations::UpdateDiscussionTopic < Mutations::DiscussionBase
         return validation_error(err_message) unless err_message.nil?
       end
     end
-
-    discussion_topic.saving_user = current_user
 
     # Save the discussion topic before updating the assignment if the group category is being updated,
     # because creating group assignment overrides are dependent on the group category being set
@@ -203,7 +202,7 @@ class Mutations::UpdateDiscussionTopic < Mutations::DiscussionBase
             points_possible: checkpoint[:points_possible],
             dates:,
             replies_required: checkpoint[:replies_required],
-            saving_user: current_user
+            updating_user: current_user
           )
         end
       end
@@ -217,13 +216,16 @@ class Mutations::UpdateDiscussionTopic < Mutations::DiscussionBase
     is_deleting_checkpoints = input.key?(:set_checkpoints) && !input[:set_checkpoints]
 
     if is_deleting_checkpoints
+      unless discussion_topic.can_group?
+        return validation_error(I18n.t("Checkpoints cannot be disabled after replies have been made."))
+      end
+
       Checkpoints::DiscussionCheckpointDeleterService.call(
         discussion_topic:
       )
     end
 
     discussion_topic.editor = current_user
-    discussion_topic.saving_user = current_user
     return errors_for(discussion_topic) unless discussion_topic.save!
 
     if input.key?(:ungraded_discussion_overrides)
@@ -275,7 +277,7 @@ def set_discussion_assignment_association(assignment_params, discussion_topic)
     discussion_topic.assignment = assignment
     discussion_topic.sync_assignment
     # This save is required to prevent an extra discussion_topic from being created in the updateAssignment
-    assignment.saving_user = current_user
+    assignment.updating_user = current_user
     assignment.save!
   end
 end
