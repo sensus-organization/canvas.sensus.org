@@ -85,6 +85,7 @@ class ProvisionalGradesController < ProvisionalGradesBaseController
   #   }]
   #
   def bulk_select
+    return render json: { message: "Select Jury results from the Grade Summary page" }, status: :unprocessable_entity if @assignment.jury_calibrated_grading?
     render_unauthorized_action and return unless @assignment.permits_moderation?(@current_user)
 
     provisional_grade_ids = params[:provisional_grade_ids]
@@ -180,6 +181,7 @@ class ProvisionalGradesController < ProvisionalGradesBaseController
   #   }
   #
   def select
+    return render json: { message: "Select Jury results from the Grade Summary page" }, status: :unprocessable_entity if @assignment.jury_calibrated_grading?
     render_unauthorized_action and return unless @assignment.permits_moderation?(@current_user)
 
     pg = @assignment.provisional_grades.find(params[:provisional_grade_id])
@@ -221,6 +223,10 @@ class ProvisionalGradesController < ProvisionalGradesBaseController
   #        -X POST
   #
   def publish
+    if @assignment.jury_calibrated_grading?
+      return render json: { message: "Publish Jury results from the Grade Summary page" }, status: :unprocessable_entity
+    end
+
     can_manage_grades = @context.grants_right?(@current_user, :manage_grades)
     unless can_manage_grades && @assignment.permits_moderation?(@current_user)
       render_unauthorized_action and return

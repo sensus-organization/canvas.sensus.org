@@ -2505,6 +2505,7 @@ EditView.prototype.renderModeratedGradingFormFieldGroup = function () {
     locale: ENV.LOCALE,
     moderatedGradingEnabled: this.assignment.moderatedGrading(),
     availableGradersCount: ENV.MODERATED_GRADING_MAX_GRADER_COUNT,
+    juryCalibratedGradingEnabled: !!this.assignment.get('jury_calibrated_grading'),
     onGraderCommentsVisibleToGradersChange: this.handleGraderCommentsVisibleToGradersChanged,
     onModeratedGradingChange: this.handleModeratedGradingChanged,
     hideNumberInputErrors: clearNumberInputErrors,

@@ -871,6 +871,7 @@ class GradebooksController < ApplicationController
         submission_record = submission_records.find { |sub| sub.user_id == submission[:user_id].to_i }
         @assignment = assignments[submission[:assignment_id].to_i]
         @user = users[submission[:user_id].to_i]
+        return render_unauthorized_action if @assignment.jury_user?(@current_user)
 
         submission = submission.permit(:grade,
                                        :score,

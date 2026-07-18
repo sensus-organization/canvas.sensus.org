@@ -26,6 +26,29 @@ describe GroupCategoriesController do
     @non_collaborative_category = @course.group_categories.create!(name: "Non-Collaborative Groups", non_collaborative: true)
   end
 
+  describe "POST ensure_jury_workspace" do
+    it "creates one non-SIS group set per Jury user and is idempotent" do
+      jury_role = @course.root_account.roles.create!(name: JuryGrading::WorkspaceService::ROLE_NAME, base_role_type: "TaEnrollment")
+      jurors = [user_factory, user_factory]
+      jurors.each { |jury| @course.enroll_ta(jury, role: jury_role, enrollment_state: "active") }
+      user_session(@teacher)
+
+      expect do
+        post "ensure_jury_workspace", params: { course_id: @course.id }, format: :json
+      end.to change(JuryGradingWorkspace, :count).by(2)
+      expect(response).to be_successful
+
+      categories = JuryGradingWorkspace.where(course: @course).map(&:group_category)
+      expect(categories.pluck(:role)).to all(be_nil)
+      expect(categories.pluck(:sis_source_id)).to all(be_nil)
+      expect(categories.map { |category| category.groups.active.count }).to all(eq(1))
+
+      expect do
+        post "ensure_jury_workspace", params: { course_id: @course.id }, format: :json
+      end.not_to change(JuryGradingWorkspace, :count)
+    end
+  end
+
   def expect_imported_groups
     group_1 = Group.where(name: "group1").first
     expect(group_1).not_to be_nil

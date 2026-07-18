@@ -41,11 +41,13 @@ export default class GroupCategoriesView extends CollectionView {
       '#group_categories_tabs': '$tabs',
       'li.static': '$static',
       '#add-group-set': '$addGroupSetButton',
+      '#make-jury-group-sets, #make-jury-group-sets-empty': '$makeJuryGroupSetsButton',
       '.empty-groupset-instructions': '$emptyInstructions',
     }
 
     this.prototype.events = {
       'click #add-group-set': 'addGroupSet',
+      'click #make-jury-group-sets, #make-jury-group-sets-empty': 'makeJuryGroupSets',
       'tabsactivate #group_categories_tabs': 'activatedTab',
     }
 
@@ -213,6 +215,18 @@ export default class GroupCategoriesView extends CollectionView {
       this.reorder()
       this.refreshTabs()
       this.$tabs.tabs({active: this.tabOffsetOfModel(cat)})
+    }
+  }
+
+  async makeJuryGroupSets(e) {
+    e.preventDefault()
+    this.$makeJuryGroupSetsButton.prop('disabled', true)
+    try {
+      await $.post(ENV.jury_workspace_url)
+      window.location.reload()
+    } catch (_) {
+      this.$makeJuryGroupSetsButton.prop('disabled', false)
+      window.alert(I18n.t('Could not create jury group sets.'))
     }
   }
 

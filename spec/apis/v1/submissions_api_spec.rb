@@ -2245,6 +2245,22 @@ describe "Submissions API", type: :request do
       submit_homework(@a1, @student2)
     end
 
+    it "does not expose course-wide submissions to a Jury TA" do
+      jury_role = custom_ta_role(JuryGrading::WorkspaceService::ROLE_NAME, account: @course.account)
+      jury = @course.enroll_ta(User.create!, role: jury_role, enrollment_state: "active").user
+      @a1.update!(jury_calibrated_grading: true)
+
+      api_call_as_user(
+        jury,
+        :get,
+        "/api/v1/courses/#{@course.id}/students/submissions.json",
+        { controller: "submissions_api", action: "for_students", format: "json", course_id: @course.to_param },
+        { student_ids: "all", assignment_ids: [@a1.to_param] },
+        {},
+        { expected_status: 403 }
+      )
+    end
+
     it "returns all submissions for a student", priority: "1" do
       json = api_call(:get,
                       "/api/v1/courses/#{@course.id}/students/submissions.json",
@@ -7116,6 +7132,22 @@ describe "Submissions API", type: :request do
       expect(json["error"]).to eq("'grade_data' parameter required")
     end
 
+    it "does not allow a Jury TA to bulk grade a Jury assignment" do
+      jury_role = custom_ta_role(JuryGrading::WorkspaceService::ROLE_NAME, account: @course.account)
+      jury = @course.enroll_ta(User.create!, role: jury_role, enrollment_state: "active").user
+      @a1.update!(jury_calibrated_grading: true)
+
+      api_call_as_user(
+        jury,
+        :post,
+        "/api/v1/courses/#{@course.id}/assignments/#{@a1.id}/submissions/update_grades",
+        { controller: "submissions_api", action: "bulk_update", format: "json", course_id: @course.id.to_s, assignment_id: @a1.id.to_s },
+        { grade_data: { @student1.id => { posted_grade: "75%" } } },
+        {},
+        { expected_status: 403 }
+      )
+    end
+
     it "queues bulk update through courses" do
       grade_data = {
         grade_data: {
@@ -7708,6 +7740,14 @@ describe "Submissions API", type: :request do
       expect(json.pluck("id")).to match_array([@student1.id, @student2.id])
       expect(json[0]["assignment_ids"]).to match_array(@assignment_ids)
       expect(json[1]["assignment_ids"]).to match_array(@assignment_ids)
+    end
+
+    it "does not expose a Jury assignment roster to a Jury TA" do
+      jury_role = custom_ta_role(JuryGrading::WorkspaceService::ROLE_NAME, account: @course.account)
+      jury = @course.enroll_ta(User.create!, role: jury_role, enrollment_state: "active").user
+      @assignment1.update!(jury_calibrated_grading: true)
+
+      api_call_as_user(jury, :get, @path, @params, {}, {}, { expected_status: 403 })
     end
 
     it "paginates" do

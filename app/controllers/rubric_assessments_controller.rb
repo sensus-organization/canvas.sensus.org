@@ -117,10 +117,14 @@ class RubricAssessmentsController < ApplicationController
       nil
     else
       opts = {}
-      provisional = value_to_boolean(params[:provisional])
+      jury_scope = JuryGrading::Scope.new(assignment: @association_object, user: @current_user) if @association_object.is_a?(Assignment)
+      jury_user = jury_scope&.jury_user?
+      return render_unauthorized_action if jury_user && !jury_scope.grading_open?
+
+      provisional = value_to_boolean(params[:provisional]) || jury_user
       if provisional
         opts[:provisional_grader] = @current_user
-        opts[:final] = true if mark_provisional_grade_as_final?
+        opts[:final] = true if !jury_user && mark_provisional_grade_as_final?
       end
 
       # For a moderated assignment, submitting an assessment claims a grading
@@ -129,6 +133,9 @@ class RubricAssessmentsController < ApplicationController
       begin
         ensure_adjudication_possible(provisional:) do
           @asset, @user = @association_object.find_asset_for_assessment(@association, user_id, opts)
+          if jury_user && !jury_scope.permits_submission?(@asset.submission)
+            return render_unauthorized_action
+          end
           assessment_type = params.dig(:rubric_assessment, :assessment_type)
           unless @association.user_can_assess_for?(assessor: @current_user, assessee: @user, assessment_type:)
             return render_unauthorized_action
@@ -202,6 +209,13 @@ class RubricAssessmentsController < ApplicationController
     @association = @context.rubric_associations.find(params[:rubric_association_id])
     @rubric = @association.rubric
     @assessment = @rubric.rubric_assessments.find(params[:id])
+    association_object = @association.association_object
+    jury_scope = JuryGrading::Scope.new(assignment: association_object, user: @current_user) if association_object.is_a?(Assignment)
+    submission = @assessment.artifact.try(:submission) || @assessment.artifact
+    if jury_scope&.jury_user? && (!jury_scope.grading_open? || !jury_scope.permits_submission?(submission))
+      return render_unauthorized_action
+    end
+
     if authorized_action(@assessment, @current_user, :delete)
       if @assessment.destroy
         render json: @assessment

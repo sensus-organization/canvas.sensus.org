@@ -122,7 +122,6 @@ class AbstractAssignment < ActiveRecord::Base
   has_many :ignores, as: :asset
   has_many :moderated_grading_selections, class_name: "ModeratedGrading::Selection", inverse_of: :assignment, foreign_key: :assignment_id
   belongs_to :context, polymorphic: [:course]
-  delegate :moderated_grading_max_grader_count, to: :course
   belongs_to :grading_standard
   belongs_to :group_category, inverse_of: :assignments
   belongs_to :grader_section, class_name: "CourseSection", optional: true
@@ -147,6 +146,8 @@ class AbstractAssignment < ActiveRecord::Base
 
   has_many :moderation_graders, inverse_of: :assignment, foreign_key: :assignment_id
   has_many :moderation_grader_users, through: :moderation_graders, source: :user
+  has_many :jury_grading_runs, inverse_of: :assignment, dependent: :destroy
+  belongs_to :published_jury_grading_run, class_name: "JuryGradingRun", optional: true
 
   has_many :auditor_grade_change_records,
            class_name: "Auditors::ActiveRecord::GradeChangeRecord",
@@ -227,6 +228,7 @@ class AbstractAssignment < ActiveRecord::Base
   validates :sis_source_id, uniqueness: { scope: :root_account_id }, allow_nil: true
 
   before_validation :convert_horizon_assignment, if: -> { context.is_a?(Course) && context.horizon_course? }
+  before_validation :configure_jury_calibrated_grading
 
   with_options unless: :moderated_grading? do
     validates :graders_anonymous_to_graders, absence: true
@@ -234,11 +236,12 @@ class AbstractAssignment < ActiveRecord::Base
     validates :final_grader, absence: true
   end
 
+  validates :grader_count, numericality: { greater_than: 0 }, if: -> { moderated_grading? && !jury_calibrated_grading? }
   with_options if: -> { moderated_grading? } do
-    validates :grader_count, numericality: { greater_than: 0 }
     validate :grader_section_ok?
     validate :final_grader_ok?
   end
+  validate :jury_calibrated_grading_configuration_ok?
 
   with_options if: :quiz_lti? do
     validate :new_quizzes_type_ok?, if: -> { Account.site_admin.feature_enabled?(:new_quizzes_surveys) }
@@ -4090,6 +4093,26 @@ class AbstractAssignment < ActiveRecord::Base
     final_grader_id == user.id || context.account_membership_allows(user, :select_final_grade)
   end
 
+  def jury_grader?(user)
+    JuryGrading::Scope.new(assignment: self, user:).grading_open?
+  end
+
+  def jury_user?(user)
+    JuryGrading::Scope.new(assignment: self, user:).jury_user?
+  end
+
+  def moderated_grading_max_grader_count
+    return jury_grader_count if jury_calibrated_grading?
+
+    course.moderated_grading_max_grader_count
+  end
+
+  def jury_grader_count
+    context.all_enrollments.active.joins(:role)
+           .where(enrollments: { type: "TaEnrollment" }, roles: { name: JuryGrading::WorkspaceService::ROLE_NAME })
+           .distinct.count(:user_id)
+  end
+
   def available_moderators
     moderators = course.moderators
     return moderators if final_grader_id.blank?
@@ -4129,7 +4152,7 @@ class AbstractAssignment < ActiveRecord::Base
   end
 
   def moderated_grader_limit_reached?
-    moderated_grading? && provisional_moderation_graders.count >= grader_count
+    moderated_grading? && !jury_calibrated_grading? && provisional_moderation_graders.count >= grader_count
   end
 
   def can_be_moderated_grader?(user)
@@ -4255,7 +4278,7 @@ class AbstractAssignment < ActiveRecord::Base
       # multiple new graders could have tried to add themselves simultaneously
       # when there weren't enough slots open for all of them. If we ended up
       # with too many provisional graders, throw an error to roll things back.
-      if filled_available_slot && provisional_moderation_graders.count > grader_count
+      if filled_available_slot && !jury_calibrated_grading? && provisional_moderation_graders.count > grader_count
         raise ::Assignment::MaxGradersReachedError
       end
     end
@@ -4393,7 +4416,9 @@ class AbstractAssignment < ActiveRecord::Base
   # NOTE: this method assumes the call site has made appropriate authorization checks
   # beforehand to ensure the current_user has permission to grade the student
   def grading_role(current_user)
-    if moderated_grading_enabled_and_no_grades_published?
+    if jury_calibrated_grading? && jury_grader?(current_user)
+      :provisional_grader
+    elsif moderated_grading_enabled_and_no_grades_published?
       permits_moderation?(current_user) ? :moderator : :provisional_grader
     else
       :grader
@@ -4696,6 +4721,26 @@ class AbstractAssignment < ActiveRecord::Base
     assignment.grader_names_visible_to_final_grader = true
     assignment.grader_comments_visible_to_graders = true
     assignment.graders_anonymous_to_graders = false
+  end
+
+  def configure_jury_calibrated_grading
+    return unless jury_calibrated_grading?
+
+    self.moderated_grading = true
+    self.grader_count = jury_grader_count
+  end
+
+  def jury_calibrated_grading_configuration_ok?
+    return false unless jury_calibrated_grading? || jury_calibrated_grading_changed?
+
+    if jury_calibrated_grading?
+      errors.add(:jury_calibrated_grading, "needs at least one active Jury TA") if jury_grader_count.zero?
+      errors.add(:jury_calibrated_grading, "cannot be enabled for group assignments") if has_group_category?
+      errors.add(:jury_calibrated_grading, "cannot be enabled for peer reviewed assignments") if peer_reviews
+    end
+    if jury_calibrated_grading_changed? && graded_submissions_exist?
+      errors.add(:jury_calibrated_grading, "cannot be changed if graded submissions exist")
+    end
   end
 
   def set_root_account_id

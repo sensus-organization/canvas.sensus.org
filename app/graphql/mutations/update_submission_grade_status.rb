@@ -32,7 +32,8 @@ class Mutations::UpdateSubmissionGradeStatus < Mutations::BaseMutation
       submission = submission.effective_checkpoint_submission(input[:checkpoint_tag])
     end
 
-    return { errors: { submission.id => "Not authorized to set submission status" } } unless submission.grants_right?(current_user, :grade)
+    jury_scope = JuryGrading::Scope.new(assignment: submission.assignment, user: current_user)
+    return { errors: { submission.id => "Not authorized to set submission status" } } if jury_scope.jury_user? || !submission.grants_right?(current_user, :grade)
 
     if input[:custom_grade_status_id]
       submission.update(custom_grade_status_id: input[:custom_grade_status_id], grader: current_user)

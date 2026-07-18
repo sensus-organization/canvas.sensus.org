@@ -29,7 +29,7 @@ class Mutations::SelectProvisionalGrade < Mutations::BaseMutation
     provisional_grade_id = input[:provisional_grade_id]
 
     assignment = Assignment.active.find(assignment_id)
-    raise GraphQL::ExecutionError, "not found" unless assignment.permits_moderation?(current_user)
+    raise GraphQL::ExecutionError, "not found" if assignment.jury_calibrated_grading? || !assignment.permits_moderation?(current_user)
 
     provisional_grade = assignment.provisional_grades.find(provisional_grade_id)
     student = provisional_grade.submission.user

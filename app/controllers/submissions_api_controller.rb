@@ -256,18 +256,23 @@ class SubmissionsApiController < ApplicationController
     if authorized_action(@context, @current_user, [:manage_grades, :view_all_grades])
       assignment_scope = AbstractAssignment.assignment_or_peer_review.where(context: @context).active
       @assignment = api_find(assignment_scope, params[:assignment_id])
+      if (jury_scope = jury_grading_scope)
+        return render_unauthorized_action unless jury_scope.grading_open?
+
+        student_ids = jury_team_ids(jury_scope)
+      end
       includes = Array.wrap(params[:include])
 
-      student_ids = if value_to_boolean(params[:grouped])
-                      # this provides one assignment object(and
-                      # submission object within), per user group
-                      @assignment.representatives(user: @current_user).map(&:id)
-                    else
-                      @context.apply_enrollment_visibility(@context.student_enrollments,
-                                                           @current_user,
-                                                           section_ids)
-                              .pluck(:user_id)
-                    end
+      student_ids ||= if value_to_boolean(params[:grouped])
+                        # this provides one assignment object(and
+                        # submission object within), per user group
+                        @assignment.representatives(user: @current_user).map(&:id)
+                      else
+                        @context.apply_enrollment_visibility(@context.student_enrollments,
+                                                             @current_user,
+                                                             section_ids)
+                                .pluck(:user_id)
+                      end
       submissions = @assignment.submissions.where(user_id: student_ids).preload(:originality_reports)
       submissions = submissions.preload(:quiz_submission) if @assignment.quiz?
 
@@ -494,6 +499,11 @@ class SubmissionsApiController < ApplicationController
       assignments = assignments.select { |a| assignment_visibilities.fetch(a.id, []).intersect?(student_ids) }
     end
 
+    # This multi-assignment endpoint cannot safely apply a different student
+    # scope per assignment. Jury users use the assignment-specific SpeedGrader
+    # endpoints, which are scoped below; never expose a course-wide response.
+    return render_unauthorized_action if assignments.any? { |assignment| assignment.jury_user?(@current_user) }
+
     # preload with stuff already in memory
     assignments.each { |a| a.context = @context }
     assignments_hash = assignments.index_by(&:id)
@@ -643,6 +653,10 @@ class SubmissionsApiController < ApplicationController
   #   Associations to include with the group.
   def show
     Submission.bulk_load_attachments_and_previews([@submission])
+
+    if (jury_scope = jury_grading_scope)
+      return render_unauthorized_action unless jury_scope.grading_open? && jury_scope.permits_submission?(@submission)
+    end
 
     if authorized_action(@submission, @current_user, :read)
       if @context.grants_any_right?(@current_user, :read_as_admin, :manage_grades) ||
@@ -895,6 +909,17 @@ class SubmissionsApiController < ApplicationController
       return
     end
     @submission ||= @assignment.all_submissions.find_or_create_by!(user: @user)
+
+    if @assignment.jury_user?(@current_user)
+      scope = JuryGrading::Scope.new(assignment: @assignment, user: @current_user)
+      unless scope.grading_open? && scope.permits_submission?(@submission)
+        render_unauthorized_action
+        return
+      end
+      params[:submission] ||= {}
+      params[:submission][:provisional] = true
+      params[:submission][:final] = false
+    end
 
     authorized = if params[:submission] || params[:rubric_assessment]
                    authorized_action(@submission, @current_user, :grade)
@@ -1244,6 +1269,9 @@ class SubmissionsApiController < ApplicationController
   def gradeable_students
     if authorized_action(@context, @current_user, [:manage_grades, :view_all_grades])
       @assignment = api_find(@context.assignments.active, params[:assignment_id])
+      if (jury_scope = jury_grading_scope)
+        return render_unauthorized_action unless jury_scope.grading_open?
+      end
       includes = Array(params[:include])
 
       # When mobile supports new anonymous we can remove the allow_new flag
@@ -1251,6 +1279,7 @@ class SubmissionsApiController < ApplicationController
       can_view_student_names = allow_new_anonymous_id ? @assignment.can_view_student_names?(@current_user) : true
 
       student_scope = context.students_visible_to(@current_user, include: :inactive)
+      student_scope = student_scope.where(id: jury_team_ids(jury_scope)) if jury_scope
       submission_scope = @assignment.submissions.except(:preload).where(user_id: student_scope)
 
       if params[:sort] == "name"
@@ -1320,6 +1349,8 @@ class SubmissionsApiController < ApplicationController
   def multiple_gradeable_students
     if authorized_action(@context, @current_user, [:manage_grades, :view_all_grades])
       assignment_ids = Array(params[:assignment_ids])
+      assignments = @context.assignments.active.where(id: assignment_ids)
+      return render_unauthorized_action if assignments.any? { |assignment| assignment.jury_user?(@current_user) }
 
       student_scope = context.students_visible_to(@current_user, include: :inactive)
 
@@ -1403,6 +1434,7 @@ class SubmissionsApiController < ApplicationController
            @context.grants_right?(@current_user, session, :manage_grades)
       return render_unauthorized_action
     end
+    return render_unauthorized_action if @assignments.any? { |assignment| assignment.jury_user?(@current_user) }
 
     # this needs to happen AFTER we've done the authorization check on ":manage_grades" above
     # so we're only leaking information about which assignments exist and don't
@@ -1663,7 +1695,12 @@ class SubmissionsApiController < ApplicationController
   def submission_summary
     if authorized_action(@context, @current_user, [:manage_grades, :view_all_grades])
       @assignment = api_find(@context.assignments.active, params[:assignment_id])
-      student_ids = if should_group?
+      jury_scope = jury_grading_scope
+      return render_unauthorized_action if jury_scope && !jury_scope.grading_open?
+
+      student_ids = if jury_scope
+                      jury_team_ids(jury_scope)
+                    elsif should_group?
                       @assignment.representatives(user: @current_user).map(&:id)
                     elsif include_deactivated_students_in_summary?
                       @context.students_visible_to(@current_user, include: :inactive)
@@ -1703,6 +1740,17 @@ class SubmissionsApiController < ApplicationController
 
   def include_deactivated_students_in_summary?
     value_to_boolean(params[:include_deactivated])
+  end
+
+  def jury_grading_scope
+    return unless @assignment
+
+    scope = JuryGrading::Scope.new(assignment: @assignment, user: @current_user)
+    scope if scope.jury_user?
+  end
+
+  def jury_team_ids(scope)
+    scope.group&.group_memberships&.active&.pluck(:user_id) || []
   end
 
   def peer_review_direct?

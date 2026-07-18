@@ -35,6 +35,7 @@ class ModerationSetController < ApplicationController
   #
   # @returns [User]
   def index
+    return render json: { message: "Jury assignments do not use a moderation set" }, status: :unprocessable_entity if @assignment.jury_calibrated_grading?
     render_unauthorized_action and return unless @assignment.permits_moderation?(@current_user)
 
     scope = @assignment.shard.activate do
@@ -56,6 +57,7 @@ class ModerationSetController < ApplicationController
   #
   # @returns [User]
   def create
+    return render json: { message: "Jury assignments do not use a moderation set" }, status: :unprocessable_entity if @assignment.jury_calibrated_grading?
     render_unauthorized_action and return unless @assignment.permits_moderation?(@current_user)
 
     if params[:student_ids].blank?

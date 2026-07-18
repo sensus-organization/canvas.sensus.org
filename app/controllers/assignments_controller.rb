@@ -563,7 +563,9 @@ class AssignmentsController < ApplicationController
 
         render locals: {
                  eula_url: tool_eula_url,
-                 show_moderation_link: @assignment.moderated_grading? && @assignment.permits_moderation?(@current_user),
+                 show_moderation_link: !@assignment.jury_user?(@current_user) && @assignment.moderated_grading? &&
+                   (@assignment.permits_moderation?(@current_user) ||
+                    (@assignment.jury_calibrated_grading? && @context.grants_right?(@current_user, :select_final_grade))),
                  show_confetti: params[:confetti] == "true" && @domain_root_account&.feature_enabled?(:confetti_for_assignments)
                },
                stream: can_stream_template?
@@ -576,7 +578,11 @@ class AssignmentsController < ApplicationController
 
     raise ActiveRecord::RecordNotFound unless @assignment.moderated_grading? && @assignment.published?
 
-    render_unauthorized_action and return unless @assignment.permits_moderation?(@current_user)
+    render_unauthorized_action and return if @assignment.jury_user?(@current_user)
+
+    can_review_jury_results = @assignment.jury_calibrated_grading? &&
+      @context.grants_right?(@current_user, :select_final_grade)
+    render_unauthorized_action and return unless can_review_jury_results || @assignment.permits_moderation?(@current_user)
 
     add_crumb(@assignment.title, polymorphic_url([@context, @assignment]))
     add_crumb(t("Moderate"))
@@ -848,6 +854,9 @@ class AssignmentsController < ApplicationController
     update_new_quizzes_params(@assignment, params[:assignment])
 
     @assignment.workflow_state = "unpublished"
+    if @assignment.jury_calibrated_grading? && @assignment.final_grader_id.blank?
+      @assignment.final_grader = @current_user
+    end
     @assignment.updating_user = @current_user
     @assignment.content_being_saved_by(@current_user)
     @assignment.assignment_group = group if group
@@ -1183,6 +1192,7 @@ class AssignmentsController < ApplicationController
         grades_published: @assignment.grades_published?,
         id: @assignment.id,
         muted: @assignment.muted?,
+        jury_calibrated_grading: @assignment.jury_calibrated_grading?,
         title: @assignment.title
       },
       CURRENT_USER: {
@@ -1239,6 +1249,7 @@ class AssignmentsController < ApplicationController
                   :sis_assignment_id,
                   :integration_id,
                   :moderated_grading,
+                  :jury_calibrated_grading,
                   :omit_from_final_grade,
                   :suppress_assignment,
                   :hide_in_gradebook,

@@ -153,6 +153,22 @@ describe Mutations::SelectProvisionalGrade do
         expect(result.dig("errors", 0, "message")).to eq "not found"
       end
     end
+
+    context "when the assignment uses Jury calibrated grading" do
+      let(:context) { { current_user: final_grader, domain_root_account: account } }
+
+      before do
+        jury_role = account.roles.create!(name: JuryGrading::WorkspaceService::ROLE_NAME, base_role_type: "TaEnrollment")
+        course.enroll_ta(User.create!, role: jury_role, enrollment_state: "active")
+        assignment.update!(jury_calibrated_grading: true)
+      end
+
+      it "does not allow the legacy provisional-grade selection" do
+        result = CanvasSchema.execute(mutation_str, context:)
+
+        expect(result.dig("errors", 0, "message")).to eq("not found")
+      end
+    end
   end
 
   describe "validation" do

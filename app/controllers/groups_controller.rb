@@ -403,11 +403,15 @@ class GroupsController < ApplicationController
             can_manage_groups: @context.grants_right?(@current_user, session, :manage_groups_manage),
             can_delete_groups: @context.grants_right?(@current_user, session, :manage_groups_delete)
           }
+          can_make_jury_workspace = @context.is_a?(Course) &&
+                                    @context.all_enrollments.active.joins(:role).where(enrollments: { type: "TaEnrollment" }, roles: { name: JuryGrading::WorkspaceService::ROLE_NAME }).exists?
 
           js_env group_categories: categories_json,
                  group_user_type: @group_user_type,
                  allow_self_signup: @allow_self_signup,
                  context_class_name: @context.class.name,
+                 can_make_jury_workspace:,
+                 jury_workspace_url: @context.is_a?(Course) ? api_v1_ensure_jury_workspace_path(@context) : nil,
                  permissions: js_permissions
 
           if @context.is_a?(Course)

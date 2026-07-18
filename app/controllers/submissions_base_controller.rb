@@ -103,8 +103,15 @@ class SubmissionsBaseController < ApplicationController
   end
 
   def update
+    jury_scope = JuryGrading::Scope.new(assignment: @assignment, user: @current_user)
+    jury_user = jury_scope.jury_user?
+    return render_unauthorized_action if jury_user && !jury_scope.grading_open?
+    return render_unauthorized_action if jury_user && !jury_scope.permits_submission?(@submission)
+
+    params[:submission][:final] = false if jury_user
+
     permissions = { user: @current_user, session:, include_permissions: false }
-    provisional = @assignment.moderated_grading? && params[:submission][:provisional]
+    provisional = @assignment.moderated_grading? && (params[:submission][:provisional] || jury_user)
     submission_json_exclusions = []
 
     if @assignment.anonymous_peer_reviews && @submission.peer_reviewer?(@current_user)

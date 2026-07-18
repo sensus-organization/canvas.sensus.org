@@ -73,6 +73,19 @@ describe GroupsController do
       expect(assigns[:categories].length).to be(2)
     end
 
+    it "exposes the Jury workspace action to a teacher who can manage groups" do
+      jury_role = @course.root_account.roles.create!(name: JuryGrading::WorkspaceService::ROLE_NAME, base_role_type: "TaEnrollment")
+      @course.enroll_ta(user_factory, role: jury_role, enrollment_state: "active")
+      user_session(@teacher)
+
+      get "index", params: { course_id: @course.id }
+
+      expect(assigns[:js_env]).to include(
+        can_make_jury_workspace: true,
+        jury_workspace_url: api_v1_ensure_jury_workspace_path(@course)
+      )
+    end
+
     it "js_env group_categories only includes non-deleted categories" do
       user_session(@teacher)
       active_category = @course.group_categories.create!(name: "Active Category")

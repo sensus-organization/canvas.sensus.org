@@ -68,6 +68,7 @@ export default function getEnv() {
       id: ENV.ASSIGNMENT.id,
       muted: ENV.ASSIGNMENT.muted,
       gradesPublished: ENV.ASSIGNMENT.grades_published,
+      juryCalibratedGrading: ENV.ASSIGNMENT.jury_calibrated_grading,
       title: ENV.ASSIGNMENT.title,
     },
 

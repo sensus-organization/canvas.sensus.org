@@ -70,6 +70,17 @@ describe('GroupCategoriesView', () => {
     expect(view.$el.find('#tab-2')).toHaveLength(1)
   })
 
+  it('shows the Jury workspace action when the course has no group sets', () => {
+    ENV.group_user_type = 'student'
+    ENV.can_make_jury_workspace = true
+    const emptyView = new GroupCategoriesView({collection: new GroupCategoryCollection()})
+
+    emptyView.render()
+
+    expect(emptyView.$el.find('#make-jury-group-sets-empty')).toHaveLength(1)
+    emptyView.remove()
+  })
+
   it('adds new GroupCategory and displays new tab and panel', () => {
     categories.add(
       new GroupCategory({

@@ -49,6 +49,7 @@ class RubricAssessmentImportsController < ApplicationController
     end
 
     return unless authorized_action(assignment.rubric_association, @current_user, :view_rubric_assessments)
+    return render_unauthorized_action if assignment.jury_user?(@current_user)
 
     if assignment.anonymize_students?
       return render json: { message: I18n.t("Rubric import is not supported for assignments with anonymous grading") }, status: :bad_request

@@ -97,7 +97,7 @@
 #     }
 #
 class GroupCategoriesController < ApplicationController
-  before_action :require_context, only: %i[create index import_tags export_tags]
+  before_action :require_context, only: %i[create index import_tags export_tags ensure_jury_workspace]
   before_action :get_category_context, only: %i[show update destroy groups users assign_unassigned_members import export]
 
   include Api::V1::Attachment
@@ -289,6 +289,17 @@ class GroupCategoriesController < ApplicationController
           render json: [@group_category.as_json, @group_category.groups.map { |g| g.as_json(include: :users) }]
         end
       end
+    end
+  end
+
+  def ensure_jury_workspace
+    return unless authorized_action(@context, @current_user, RoleOverride::GRANULAR_MANAGE_GROUPS_PERMISSIONS)
+
+    result = JuryGrading::WorkspaceService.new(course: @context).ensure!
+    result_json = result.transform_values { |users| users.map { |user| user_json(user, @current_user, session) } }
+    respond_to do |format|
+      format.html { redirect_to course_groups_url(@context), notice: t("Jury group sets are ready. Drag team students into each juror's group.") }
+      format.json { render json: result_json }
     end
   end
 

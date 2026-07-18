@@ -1483,6 +1483,12 @@ CanvasRails::Application.routes.draw do
       post "courses/:course_id/assignments/:assignment_id/allocate", action: :allocate, as: :allocate_peer_review
     end
 
+    scope(controller: :jury_grading) do
+      get "courses/:course_id/assignments/:assignment_id/jury_results", action: :show
+      post "courses/:course_id/assignments/:assignment_id/jury_results", action: :calculate
+      post "courses/:course_id/assignments/:assignment_id/jury_results/publish", action: :publish
+    end
+
     scope(controller: :moderation_set) do
       get "courses/:course_id/assignments/:assignment_id/moderated_students", action: :index, as: :moderated_students
       post "courses/:course_id/assignments/:assignment_id/moderated_students", action: :create, as: :add_moderated_students
@@ -2528,6 +2534,7 @@ CanvasRails::Application.routes.draw do
       get "courses/:course_id/group_categories", action: :index, as: "course_group_categories"
       post "accounts/:account_id/group_categories", action: :create
       post "courses/:course_id/group_categories", action: :create
+      post "courses/:course_id/group_categories/ensure_jury_workspace", action: :ensure_jury_workspace, as: "ensure_jury_workspace"
       post "group_categories/:group_category_id/import", action: :import
       get "group_categories/:group_category_id/groups", action: :groups, as: "group_category_groups"
       get "group_categories/:group_category_id/users", action: :users, as: "group_category_users"

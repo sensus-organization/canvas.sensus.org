@@ -29,6 +29,7 @@ import {loadStudents} from '../students/StudentActions'
 import FlashMessageHolder from './FlashMessageHolder'
 import GradesGrid from './GradesGrid/index'
 import Header from './Header'
+import JuryResults from './JuryResults'
 
 const I18n = createI18nScope('assignment_grade_summary')
 
@@ -65,10 +66,12 @@ class Layout extends Component {
   }
 
   componentDidMount() {
-    this.props.loadStudents()
+    if (!this.props.assignment.juryCalibratedGrading) this.props.loadStudents()
   }
 
   render() {
+    if (this.props.assignment.juryCalibratedGrading) return <JuryResults assignment={this.props.assignment} />
+
     const onGradeSelect = this.props.assignment.gradesPublished ? null : this.props.selectGrade
 
     return (

@@ -10153,6 +10153,36 @@ describe Assignment do
   end
 
   describe "moderated_grading validation" do
+    it "requires an active Jury TA for Jury calibrated grading" do
+      assignment = @course.assignments.build(assignment_valid_attributes.merge(jury_calibrated_grading: true))
+
+      expect(assignment).not_to be_valid
+      expect(assignment.errors[:jury_calibrated_grading]).to include("needs at least one active Jury TA")
+    end
+
+    it "rejects group assignments after Jury grading has been enabled" do
+      jury_role = @course.root_account.roles.create!(name: JuryGrading::WorkspaceService::ROLE_NAME, base_role_type: "TaEnrollment")
+      @course.enroll_ta(user_factory, role: jury_role, enrollment_state: "active")
+      assignment_model(course: @course, jury_calibrated_grading: true)
+
+      @assignment.group_category = @course.group_categories.create!(name: "teams")
+
+      expect(@assignment).not_to be_valid
+      expect(@assignment.errors[:jury_calibrated_grading]).to include("cannot be enabled for group assignments")
+    end
+
+    it "does not allow Jury grading to change after grading starts" do
+      jury_role = @course.root_account.roles.create!(name: JuryGrading::WorkspaceService::ROLE_NAME, base_role_type: "TaEnrollment")
+      jury = @course.enroll_ta(user_factory, role: jury_role, enrollment_state: "active").user
+      assignment_model(course: @course, jury_calibrated_grading: true)
+      @assignment.submit_homework(@student, body: "test").find_or_create_provisional_grade!(jury, score: 0)
+
+      @assignment.jury_calibrated_grading = false
+
+      expect(@assignment).not_to be_valid
+      expect(@assignment.errors[:jury_calibrated_grading]).to include("cannot be changed if graded submissions exist")
+    end
+
     it "does not allow turning on if graded submissions exist" do
       assignment_model(course: @course)
       @assignment.grade_student @student, score: 0, grader: @teacher

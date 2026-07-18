@@ -62,6 +62,7 @@ module Api::V1::Assignment
       group_category_id
       grading_standard_id
       moderated_grading
+      jury_calibrated_grading
       hide_in_gradebook
       omit_from_final_grade
       suppress_assignment
@@ -624,6 +625,7 @@ module Api::V1::Assignment
     anonymous_instructor_annotations
     allowed_attempts
     important_dates
+    jury_calibrated_grading
   ].freeze
 
   API_ALLOWED_TURNITIN_SETTINGS = %w[
@@ -1150,6 +1152,7 @@ module Api::V1::Assignment
 
     assignment.updating_user = user
     assignment.attributes = update_params
+    assignment.final_grader = user if assignment.jury_calibrated_grading? && assignment.final_grader_id.blank? && context.grants_right?(user, :select_final_grade)
     assignment.infer_times
 
     # Store peer review params in assignment_params for later use

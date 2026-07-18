@@ -37,6 +37,8 @@ class Mutations::SaveRubricAssessment < Mutations::BaseMutation
 
     association = RubricAssociation.find(input[:rubric_association_id])
     association_object = association.association_object
+    jury_scope = JuryGrading::Scope.new(assignment: association_object, user: current_user) if association_object.is_a?(Assignment)
+    raise GraphQL::ExecutionError, "Jury grading is closed" if jury_scope&.jury_user? && !jury_scope.grading_open?
 
     assessment = association.rubric_assessments.find(input[:rubric_assessment_id]) if input[:rubric_assessment_id].present?
 
@@ -50,16 +52,19 @@ class Mutations::SaveRubricAssessment < Mutations::BaseMutation
     # slots remain).
     begin
       opts = {}
-      provisional = input[:provisional]
+      provisional = input[:provisional] || jury_scope&.jury_user?
       if provisional
         opts[:provisional_grader] = current_user
-        if input[:final] && association_object.permits_moderation?(current_user)
+        if input[:final] && !jury_scope&.jury_user? && association_object.permits_moderation?(current_user)
           opts[:final] = true
         end
       end
 
       ensure_adjudication_possible(provisional:, association_object:, grader: current_user) do
         asset, user = association_object.find_asset_for_assessment(association, user_id, opts)
+        if jury_scope&.jury_user? && !jury_scope.permits_submission?(asset.submission)
+          raise GraphQL::ExecutionError, "Not authorized to assess user"
+        end
         assessment_details = JSON.parse(input[:assessment_details]).with_indifferent_access
         assessment_type = assessment_details[:assessment_type]
 

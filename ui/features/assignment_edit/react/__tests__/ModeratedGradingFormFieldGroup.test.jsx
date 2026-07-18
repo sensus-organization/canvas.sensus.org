@@ -132,6 +132,27 @@ describe('ModeratedGradingFormFieldGroup', () => {
     })
   })
 
+  describe('Jury-calibrated Grading Checkbox', () => {
+    test('enables moderated grading and hides normal moderator settings', async () => {
+      const user = userEvent.setup()
+      props.moderatedGradingEnabled = false
+      mountComponent()
+
+      await user.click(wrapper.container.querySelector('#assignment_jury_calibrated_grading'))
+
+      expect(content()).not.toBeInTheDocument()
+      expect(wrapper.container.querySelector('input[name="moderated_grading"]').value).toBe('true')
+    })
+
+    test('explains why the checkbox is disabled', () => {
+      props.isGroupAssignment = true
+      mountComponent()
+
+      expect(wrapper.container.querySelector('#assignment_jury_calibrated_grading')).toBeDisabled()
+      expect(wrapper.getByText('Jury-calibrated grading uses one student to represent each team and cannot be enabled for group assignments')).toBeInTheDocument()
+    })
+  })
+
   describe('Grader Comment Visibility Checkbox', () => {
     function graderCommentsVisibleToGradersCheckbox() {
       return wrapper.container.querySelector('input#assignment_grader_comment_visibility')

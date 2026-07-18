@@ -31,7 +31,8 @@ class Mutations::UpdateSubmissionGrade < Mutations::BaseMutation
     submission = Submission.find(input[:submission_id])
     errors = {}
 
-    if submission.grants_right?(current_user, :grade)
+    jury_scope = JuryGrading::Scope.new(assignment: submission.assignment, user: current_user)
+    if !jury_scope.jury_user? && submission.grants_right?(current_user, :grade)
       submission.update(score: input[:score])
     else
       errors[submission.id.to_s] = "Not authorized to score Submission"
