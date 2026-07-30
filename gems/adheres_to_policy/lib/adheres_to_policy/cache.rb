@@ -21,7 +21,7 @@
 module AdheresToPolicy
   class Cache
     # Internal: The time to live for the underlying cache.  In seconds.
-    CACHE_EXPIRES_IN = 3600
+    CACHE_EXPIRES_IN = 300
 
     # Public: Gets the cached object with the provided key.  Will call the block
     #         if the key does not exist in the cache and store that returned value

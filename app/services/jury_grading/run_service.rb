@@ -136,7 +136,7 @@ module JuryGrading
     end
 
     def team_ids
-      @team_ids ||= @assignment.context.student_enrollments.active.distinct.pluck(:user_id)
+      @team_ids ||= @assignment.context.student_enrollments.active.not_fake.distinct.pluck(:user_id)
     end
 
     def rubric_criterion_ids

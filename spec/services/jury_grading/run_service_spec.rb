@@ -70,6 +70,16 @@ describe JuryGrading::RunService do
     expect(service.send(:configuration_issues, coverage)).to be_empty
   end
 
+  it "does not count the Student View test student as a team" do
+    course_with_student(active_all: true)
+    @course.student_view_student
+    assignment = @course.assignments.create!(points_possible: 10)
+
+    service = described_class.new(assignment:, created_by: @teacher)
+
+    expect(service.send(:team_ids)).to eq([@student.id])
+  end
+
   it "counts overlapping Jury pairs once across all teams" do
     service = described_class.new(assignment: instance_double(Assignment), created_by: instance_double(User))
 
