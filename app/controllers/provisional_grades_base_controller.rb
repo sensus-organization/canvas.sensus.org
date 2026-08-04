@@ -26,7 +26,6 @@ class ProvisionalGradesBaseController < ApplicationController
   before_action :load_assignment
 
   def status
-    return render_unauthorized_action if @assignment.jury_calibrated_grading?
     return unless authorized_action(@context, @current_user, [:manage_grades, :view_all_grades])
 
     unless @assignment.moderated_grading?
