@@ -1208,6 +1208,7 @@ class GradebooksController < ApplicationController
           instructor_selectable_states: @assignment.instructor_selectable_states_by_provisional_grade_id,
           final_grader_id: @assignment.final_grader_id,
           grading_role: grading_role_for_user,
+          jury_grader: @context.jury_grader?(@current_user),
           grading_type: @assignment.grading_type,
           lti_retrieve_url: retrieve_course_external_tools_url(
             @context.id, assignment_id: @assignment.id, display: "borderless"

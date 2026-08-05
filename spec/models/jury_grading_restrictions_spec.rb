@@ -47,6 +47,42 @@ describe "Jury grading restrictions" do
     end
   end
 
+  describe "rubric use_for_grading" do
+    let(:rubric) { rubric_model(context: course, data: larger_rubric_data) }
+
+    def assess!(assignment, association)
+      submission = assignment.submit_homework(team, body: "done", submission_type: "online_text_entry")
+      provisional = submission.find_or_create_provisional_grade!(juror)
+      association.assess(
+        user: team,
+        assessor: juror,
+        artifact: provisional,
+        assessment: { assessment_type: "grading", criterion_crit1: { points: 3 } }
+      )
+      provisional.reload
+    end
+
+    it "is forced on when a rubric is associated with a jury-calibrated assignment" do
+      association = rubric.associate_with(jury_assignment, course, purpose: "grading", use_for_grading: false)
+
+      expect(association.reload.use_for_grading).to be true
+    end
+
+    it "is left alone for an ordinary assignment" do
+      association = rubric.associate_with(ordinary, course, purpose: "grading", use_for_grading: false)
+
+      expect(association.reload.use_for_grading).to be false
+    end
+
+    it "scores the provisional grade even when the stored flag is still false" do
+      assignment = jury_assignment
+      association = rubric.associate_with(assignment, course, purpose: "grading", use_for_grading: true)
+      association.update_column(:use_for_grading, false)
+
+      expect(assess!(assignment, association.reload).score).to eq 3
+    end
+  end
+
   describe "the gradebook importer" do
     def gradeable_for?(user)
       importer = GradebookImporter.new(GradebookUpload.new(course:, user:, progress: Progress.new), "", user, nil)

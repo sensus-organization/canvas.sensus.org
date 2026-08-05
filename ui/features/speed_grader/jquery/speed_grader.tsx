@@ -2464,7 +2464,7 @@ EG = {
         EG.updateSelectMenuStatus(EG.currentStudent)
         EG.updateStatsInHeader()
 
-        if (enhanced_rubrics_enabled && ENV.rubric) {
+        if (enhanced_rubrics_enabled && ENV.rubric && !ENV.jury_grader) {
           const rubricScore = (response as any).score as number | null | undefined
           if (rubricScore != null) {
             const gradeData: Record<string, unknown> = {

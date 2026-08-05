@@ -3421,6 +3421,27 @@ describe GradebooksController do
     let(:classic_sg_template) { :speed_grader }
     let(:platform_sg_template) { :bare }
 
+    describe "jury_grader env flag" do
+      it "is false for a teacher" do
+        get :speed_grader, params: { course_id: @course.id, assignment_id: @assignment.id }
+        expect(assigns[:js_env][:jury_grader]).to be false
+      end
+
+      it "is true for a Jury member on a jury-calibrated assignment" do
+        juror = user_factory(active_all: true)
+        jury_role = custom_ta_role(JuryGrading::WorkspaceService::ROLE_NAME, account: @course.root_account)
+        @course.enroll_user(juror, "TaEnrollment", role: jury_role, enrollment_state: "active")
+        jury_assignment = @course.assignments.create!(
+          title: "Jury", points_possible: 10, moderated_grading: true, final_grader: @teacher, grader_count: 1
+        )
+        jury_assignment.update!(jury_calibrated_grading: true)
+        user_session(juror)
+
+        get :speed_grader, params: { course_id: @course.id, assignment_id: jury_assignment.id }
+        expect(assigns[:js_env][:jury_grader]).to be true
+      end
+    end
+
     it "renders speed_grader template with locals" do
       @assignment.publish
       get "speed_grader", params: { course_id: @course, assignment_id: @assignment.id }

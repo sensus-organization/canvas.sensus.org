@@ -46,6 +46,7 @@ class RubricAssociation < ActiveRecord::Base
 
   before_create :set_root_account_id
   before_save :update_assignment_points
+  before_save :force_use_for_grading_for_jury
   before_save :update_values
   after_create :update_rubric
   before_save :update_old_rubric
@@ -192,6 +193,11 @@ class RubricAssociation < ActiveRecord::Base
     self.workflow_state ||= "active"
   end
   protected :update_values
+
+  def force_use_for_grading_for_jury
+    self.use_for_grading = true if association_object.is_a?(AbstractAssignment) && association_object.jury_calibrated_grading?
+  end
+  protected :force_use_for_grading_for_jury
 
   def user_can_assess_for?(assessor: nil, assessee: nil, assessment_type: nil)
     raise "assessor and assessee required" unless assessor && assessee

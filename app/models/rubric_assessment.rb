@@ -197,7 +197,8 @@ class RubricAssessment < ActiveRecord::Base
   end
 
   def update_artifact
-    return if artifact.blank? || !rubric_association&.use_for_grading? || artifact.score == score
+    return if artifact.blank? || artifact.score == score
+    return unless rubric_association&.use_for_grading? || jury_calibrated_provisional_grade?
 
     case artifact_type
     when "Submission"
@@ -219,6 +220,14 @@ class RubricAssessment < ActiveRecord::Base
     end
   end
   protected :update_artifact
+
+  def jury_calibrated_provisional_grade?
+    return false unless artifact_type == "ModeratedGrading::ProvisionalGrade"
+
+    assignment = rubric_association&.association_object
+    assignment.is_a?(AbstractAssignment) && assignment.jury_calibrated_grading?
+  end
+  protected :jury_calibrated_provisional_grade?
 
   set_policy do
     given { |user| user && assessor_id == user.id }
