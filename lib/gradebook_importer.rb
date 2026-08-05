@@ -37,6 +37,7 @@ class GradebookImporter
     workflow_state
     has_sub_assignments
     sub_assignment_tag
+    jury_calibrated_grading
   ].freeze
 
   class NegativeId
@@ -875,6 +876,7 @@ class GradebookImporter
     # to avoid an N+1, check that first.
     assignment = @all_assignments[submission.assignment_id]
     return false if assignment&.unposted_anonymous_submissions?
+    return false if assignment&.jury_grading_withheld?(@user)
 
     is_admin || submission.grants_right?(@user, :grade)
   end

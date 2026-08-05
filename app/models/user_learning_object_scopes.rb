@@ -395,7 +395,9 @@ module UserLearningObjectScopes
              .where("EXISTS (#{grader_visible_submissions_sql})")
       end
       as = as.joins("INNER JOIN #{Enrollment.quoted_table_name} ON enrollments.course_id = assignments.context_id")
+             .joins("INNER JOIN #{Role.quoted_table_name} ON roles.id = enrollments.role_id")
              .where(enrollments: { user_id: self, workflow_state: "active", type: ["TeacherEnrollment", "TaEnrollment"] })
+             .where("roles.name <> ? OR assignments.jury_calibrated_grading", JuryGrading::WorkspaceService::ROLE_NAME)
              .group("assignments.id")
              .order("assignments.due_at")
              .preload(:context)

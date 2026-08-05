@@ -2135,11 +2135,13 @@ class AbstractAssignment < ActiveRecord::Base
     can :read
 
     given { |user, session| context.grants_right?(user, session, :manage_grades) }
-    can :grade and
-      can :attach_submission_comment_files and
+    can :attach_submission_comment_files and
       can :manage_files_add and
       can :manage_files_edit and
       can :manage_files_delete
+
+    given { |user, session| context.grants_right?(user, session, :manage_grades) && !jury_grading_withheld?(user) }
+    can :grade
 
     given { |user, session| context.grants_right?(user, session, :set_grading_scheme) }
     can :set_grading_scheme
@@ -4099,6 +4101,10 @@ class AbstractAssignment < ActiveRecord::Base
 
   def jury_user?(user)
     JuryGrading::Scope.new(assignment: self, user:).jury_user?
+  end
+
+  def jury_grading_withheld?(user)
+    !jury_calibrated_grading? && context.is_a?(Course) && context.jury_grader?(user)
   end
 
   def moderated_grading_max_grader_count

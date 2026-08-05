@@ -4507,6 +4507,16 @@ describe GradebooksController do
       expect(response).to be_ok
     end
 
+    it "returns unauthorized for a Jury member" do
+      juror = user_factory(active_all: true)
+      jury_role = custom_ta_role(JuryGrading::WorkspaceService::ROLE_NAME, account: @course.root_account)
+      @course.enroll_user(juror, "TaEnrollment", role: jury_role, enrollment_state: "active")
+      user_session(juror)
+
+      put :update_final_grade_overrides, params: update_params, format: :json
+      assert_forbidden
+    end
+
     it "returns unauthorized when the course is concluded" do
       @course.complete!
       put :update_final_grade_overrides, params: update_params, format: :json

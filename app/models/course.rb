@@ -4539,6 +4539,18 @@ class Course < ActiveRecord::Base
     participating_instructors.distinct.select { |user| grants_right?(user, :select_final_grade) }
   end
 
+  def jury_grader?(user)
+    return false unless user
+
+    @jury_graders ||= {}
+    return @jury_graders[user.id] if @jury_graders.key?(user.id)
+
+    @jury_graders[user.id] = all_enrollments.active.joins(:role)
+                                            .where(enrollments: { user_id: user.id, type: "TaEnrollment" },
+                                                   roles: { name: JuryGrading::WorkspaceService::ROLE_NAME })
+                                            .exists?
+  end
+
   def moderated_grading_max_grader_count
     count = participating_instructors.distinct.count
     # A moderated assignment must have at least 1 (non-moderator) grader.

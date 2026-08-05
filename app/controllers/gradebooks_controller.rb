@@ -1076,6 +1076,8 @@ class GradebooksController < ApplicationController
                     assignment_scope.active.find(params[:assignment_id])
                   end
 
+    return render_unauthorized_action if @assignment&.jury_grading_withheld?(@current_user)
+
     platform_speedgrader_param_enabled = query_params_allow_platform_service_speedgrader?(params)
     platform_speedgrader_feature_enabled = platform_service_speedgrader_enabled?
     track_speedgrader_metrics(platform_speedgrader_param_enabled, platform_speedgrader_feature_enabled)
@@ -1471,6 +1473,7 @@ class GradebooksController < ApplicationController
   # @returns Progress
   def update_final_grade_overrides
     return unless authorized_action(@context, @current_user, :manage_grades)
+    return render_unauthorized_action if @context.jury_grader?(@current_user)
 
     unless @context.allow_final_grade_override?
       render_unauthorized_action and return
