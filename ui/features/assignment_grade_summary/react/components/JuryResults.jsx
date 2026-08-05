@@ -1,5 +1,3 @@
-/* Copyright (C) 2026 SensUs. */
-
 import React, {Component} from 'react'
 import {bool, shape, string} from 'prop-types'
 import {Button} from '@instructure/ui-buttons'
@@ -9,6 +7,7 @@ import {Spinner} from '@instructure/ui-spinner'
 import axios from '@canvas/axios'
 import {useScope as createI18nScope} from '@canvas/i18n'
 import {windowConfirm} from '@canvas/util/globalUtils'
+import {buildRatingsCsv} from '../juryResultsCsv'
 
 const I18n = createI18nScope('assignment_grade_summary')
 
@@ -67,6 +66,29 @@ export default class JuryResults extends Component {
     } catch (error) {
       this.setState({error: error.response?.data?.message || I18n.t('Could not publish Jury results.')})
     }
+  }
+
+  downloadRatings = (ratings, names, criterionNames) => {
+    const csv = buildRatingsCsv({
+      ratings,
+      names,
+      criterionNames,
+      headers: [
+        I18n.t('Team'),
+        I18n.t('Jury'),
+        I18n.t('Criterion'),
+        I18n.t('Score'),
+        I18n.t('Criterion points'),
+        I18n.t('Normalized (/5)'),
+        I18n.t('Comment'),
+      ],
+    })
+    const url = URL.createObjectURL(new Blob([csv], {type: 'text/csv;charset=utf-8'}))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `jury-ratings-${this.props.assignment.id}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
   }
 
   stopProgressPolling = () => {
@@ -220,9 +242,10 @@ export default class JuryResults extends Component {
         {ratings.length > 0 && (
           <details style={{marginTop: '1.5rem'}}>
             <summary>{I18n.t('Individual Jury ratings')}</summary>
+            <Button margin="small 0 0" onClick={() => this.downloadRatings(ratings, names, criterionNames)}>{I18n.t('Download ratings CSV')}</Button>
             <table className="ic-Table ic-Table--hover-row" style={{marginTop: '1rem'}}>
-              <thead><tr><th>{I18n.t('Team')}</th><th>{I18n.t('Jury')}</th><th>{I18n.t('Criterion')}</th><th>{I18n.t('Score')}</th><th>{I18n.t('Normalized (/5)')}</th></tr></thead>
-              <tbody>{ratings.flatMap(([teamId, teamRatings]) => teamRatings.map((rating, index) => <tr key={`${teamId}-${rating.juror}-${rating.criterion}-${index}`}><td>{names[teamId] || teamId}</td><td>{names[rating.juror] || rating.juror}</td><td>{criterionNames[rating.criterion] || rating.criterion}</td><td>{rating.criterion_points ? `${rating.score?.toFixed(2)}/${rating.criterion_points.toFixed(2)}` : rating.score?.toFixed(2)}</td><td>{rating.normalized_score?.toFixed(2)}</td></tr>))}</tbody>
+              <thead><tr><th>{I18n.t('Team')}</th><th>{I18n.t('Jury')}</th><th>{I18n.t('Criterion')}</th><th>{I18n.t('Score')}</th><th>{I18n.t('Normalized (/5)')}</th><th>{I18n.t('Comment')}</th></tr></thead>
+              <tbody>{ratings.flatMap(([teamId, teamRatings]) => teamRatings.map((rating, index) => <tr key={`${teamId}-${rating.juror}-${rating.criterion}-${index}`}><td>{names[teamId] || teamId}</td><td>{names[rating.juror] || rating.juror}</td><td>{criterionNames[rating.criterion] || rating.criterion}</td><td>{rating.criterion_points ? `${rating.score?.toFixed(2)}/${rating.criterion_points.toFixed(2)}` : rating.score?.toFixed(2)}</td><td>{rating.normalized_score?.toFixed(2)}</td><td style={{whiteSpace: 'pre-wrap'}}>{rating.comments}</td></tr>))}</tbody>
             </table>
           </details>
         )}

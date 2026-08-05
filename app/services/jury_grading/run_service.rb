@@ -57,7 +57,7 @@ module JuryGrading
             criterion_points = rubric_criteria[rating[:criterion_id].to_s]
             next if rating[:points].blank? || criterion_points.blank?
 
-            { team: grade.submission.user_id, criterion: rating[:criterion_id].to_s, juror: grade.scorer_id, score: rating[:points], criterion_points:, assessment_id: assessment.id }
+            { team: grade.submission.user_id, criterion: rating[:criterion_id].to_s, juror: grade.scorer_id, score: rating[:points], criterion_points:, comments: rating[:comments].presence, assessment_id: assessment.id }
           end
         end
       end.flatten

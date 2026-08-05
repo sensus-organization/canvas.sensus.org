@@ -6,7 +6,7 @@ module JuryGrading
     NORMALIZED_POINTS = 5.0
 
     def initialize(observations:, settings: {}, progress: nil)
-      @observations = observations.map { |row| row.symbolize_keys.slice(:team, :criterion, :juror, :score, :criterion_points) }
+      @observations = observations.map { |row| row.symbolize_keys.slice(:team, :criterion, :juror, :score, :criterion_points, :comments) }
       @settings = DEFAULT_SETTINGS.merge(settings.symbolize_keys)
       @progress = progress
       @criterion_points = @observations.each_with_object({}) do |row, points|
@@ -53,7 +53,7 @@ module JuryGrading
         end,
         ratings: @observations.group_by { |row| row[:team] }.transform_values do |rows|
           rows.map do |row|
-            row.slice(:juror, :criterion, :score, :criterion_points).merge(raw_score: row[:score], normalized_score: normalized_score(row))
+            row.slice(:juror, :criterion, :score, :criterion_points, :comments).merge(raw_score: row[:score], normalized_score: normalized_score(row))
           end
         end,
         warnings: result_warnings,

@@ -9,7 +9,7 @@ This is a fork of [Canvas LMS](https://github.com/instructure/canvas-lms) custom
 - Modified notification default policy to apply to all email channels, not just the default one
 - AGPL source code link in footer
 - Rubric slider assessment mode with continuous scoring, always-visible rubric in SpeedGrader, 50/50 panel split, hidden points column, and auto-submitted rubric grade
-- Jury-calibrated grading: Jury TAs grade assigned teams in SpeedGrader; teachers calculate and publish calibrated rubric results.
+- Jury-calibrated grading: Jury TAs grade assigned teams in SpeedGrader; teachers calculate, publish, and export calibrated rubric results
 
 ---
 

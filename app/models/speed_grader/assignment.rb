@@ -611,7 +611,7 @@ module SpeedGrader
 
     def group_id_filter
       jury_scope = JuryGrading::Scope.new(assignment:, user: current_user)
-      return jury_scope.group&.id || -1 if jury_scope.jury_user?
+      return jury_scope.group&.id || -1 if jury_scope.jury_assignment?
 
       return nil unless course.filter_speed_grader_by_student_group?
 

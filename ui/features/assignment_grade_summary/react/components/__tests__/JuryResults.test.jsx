@@ -1,5 +1,3 @@
-/* Copyright (C) 2026 SensUs. */
-
 import React from 'react'
 import {fireEvent, render, waitFor} from '@testing-library/react'
 import axios from '@canvas/axios'
