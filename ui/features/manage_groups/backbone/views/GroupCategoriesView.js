@@ -24,7 +24,9 @@ import groupCategoriesTemplate from '../../jst/groupCategories.handlebars'
 import tabTemplate from '../../jst/groupCategoryTab.handlebars'
 import awaitElement from '@canvas/await-element'
 import {renderCreateDialog} from '@canvas/groups/react/CreateOrEditSetModal'
+import {renderJuryWorkspaceDialog} from '../../react/JuryWorkspaceModal'
 import 'jqueryui/tabs'
+import '@canvas/rails-flash-notifications'
 import {initializeTopNavPortalWithDefaults} from '@canvas/top-navigation/react/TopNavPortalWithDefaults'
 import {useScope as createI18nScope} from '@canvas/i18n'
 import {setupTabKeyboardNavigation} from '@canvas/util/tabKeyboardNavigation'
@@ -222,11 +224,26 @@ export default class GroupCategoriesView extends CollectionView {
     e.preventDefault()
     this.$makeJuryGroupSetsButton.prop('disabled', true)
     try {
-      await $.post(ENV.jury_workspace_url)
+      const mountPoint = await awaitElement('create-group-set-modal-mountpoint')
+      const selection = await renderJuryWorkspaceDialog(
+        mountPoint,
+        ENV.jury_assignments || [],
+        ENV.jury_members || [],
+      )
+      if (!selection) {
+        this.$makeJuryGroupSetsButton.prop('disabled', false)
+        return
+      }
+
+      await $.post(ENV.jury_workspace_url, {
+        assignment_id: selection.assignmentId,
+        label: selection.label,
+        juror_ids: selection.jurorIds,
+      })
       window.location.reload()
-    } catch (_) {
+    } catch (error) {
       this.$makeJuryGroupSetsButton.prop('disabled', false)
-      window.alert(I18n.t('Could not create jury group sets.'))
+      $.flashError(error?.responseJSON?.message || I18n.t('Could not create jury group sets.'))
     }
   }
 

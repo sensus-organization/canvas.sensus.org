@@ -27,25 +27,82 @@ describe GroupCategoriesController do
   end
 
   describe "POST ensure_jury_workspace" do
-    it "creates one non-SIS group set per Jury user and is idempotent" do
-      jury_role = @course.root_account.roles.create!(name: JuryGrading::WorkspaceService::ROLE_NAME, base_role_type: "TaEnrollment")
-      jurors = [user_factory, user_factory]
-      jurors.each { |jury| @course.enroll_ta(jury, role: jury_role, enrollment_state: "active") }
-      user_session(@teacher)
+    before :once do
+      @jury_role = @course.root_account.roles.create!(name: JuryGrading::WorkspaceService::ROLE_NAME, base_role_type: "TaEnrollment")
+      @jurors = [user_factory, user_factory]
+      @jurors.each { |jury| @course.enroll_ta(jury, role: @jury_role, enrollment_state: "active") }
+      @jury_assignment = @course.assignments.create!(
+        title: "Jury", points_possible: 10, moderated_grading: true, final_grader: @teacher, grader_count: 1
+      )
+      @jury_assignment.update!(jury_calibrated_grading: true)
+    end
 
+    before { user_session(@teacher) }
+
+    it "creates one non-SIS group set per Jury user and is idempotent" do
       expect do
-        post "ensure_jury_workspace", params: { course_id: @course.id }, format: :json
+        post "ensure_jury_workspace", params: { course_id: @course.id, assignment_id: @jury_assignment.id }, format: :json
       end.to change(JuryGradingWorkspace, :count).by(2)
       expect(response).to be_successful
 
-      categories = JuryGradingWorkspace.where(course: @course).map(&:group_category)
+      categories = JuryGradingWorkspace.where(assignment: @jury_assignment).map(&:group_category)
       expect(categories.pluck(:role)).to all(be_nil)
       expect(categories.pluck(:sis_source_id)).to all(be_nil)
       expect(categories.map { |category| category.groups.active.count }).to all(eq(1))
 
       expect do
-        post "ensure_jury_workspace", params: { course_id: @course.id }, format: :json
+        post "ensure_jury_workspace", params: { course_id: @course.id, assignment_id: @jury_assignment.id }, format: :json
       end.not_to change(JuryGradingWorkspace, :count)
+    end
+
+    it "only creates sets for the selected jurors" do
+      expect do
+        post "ensure_jury_workspace",
+             params: { course_id: @course.id, assignment_id: @jury_assignment.id, juror_ids: [@jurors.first.id] },
+             format: :json
+      end.to change(JuryGradingWorkspace, :count).by(1)
+
+      expect(JuryGradingWorkspace.where(assignment: @jury_assignment).pluck(:juror_id)).to eq [@jurors.first.id]
+    end
+
+    it "refuses an assignment that is not jury-calibrated" do
+      ordinary = @course.assignments.create!(title: "Ordinary", points_possible: 10)
+
+      expect do
+        post "ensure_jury_workspace", params: { course_id: @course.id, assignment_id: ordinary.id }, format: :json
+      end.not_to change(JuryGradingWorkspace, :count)
+      expect(response).to have_http_status :unprocessable_content
+    end
+
+    it "refuses an assignment from another course" do
+      this_course = @course
+      foreign = course_factory(active_all: true).assignments.create!(title: "Elsewhere", points_possible: 10)
+
+      expect do
+        post "ensure_jury_workspace", params: { course_id: this_course.id, assignment_id: foreign.id }, format: :json
+      end.not_to change(JuryGradingWorkspace, :count)
+      expect(response).to have_http_status :unprocessable_content
+    end
+
+    it "requires permission to manage groups" do
+      user_session(@student)
+
+      post "ensure_jury_workspace", params: { course_id: @course.id, assignment_id: @jury_assignment.id }, format: :json
+      expect(response).to have_http_status :forbidden
+    end
+
+    it "refuses a Jury member, so they cannot allocate themselves to an assignment" do
+      juror = @jurors.first
+      @course.root_account.role_overrides.create!(permission: :manage_groups_add, role: @jury_role, enabled: true)
+      @course.root_account.role_overrides.create!(permission: :manage_groups_manage, role: @jury_role, enabled: true)
+      user_session(juror)
+
+      expect do
+        post "ensure_jury_workspace",
+             params: { course_id: @course.id, assignment_id: @jury_assignment.id, juror_ids: [juror.id] },
+             format: :json
+      end.not_to change(JuryGradingWorkspace, :count)
+      expect(response).to have_http_status :forbidden
     end
   end
 

@@ -294,8 +294,15 @@ class GroupCategoriesController < ApplicationController
 
   def ensure_jury_workspace
     return unless authorized_action(@context, @current_user, RoleOverride::GRANULAR_MANAGE_GROUPS_PERMISSIONS)
+    return render_unauthorized_action unless @context.grants_right?(@current_user, :manage_grades)
+    return render_unauthorized_action if @context.jury_grader?(@current_user)
 
-    result = JuryGrading::WorkspaceService.new(course: @context).ensure!
+    assignment = @context.assignments.active.find_by(id: params[:assignment_id])
+    unless assignment&.jury_calibrated_grading?
+      return render json: { message: t("Select an assignment that uses jury-calibrated grading") }, status: :unprocessable_content
+    end
+
+    result = JuryGrading::WorkspaceService.new(assignment:, label: params[:label]).ensure!(juror_ids: params[:juror_ids])
     result_json = result.transform_values { |users| users.map { |user| user_json(user, @current_user, session) } }
     respond_to do |format|
       format.html { redirect_to course_groups_url(@context), notice: t("Jury group sets are ready. Drag team students into each juror's group.") }

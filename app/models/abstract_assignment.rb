@@ -4114,9 +4114,15 @@ class AbstractAssignment < ActiveRecord::Base
   end
 
   def jury_grader_count
-    context.all_enrollments.active.joins(:role)
-           .where(enrollments: { type: "TaEnrollment" }, roles: { name: JuryGrading::WorkspaceService::ROLE_NAME })
-           .distinct.count(:user_id)
+    return 0 unless persisted?
+
+    JuryGradingWorkspace.where(assignment_id: id).count
+  end
+
+  def course_jury_count
+    return 0 unless context.is_a?(Course)
+
+    JuryGrading::WorkspaceService.jury_user_ids(context).length
   end
 
   def available_moderators
@@ -4740,7 +4746,7 @@ class AbstractAssignment < ActiveRecord::Base
     return false unless jury_calibrated_grading? || jury_calibrated_grading_changed?
 
     if jury_calibrated_grading?
-      errors.add(:jury_calibrated_grading, "needs at least one active Jury TA") if jury_grader_count.zero?
+      errors.add(:jury_calibrated_grading, "needs at least one active Jury TA") if course_jury_count.zero?
       errors.add(:jury_calibrated_grading, "cannot be enabled for group assignments") if has_group_category?
       errors.add(:jury_calibrated_grading, "cannot be enabled for peer reviewed assignments") if peer_reviews
     end

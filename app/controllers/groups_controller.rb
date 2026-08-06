@@ -403,14 +403,21 @@ class GroupsController < ApplicationController
             can_manage_groups: @context.grants_right?(@current_user, session, :manage_groups_manage),
             can_delete_groups: @context.grants_right?(@current_user, session, :manage_groups_delete)
           }
-          can_make_jury_workspace = @context.is_a?(Course) &&
-                                    @context.all_enrollments.active.joins(:role).where(enrollments: { type: "TaEnrollment" }, roles: { name: JuryGrading::WorkspaceService::ROLE_NAME }).exists?
+          can_configure_jury = @context.is_a?(Course) &&
+                               @context.grants_right?(@current_user, session, :manage_grades) &&
+                               !@context.jury_grader?(@current_user)
+          jury_user_ids = can_configure_jury ? JuryGrading::WorkspaceService.jury_user_ids(@context) : []
+          can_make_jury_workspace = jury_user_ids.any?
+          jury_assignments = can_make_jury_workspace ? @context.assignments.active.where(jury_calibrated_grading: true).order(:title).pluck(:id, :title) : []
+          jury_members = can_make_jury_workspace ? User.where(id: jury_user_ids).order(:sortable_name).pluck(:id, :name) : []
 
           js_env group_categories: categories_json,
                  group_user_type: @group_user_type,
                  allow_self_signup: @allow_self_signup,
                  context_class_name: @context.class.name,
                  can_make_jury_workspace:,
+                 jury_assignments: jury_assignments.map { |id, title| { id:, title: } },
+                 jury_members: jury_members.map { |id, name| { id:, name: } },
                  jury_workspace_url: @context.is_a?(Course) ? api_v1_ensure_jury_workspace_path(@context) : nil,
                  permissions: js_permissions
 

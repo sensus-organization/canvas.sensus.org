@@ -8,25 +8,25 @@ describe JuryGrading::Scope do
   let(:team) { student_in_course(course:, active_all: true).user }
   let(:ordinary) { course.assignments.create!(title: "Ordinary", points_possible: 10) }
 
-  def jury_assignment
+  let(:jury_assignment) do
     assignment = course.assignments.create!(title: "Jury", points_possible: 10, moderated_grading: true, final_grader: teacher, grader_count: 1)
     assignment.update!(jury_calibrated_grading: true)
+    JuryGrading::WorkspaceService.new(assignment:).ensure!
     assignment
   end
 
-  def allocate!(user)
-    JuryGradingWorkspace.find_by(course:, juror:).group_category.groups.first.add_user(user, "accepted")
+  def allocate!(assignment, user)
+    JuryGradingWorkspace.find_by(assignment:, juror:).group_category.groups.first.add_user(user, "accepted")
   end
 
   before do
     course.enroll_user(juror, "TaEnrollment", role: jury_role, enrollment_state: "active")
-    JuryGrading::WorkspaceService.new(course:).ensure!
   end
 
   context "on a jury-calibrated assignment" do
     it "treats a Jury member as a juror who may grade their allocated teams" do
-      allocate!(team)
       assignment = jury_assignment
+      allocate!(assignment, team)
       assignment.submit_homework(team, body: "done", submission_type: "online_text_entry")
       scope = described_class.new(assignment:, user: juror)
 
@@ -51,7 +51,7 @@ describe JuryGrading::Scope do
     end
 
     it "refuses a submission even when the team is allocated to them" do
-      allocate!(team)
+      allocate!(jury_assignment, team)
       ordinary.submit_homework(team, body: "done", submission_type: "online_text_entry")
       scope = described_class.new(assignment: ordinary, user: juror)
 

@@ -80,12 +80,9 @@ module JuryGrading
     end
 
     def workspace_issues
-      jury_ids = @assignment.context.all_enrollments.active.joins(:role)
-                            .where(enrollments: { type: "TaEnrollment" }, roles: { name: WorkspaceService::ROLE_NAME })
-                            .distinct.pluck(:user_id)
-      return ["No active Jury users"] if jury_ids.empty?
+      return ["No Jury members are assigned to this assignment"] if active_jury_ids.empty?
 
-      jury_ids.filter_map do |jury_id|
+      active_jury_ids.filter_map do |jury_id|
         scope = Scope.new(assignment: @assignment, user: User.find(jury_id))
         "Jury workspace is missing or malformed for user #{jury_id}" unless scope.group
       end
@@ -189,9 +186,8 @@ module JuryGrading
     end
 
     def active_jury_ids
-      @active_jury_ids ||= @assignment.context.all_enrollments.active.joins(:role)
-                                      .where(enrollments: { type: "TaEnrollment" }, roles: { name: WorkspaceService::ROLE_NAME })
-                                      .distinct.pluck(:user_id)
+      @active_jury_ids ||= JuryGradingWorkspace.where(assignment: @assignment).pluck(:juror_id) &
+                           WorkspaceService.jury_user_ids(@assignment.context)
     end
 
     def jury_scopes

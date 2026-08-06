@@ -10,11 +10,8 @@ module JuryGrading
     def group
       return @group if defined?(@group)
 
-      workspace = JuryGradingWorkspace.find_by(course: @assignment.context, juror: @user)
-      category = workspace&.group_category ||
-                 @assignment.context.group_categories.active.find_by(role: category_role) ||
-                 @assignment.context.group_categories.active.find_by(sis_source_id: category_role)
-      @group = category&.groups&.active&.sole
+      workspace = JuryGradingWorkspace.find_by(assignment: @assignment, juror: @user)
+      @group = workspace&.group_category&.groups&.active&.sole
     rescue ActiveRecord::RecordNotFound, ActiveRecord::SoleRecordExceeded
       @group = nil
     end
@@ -44,12 +41,6 @@ module JuryGrading
       return false unless jury_assignment?
 
       group&.group_memberships&.active&.where(user_id: submission.user_id)&.exists? || false
-    end
-
-    private
-
-    def category_role
-      "#{WorkspaceService::ROLE_PREFIX}#{@user.id}"
     end
   end
 end
