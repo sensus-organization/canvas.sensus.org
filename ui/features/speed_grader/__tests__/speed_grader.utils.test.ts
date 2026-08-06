@@ -16,7 +16,11 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import {isStudentConcluded, mergeSavedRubricAssessment} from '../jquery/speed_grader.utils'
+import {
+  isStudentConcluded,
+  mergeSavedRubricAssessment,
+  stringifyAssessmentIds,
+} from '../jquery/speed_grader.utils'
 import type {Student, Enrollment, WorkflowState} from '../../../api.d'
 
 type SpeedGraderEnrollment = Enrollment
@@ -350,5 +354,46 @@ describe('mergeSavedRubricAssessment', () => {
     mergeSavedRubricAssessment(assessments, {id: 42, data: []} as any)
 
     expect(assessments[0].id).toBe('42')
+  })
+})
+
+describe('stringifyAssessmentIds', () => {
+  it('stringifies numeric id fields so strict comparisons against ENV ids hold', () => {
+    const saved = stringifyAssessmentIds({
+      id: 69,
+      assessor_id: 121,
+      user_id: 68,
+      artifact_id: 72,
+      score: 20.63,
+      data: [{criterion_id: '_7077', points: 3}],
+    } as any)
+
+    expect(saved.id).toBe('69')
+    expect(saved.assessor_id).toBe('121')
+    expect(saved.user_id).toBe('68')
+    expect(saved.artifact_id).toBe('72')
+    // ENV.current_user_id is a string, so this is the comparison that was failing
+    expect('121' === saved.assessor_id).toBe(true)
+  })
+
+  it('leaves non-id values and nested data alone', () => {
+    const saved = stringifyAssessmentIds({
+      id: 1,
+      score: 20.63,
+      hide_points: false,
+      assessor_name: 'Jury 01',
+      data: [{criterion_id: '_7077', points: 3}],
+    } as any)
+
+    expect(saved.score).toBe(20.63)
+    expect(saved.hide_points).toBe(false)
+    expect(saved.assessor_name).toBe('Jury 01')
+    expect((saved as any).data[0].points).toBe(3)
+  })
+
+  it('does not turn null ids into the string "null"', () => {
+    const saved = stringifyAssessmentIds({id: 1, learning_outcome_id: null} as any)
+
+    expect((saved as any).learning_outcome_id).toBeNull()
   })
 })

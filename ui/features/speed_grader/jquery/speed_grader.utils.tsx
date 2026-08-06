@@ -523,19 +523,32 @@ export function isStudentConcluded(studentMap: any, student: string, sectionId: 
   }
 }
 
+// The page payload runs through StringifyIds but this save response does not, so its
+// numeric ids must be normalised before merging. Otherwise `id` fails to match an
+// existing assessment (appending a duplicate) and `assessor_id` stops matching
+// ENV.current_user_id, which drops the assessment out of the current user's list.
+export function stringifyAssessmentIds(assessment: RubricAssessment): RubricAssessment {
+  return Object.fromEntries(
+    Object.entries(assessment).map(([key, value]) => [
+      key,
+      /^(id|.*_id)$/.test(key) && typeof value === 'number' ? String(value) : value,
+    ]),
+  ) as RubricAssessment
+}
+
 export function mergeSavedRubricAssessment(
   assessments: RubricAssessment[],
   response: RubricAssessment,
 ): RubricAssessment[] {
-  // the page payload stringifies ids but the save response does not, so comparing
-  // them strictly would append a duplicate assessment instead of updating in place
-  const saved = {...response, id: response.id == null ? response.id : String(response.id)}
+  const saved = stringifyAssessmentIds(response)
   const index = assessments.findIndex(other => String(other.id) === String(saved.id))
 
   if (index === -1) {
     assessments.push(saved)
   } else {
-    $.extend(true, assessments[index], saved)
+    // a fresh object, not an in-place merge: the rubric is memoised on the identity of the
+    // selected assessment, so mutating it leaves the UI rendering the pre-save ratings
+    assessments[index] = $.extend(true, {}, assessments[index], saved)
   }
 
   return assessments
