@@ -16,7 +16,7 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import {isStudentConcluded} from '../jquery/speed_grader.utils'
+import {isStudentConcluded, mergeSavedRubricAssessment} from '../jquery/speed_grader.utils'
 import type {Student, Enrollment, WorkflowState} from '../../../api.d'
 
 type SpeedGraderEnrollment = Enrollment
@@ -309,5 +309,46 @@ describe('isStudentConcluded', () => {
 
   it('return true if the student is concluded in this specific section, but active in another', () => {
     expect(isStudentConcluded(studentMap, '2', '1')).toBe(true)
+  })
+})
+
+describe('mergeSavedRubricAssessment', () => {
+  const existing = () => [
+    {id: '1', assessor_id: '7', data: [{criterion_id: 'crit1', points: 2}]} as any,
+  ]
+
+  it('updates in place when the response id is a number and the stored id is a string', () => {
+    const assessments = existing()
+
+    mergeSavedRubricAssessment(assessments, {
+      id: 1,
+      assessor_id: '7',
+      data: [{criterion_id: 'crit1', points: 3}],
+    } as any)
+
+    expect(assessments).toHaveLength(1)
+    expect(assessments[0].data[0].points).toBe(3)
+    expect(assessments[0].id).toBe('1')
+  })
+
+  it('appends a genuinely new assessment', () => {
+    const assessments = existing()
+
+    mergeSavedRubricAssessment(assessments, {
+      id: 2,
+      assessor_id: '7',
+      data: [{criterion_id: 'crit1', points: 5}],
+    } as any)
+
+    expect(assessments).toHaveLength(2)
+    expect(assessments[1].id).toBe('2')
+  })
+
+  it('normalises the id so the assessment select can match it', () => {
+    const assessments: any[] = []
+
+    mergeSavedRubricAssessment(assessments, {id: 42, data: []} as any)
+
+    expect(assessments[0].id).toBe('42')
   })
 })

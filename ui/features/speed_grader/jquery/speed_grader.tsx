@@ -105,6 +105,7 @@ import {
   getSelectedAssessment,
   hideMediaRecorderContainer,
   isStudentConcluded,
+  mergeSavedRubricAssessment,
   renderDeleteAttachmentLink,
   renderPostGradesMenu,
   renderSettingsMenu,
@@ -2449,7 +2450,6 @@ EG = {
           }[]
         }[]
       }) => {
-        let found = false
         let pendingSavedComments: Record<string, string[]> | undefined
         if (response && response.rubric_association) {
           if (!enhanced_rubrics_enabled) {
@@ -2465,15 +2465,7 @@ EG = {
         // otherwise we need to create a submission for them.
         const assessedStudent = EG.setOrUpdateSubmission(response.artifact)
 
-        for (let i = 0; i < assessedStudent.rubric_assessments.length; i++) {
-          if (response.id === assessedStudent.rubric_assessments[i].id) {
-            $.extend(true, assessedStudent.rubric_assessments[i], response)
-            found = true
-          }
-        }
-        if (!found) {
-          assessedStudent.rubric_assessments.push(response)
-        }
+        mergeSavedRubricAssessment(assessedStudent.rubric_assessments, response)
 
         // this next part will take care of group submissions, so that when one member of the group gets assessesed then everyone in the group will get that same assessment.
         $.each(
@@ -3610,7 +3602,10 @@ EG = {
     return contents
   },
 
-  showRubric({validateEnteredData = true, pendingSavedComments = undefined as Record<string, string[]> | undefined} = {}) {
+  showRubric({
+    validateEnteredData = true,
+    pendingSavedComments = undefined as Record<string, string[]> | undefined,
+  } = {}) {
     const selectMenu = selectors.get('#rubric_assessments_select')
     // if this has some rubric_assessments
     if (window.jsonData.rubric_association) {

@@ -522,3 +522,21 @@ export function isStudentConcluded(studentMap: any, student: string, sectionId: 
     )
   }
 }
+
+export function mergeSavedRubricAssessment(
+  assessments: RubricAssessment[],
+  response: RubricAssessment,
+): RubricAssessment[] {
+  // the page payload stringifies ids but the save response does not, so comparing
+  // them strictly would append a duplicate assessment instead of updating in place
+  const saved = {...response, id: response.id == null ? response.id : String(response.id)}
+  const index = assessments.findIndex(other => String(other.id) === String(saved.id))
+
+  if (index === -1) {
+    assessments.push(saved)
+  } else {
+    $.extend(true, assessments[index], saved)
+  }
+
+  return assessments
+}
