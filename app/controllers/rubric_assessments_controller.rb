@@ -136,6 +136,7 @@ class RubricAssessmentsController < ApplicationController
           if jury_user && !jury_scope.permits_submission?(@asset.submission)
             return render_unauthorized_action
           end
+
           assessment_type = params.dig(:rubric_assessment, :assessment_type)
           unless @association.user_can_assess_for?(assessor: @current_user, assessee: @user, assessment_type:)
             return render_unauthorized_action
@@ -210,7 +211,7 @@ class RubricAssessmentsController < ApplicationController
     @rubric = @association.rubric
     @assessment = @rubric.rubric_assessments.find(params[:id])
     association_object = @association.association_object
-    jury_scope = JuryGrading::Scope.new(assignment: association_object, user: @current_user) if association_object.is_a?(Assignment)
+    jury_scope = JuryGrading::Scope.new(assignment: association_object, user: @current_user) if association_object.is_a?(AbstractAssignment)
     submission = @assessment.artifact.try(:submission) || @assessment.artifact
     if jury_scope&.jury_user? && (!jury_scope.grading_open? || !jury_scope.permits_submission?(submission))
       return render_unauthorized_action

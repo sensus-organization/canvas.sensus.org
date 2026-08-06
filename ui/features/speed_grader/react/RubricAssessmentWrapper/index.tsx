@@ -26,7 +26,12 @@ import {
   type RubricUnderscoreType,
 } from '@canvas/rubrics/react/utils'
 import {View} from '@instructure/ui-view'
+import {Button} from '@instructure/ui-buttons'
+import {useScope as createI18nScope} from '@canvas/i18n'
+import {windowConfirm} from '@canvas/util/globalUtils'
 import {RubricAssessmentContainerWrapper} from '@canvas/rubrics/react/RubricAssessment'
+
+const I18n = createI18nScope('speed_grader')
 
 const convertSubmittedAssessment = (assessments: RubricAssessmentData[]): any => {
   const {assessment_user_id, anonymous_id, assessment_type} = ENV.RUBRIC_ASSESSMENT ?? {}
@@ -60,6 +65,7 @@ type RubricAssessmentWrapperProps = {
   rubricOutcomeData?: RubricOutcomeUnderscore[]
   onDismiss: () => void
   onSave: (assessmentData: any) => void
+  onReset?: (assessmentId: string) => void
 }
 export default ({
   currentUserId,
@@ -67,6 +73,7 @@ export default ({
   rubricOutcomeData,
   onDismiss,
   onSave,
+  onReset,
 }: RubricAssessmentWrapperProps) => {
   const {
     currentStudentAvatarPath,
@@ -108,9 +115,36 @@ export default ({
     [currentStudentName, currentStudentAvatarPath],
   )
 
+  const ownSavedAssessmentId =
+    studentAssessment?.id && String(studentAssessment.assessor_id ?? '') === String(currentUserId)
+      ? String(studentAssessment.id)
+      : undefined
+
   return (
     <View as="div">
+      {onReset && ownSavedAssessmentId && (
+        <View as="div" textAlign="end" margin="0 0 x-small 0">
+          <Button
+            size="small"
+            data-testid="reset-rubric-assessment-button"
+            onClick={() => {
+              if (
+                windowConfirm(
+                  I18n.t(
+                    'Remove your saved assessment for this student? This clears your ratings and score for them.',
+                  ),
+                )
+              ) {
+                onReset(ownSavedAssessmentId)
+              }
+            }}
+          >
+            {I18n.t('Reset my assessment')}
+          </Button>
+        </View>
+      )}
       <RubricAssessmentContainerWrapper
+        key={`${studentAssessment?.id ?? 'new'}-${studentAssessment?.updated_at ?? ''}`}
         buttonDisplay={mappedRubric?.buttonDisplay ?? 'level'}
         criteria={mappedRubric?.criteria ?? []}
         currentUserId={currentUserId}

@@ -45,6 +45,7 @@ class RubricAssessment < ActiveRecord::Base
   before_save :htmlify_rating_comments
   before_save :mark_unread_assessments
   before_create :set_root_account_id
+  after_destroy :clear_withdrawn_provisional_grade
   after_save :update_assessment_requests, :update_artifact
   after_save :track_outcomes
 
@@ -229,9 +230,28 @@ class RubricAssessment < ActiveRecord::Base
   end
   protected :jury_calibrated_provisional_grade?
 
+  def jury_withdrawable?(user)
+    return false unless jury_calibrated_provisional_grade?
+    return false unless artifact&.submission
+
+    scope = JuryGrading::Scope.new(assignment: rubric_association.association_object, user:)
+    scope.grading_open? && scope.permits_submission?(artifact.submission)
+  end
+
+  def clear_withdrawn_provisional_grade
+    return unless jury_calibrated_provisional_grade?
+    return unless artifact && artifact.rubric_assessments.where.not(id:).empty?
+
+    artifact.update!(score: nil, grade: nil, graded_at: nil)
+  end
+  private :clear_withdrawn_provisional_grade
+
   set_policy do
     given { |user| user && assessor_id == user.id }
     can :create and can :read and can :update
+
+    given { |user| user && assessor_id == user.id && jury_withdrawable?(user) }
+    can :delete
 
     given { |user| user && user_id == user.id }
     can :read

@@ -31,12 +31,14 @@ type Props = {
 }
 
 export function JuryWorkspaceModal({assignments, members, onSubmit, onDismiss, closed}: Props) {
-  const [assignmentId, setAssignmentId] = useState<number | null>(assignments[0]?.id ?? null)
+  const [assignmentId, setAssignmentId] = useState<string>(
+    assignments[0] ? String(assignments[0].id) : '',
+  )
   const [label, setLabel] = useState('')
   const [jurorIds, setJurorIds] = useState<number[]>([])
 
-  const selected = assignments.find(a => a.id === assignmentId)
-  const canSubmit = assignmentId != null && jurorIds.length > 0
+  const selected = assignments.find(a => String(a.id) === assignmentId)
+  const canSubmit = assignmentId !== '' && jurorIds.length > 0
 
   const toggle = (id: number) =>
     setJurorIds(current =>
@@ -68,14 +70,14 @@ export function JuryWorkspaceModal({assignments, members, onSubmit, onDismiss, c
           <View as="div">
             <SimpleSelect
               renderLabel={I18n.t('Assignment')}
-              value={assignmentId ?? undefined}
-              onChange={(_e, {value}) => setAssignmentId(Number(value))}
+              value={assignmentId}
+              onChange={(_e, data) => setAssignmentId(String(data.value))}
             >
               {assignments.map(assignment => (
                 <SimpleSelect.Option
                   key={assignment.id}
-                  id={String(assignment.id)}
-                  value={assignment.id}
+                  id={`jury-assignment-${assignment.id}`}
+                  value={String(assignment.id)}
                 >
                   {assignment.title}
                 </SimpleSelect.Option>
@@ -119,7 +121,7 @@ export function JuryWorkspaceModal({assignments, members, onSubmit, onDismiss, c
         <Button
           color="primary"
           interaction={canSubmit ? 'enabled' : 'disabled'}
-          onClick={() => onSubmit({assignmentId: assignmentId as number, label, jurorIds})}
+          onClick={() => onSubmit({assignmentId: Number(assignmentId), label, jurorIds})}
         >
           {I18n.t('Create')}
         </Button>

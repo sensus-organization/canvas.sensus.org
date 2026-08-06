@@ -83,6 +83,108 @@ describe "Jury grading restrictions" do
     end
   end
 
+  describe "withdrawing your own jury assessment" do
+    let(:rubric) { rubric_model(context: course, data: larger_rubric_data) }
+    let(:other_juror) { user_factory(active_all: true, name: "Jury 02") }
+
+    # production revokes manage_rubrics for the Jury role, so :manage is not a path to :delete there
+    before { course.root_account.role_overrides.create!(permission: :manage_rubrics, role: jury_role, enabled: false) }
+
+    def assess!(assignment, association, assessor)
+      JuryGrading::WorkspaceService.new(assignment:).ensure!(juror_ids: [assessor.id])
+      JuryGradingWorkspace.find_by(assignment:, juror: assessor)
+                          .group_category.groups.first.add_user(team, "accepted")
+      submission = assignment.submit_homework(team, body: "done", submission_type: "online_text_entry")
+      provisional = submission.find_or_create_provisional_grade!(assessor)
+      association.assess(
+        user: team,
+        assessor:,
+        artifact: provisional,
+        assessment: { assessment_type: "grading", criterion_crit1: { points: 3 } }
+      )
+    end
+
+    it "lets a Jury member delete their own and clears the provisional score" do
+      assignment = jury_assignment
+      association = rubric.associate_with(assignment, course, purpose: "grading", use_for_grading: true)
+      assessment = assess!(assignment, association, juror)
+      provisional = assessment.artifact
+
+      expect(provisional.reload.score).to eq 3
+      expect(assessment.grants_right?(juror, :delete)).to be true
+
+      assessment.destroy
+      expect(provisional.reload.score).to be_nil
+    end
+
+    it "does not let a Jury member delete someone else's assessment" do
+      course.enroll_user(other_juror, "TaEnrollment", role: jury_role, enrollment_state: "active")
+      assignment = jury_assignment
+      association = rubric.associate_with(assignment, course, purpose: "grading", use_for_grading: true)
+      assessment = assess!(assignment, association, juror)
+
+      expect(assessment.grants_right?(other_juror, :delete)).to be false
+    end
+
+    it "does not let a Jury member delete once results are published" do
+      assignment = jury_assignment
+      association = rubric.associate_with(assignment, course, purpose: "grading", use_for_grading: true)
+      assessment = assess!(assignment, association, juror)
+      assignment.update!(grades_published_at: Time.zone.now)
+
+      expect(assessment.reload.grants_right?(juror, :delete)).to be false
+    end
+
+    it "refuses when the team is no longer allocated to them" do
+      assignment = jury_assignment
+      association = rubric.associate_with(assignment, course, purpose: "grading", use_for_grading: true)
+      assessment = assess!(assignment, association, juror)
+
+      JuryGradingWorkspace.find_by(assignment:, juror:).group_category.groups.first
+                          .group_memberships.active.find_by(user_id: team.id).destroy
+
+      expect(assessment.reload.grants_right?(juror, :delete)).to be false
+    end
+
+    it "does not clear a provisional score on an ordinary moderated assignment" do
+      moderated = course.assignments.create!(
+        title: "Moderated",
+        points_possible: 10,
+        moderated_grading: true,
+        final_grader: teacher,
+        grader_count: 1,
+        submission_types: "online_text_entry"
+      )
+      association = rubric.associate_with(moderated, course, purpose: "grading", use_for_grading: false)
+      submission = moderated.submit_homework(team, body: "done", submission_type: "online_text_entry")
+      provisional = submission.find_or_create_provisional_grade!(teacher, score: 85)
+      assessment = association.assess(
+        user: team,
+        assessor: teacher,
+        artifact: provisional,
+        assessment: { assessment_type: "grading", criterion_crit1: { points: 3 } }
+      )
+
+      expect(provisional.reload.score).to eq 85
+      assessment.destroy
+
+      expect(provisional.reload.score).to eq 85
+    end
+
+    it "leaves ordinary rubric assessments unaffected" do
+      ordinary.submit_homework(team, body: "done", submission_type: "online_text_entry")
+      association = rubric.associate_with(ordinary, course, purpose: "grading", use_for_grading: true)
+      assessment = association.assess(
+        user: team,
+        assessor: juror,
+        artifact: ordinary.submissions.find_by(user: team),
+        assessment: { assessment_type: "grading", criterion_crit1: { points: 3 } }
+      )
+
+      expect(assessment.grants_right?(juror, :delete)).to be false
+    end
+  end
+
   describe "the gradebook importer" do
     def gradeable_for?(user)
       importer = GradebookImporter.new(GradebookUpload.new(course:, user:, progress: Progress.new), "", user, nil)

@@ -48,6 +48,22 @@ describe('JuryWorkspaceModal', () => {
     expect(onSubmit).toHaveBeenCalledWith({assignmentId: 52, label: 'IN', jurorIds: [122]})
   })
 
+  it('keeps a non-default assignment selected and submits it', async () => {
+    const {onSubmit} = renderModal()
+
+    await userEvent.click(screen.getByRole('combobox', {name: /Assignment/}))
+    await userEvent.click(screen.getByText('Teams Results Document Submission - TP'))
+
+    expect(screen.getByRole('combobox', {name: /Assignment/})).toHaveValue(
+      'Teams Results Document Submission - TP',
+    )
+
+    await userEvent.click(screen.getByLabelText('Jury 01'))
+    await userEvent.click(screen.getByRole('button', {name: 'Create'}))
+
+    expect(onSubmit).toHaveBeenCalledWith({assignmentId: 53, label: '', jurorIds: [121]})
+  })
+
   it('defaults the label to empty so the server falls back to the assignment title', async () => {
     const {onSubmit} = renderModal()
 

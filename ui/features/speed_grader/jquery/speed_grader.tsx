@@ -2374,8 +2374,40 @@ EG = {
         onSave={data => {
           this.saveRubricAssessment(data)
         }}
+        onReset={
+          ENV.jury_grader
+            ? assessmentId => {
+                this.resetRubricAssessment(assessmentId)
+              }
+            : undefined
+        }
       />,
       document.getElementById('enhanced-rubric-assessment-container'),
+    )
+  },
+
+  resetRubricAssessment(assessmentId: string) {
+    const associationId = (window.jsonData.rubric_association as {id?: string} | undefined)?.id
+    if (!associationId) return
+
+    $.ajaxJSON(
+      `/courses/${ENV.course_id}/rubric_associations/${associationId}/assessments/${assessmentId}`,
+      'DELETE',
+      {},
+      () => {
+        const student = EG.currentStudent
+        student.rubric_assessments = (student.rubric_assessments || []).filter(
+          (assessment: {id: string}) => String(assessment.id) !== String(assessmentId),
+        )
+        EG.showRubric()
+        EG.showGrade()
+        EG.updateSelectMenuStatus(student)
+        EG.updateStatsInHeader()
+        $.flashMessage(I18n.t('Your assessment was removed.'))
+      },
+      (error: {message?: string}) => {
+        $.flashError(error?.message || I18n.t('Could not remove your assessment.'))
+      },
     )
   },
 
