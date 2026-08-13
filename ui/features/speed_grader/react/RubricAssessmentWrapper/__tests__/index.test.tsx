@@ -35,7 +35,13 @@ const rubric = {
       ratings: [
         {id: 'r0', criterion_id: '_7077', description: 'Poor', long_description: '', points: 0},
         {id: 'r1', criterion_id: '_7077', description: 'Good', long_description: '', points: 3},
-        {id: 'r2', criterion_id: '_7077', description: 'Excellent', long_description: '', points: 5},
+        {
+          id: 'r2',
+          criterion_id: '_7077',
+          description: 'Excellent',
+          long_description: '',
+          points: 5,
+        },
       ],
     },
   ],
@@ -55,10 +61,10 @@ const assessment = (points: number, updatedAt: string) => ({
   data: [{id: 'd1', criterion_id: '_7077', points, comments: '', description: ''}],
 })
 
-const renderWrapper = () =>
+const renderWrapper = (currentUserId = '121') =>
   render(
     <RubricAssessmentWrapper
-      currentUserId="121"
+      currentUserId={currentUserId}
       rubric={rubric}
       onDismiss={() => {}}
       onSave={() => {}}
@@ -78,6 +84,27 @@ describe('RubricAssessmentWrapper', () => {
     renderWrapper()
 
     expect(shownPoints()).toBe('4.44 / 5')
+  })
+
+  it('is read-only when the selected assessment belongs to someone else', () => {
+    useStore.setState({studentAssessment: assessment(4.44, '2026-08-06T11:39:18Z') as any})
+    renderWrapper('11')
+
+    expect(screen.getByTestId('rubric-slider-input')).toBeDisabled()
+  })
+
+  it('stays editable for your own assessment', () => {
+    useStore.setState({studentAssessment: assessment(4.44, '2026-08-06T11:39:18Z') as any})
+    renderWrapper()
+
+    expect(screen.getByTestId('rubric-slider-input')).toBeEnabled()
+  })
+
+  it('stays editable when no assessment is selected yet', () => {
+    useStore.setState({studentAssessment: {} as any})
+    renderWrapper('11')
+
+    expect(screen.getByTestId('rubric-slider-input')).toBeEnabled()
   })
 
   it('re-renders with the ratings returned by a save', () => {

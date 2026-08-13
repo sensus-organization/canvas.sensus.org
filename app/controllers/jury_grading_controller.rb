@@ -36,8 +36,10 @@ class JuryGradingController < ApplicationController
       readiness = JuryGrading::RunService.new(assignment: @assignment, created_by: @current_user).readiness(run:)
       break [:error, "Cannot publish: #{readiness[:issues].join(". ")}"] if readiness[:issues].present?
       break [:error, "Jury ratings changed; calculate fresh results before publishing"] if readiness[:stale]
+
       if readiness[:coverage][:ungraded_team_ids].present?
-        break [:error, "Cannot publish: teams without any Jury rating: #{readiness[:coverage][:ungraded_team_ids].join(", ")}"]
+        names = user_names(readiness[:coverage][:ungraded_team_ids])
+        break [:error, "Cannot publish: teams without any Jury rating: #{readiness[:coverage][:ungraded_team_ids].map { |id| "#{names[id.to_s] || id} (#{id})" }.join(", ")}"]
       end
 
       team_ids = results.fetch(:teams).keys
@@ -90,7 +92,11 @@ class JuryGradingController < ApplicationController
   def readiness_json(run:)
     readiness = JuryGrading::RunService.new(assignment: @assignment, created_by: @current_user).readiness(run:)
     coverage = readiness[:coverage]
-    user_ids = coverage[:missing].flat_map { |row| row.values_at(:juror, :team) } + coverage[:unallocated_team_ids] + coverage[:ungraded_team_ids]
+    user_ids = coverage[:missing].flat_map { |row| row.values_at(:juror, :team) } +
+               coverage[:unallocated_team_ids] +
+               coverage[:ungraded_team_ids] +
+               readiness[:observations].flat_map { |row| row.values_at(:juror, :team) } +
+               readiness[:allocations].flatten
     readiness.merge(user_names: user_names(user_ids), criterion_names:)
   end
 

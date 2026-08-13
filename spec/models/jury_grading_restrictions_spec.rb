@@ -185,6 +185,48 @@ describe "Jury grading restrictions" do
     end
   end
 
+  describe "assignment configuration" do
+    it "stops Jury members seeing each other's provisional grades" do
+      expect(jury_assignment.grader_comments_visible_to_graders).to be false
+    end
+
+    it "leaves an ordinary moderated assignment alone" do
+      moderated = course.assignments.create!(title: "Moderated", points_possible: 10, moderated_grading: true, final_grader: teacher, grader_count: 1)
+
+      expect(moderated.grader_comments_visible_to_graders).to be true
+    end
+  end
+
+  describe "readiness issues" do
+    def issues_for(assignment)
+      JuryGrading::RunService.new(assignment:, created_by: teacher).readiness[:issues]
+    end
+
+    it "ignores a workspace whose group set was deleted" do
+      JuryGrading::WorkspaceService.new(assignment: jury_assignment).ensure!(juror_ids: [juror.id])
+      JuryGradingWorkspace.find_by(assignment: jury_assignment, juror:).group_category.destroy
+
+      issues = issues_for(jury_assignment)
+
+      expect(issues.grep(/missing or malformed/)).to be_empty
+      expect(issues).to include("No Jury members are assigned to this assignment")
+    end
+
+    it "still reports a workspace whose group set is present but empty" do
+      JuryGrading::WorkspaceService.new(assignment: jury_assignment).ensure!(juror_ids: [juror.id])
+      JuryGradingWorkspace.find_by(assignment: jury_assignment, juror:).group_category.groups.first.destroy
+
+      expect(issues_for(jury_assignment)).to include("Jury workspace is missing or malformed for #{juror.name} (#{juror.id})")
+    end
+
+    it "names the teams that have no Jury allocation" do
+      team
+      JuryGrading::WorkspaceService.new(assignment: jury_assignment).ensure!(juror_ids: [juror.id])
+
+      expect(issues_for(jury_assignment)).to include("Teams without a Jury allocation: #{team.name} (#{team.id})")
+    end
+  end
+
   describe "the gradebook importer" do
     def gradeable_for?(user)
       importer = GradebookImporter.new(GradebookUpload.new(course:, user:, progress: Progress.new), "", user, nil)

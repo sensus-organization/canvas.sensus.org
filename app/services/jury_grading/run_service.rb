@@ -84,7 +84,7 @@ module JuryGrading
 
       active_jury_ids.filter_map do |jury_id|
         scope = Scope.new(assignment: @assignment, user: User.find(jury_id))
-        "Jury workspace is missing or malformed for user #{jury_id}" unless scope.group
+        "Jury workspace is missing or malformed for #{display_name(jury_id)}" unless scope.group
       end
     end
 
@@ -95,7 +95,7 @@ module JuryGrading
         issues << "Scoring rubric total (#{rubric_total_points}) must equal assignment points (#{@assignment.points_possible})"
       end
       issues << "No jury-team overlap" if coverage[:distribution][:allocated][:shared_jury_pairs].zero?
-      issues << "Teams without a Jury allocation: #{coverage[:unallocated_team_ids].join(", ")}" if coverage[:unallocated_team_ids].present?
+      issues << "Teams without a Jury allocation: #{coverage[:unallocated_team_ids].map { |id| display_name(id) }.join(", ")}" if coverage[:unallocated_team_ids].present?
       issues << "No rubric observations" if coverage[:completed_ratings].zero?
       issues
     end
@@ -186,8 +186,22 @@ module JuryGrading
     end
 
     def active_jury_ids
-      @active_jury_ids ||= JuryGradingWorkspace.where(assignment: @assignment).pluck(:juror_id) &
+      # a workspace outlives the deletion of its group set, so ignore the orphans rather than
+      # reporting every group set the moderator has ever thrown away as a malformed workspace
+      @active_jury_ids ||= JuryGradingWorkspace.where(assignment: @assignment)
+                                               .joins(:group_category)
+                                               .where(group_categories: { deleted_at: nil })
+                                               .pluck(:juror_id) &
                            WorkspaceService.jury_user_ids(@assignment.context)
+    end
+
+    def display_names
+      @display_names ||= User.where(id: active_jury_ids | team_ids).pluck(:id, :name).to_h
+    end
+
+    def display_name(id)
+      name = display_names[id]
+      name ? "#{name} (#{id})" : id.to_s
     end
 
     def jury_scopes

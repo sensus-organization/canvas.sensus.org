@@ -1342,10 +1342,20 @@ function handleSelectedRubricAssessmentChanged({validateEnteredData = true} = {}
   // In the latter case, because this function is called *before* the editing
   // data is switched over to the new student, we don't want to perform the
   // comparison since it could result in specious alerts being shown.
+  const selectedAssessment = getSelectedAssessment(EG)
+
+  if (enhanced_rubrics_enabled) {
+    // the legacy summary and its edit button are hidden in this mode, so pushing the selection
+    // into the store is all the picker has to do
+    useStore.setState({
+      studentAssessment: (selectedAssessment ?? {}) as RubricAssessmentUnderscore,
+    })
+    return
+  }
+
   const editingData = validateEnteredData
     ? rubricAssessment.assessmentData($('#rubric_full'))
     : null
-  const selectedAssessment = getSelectedAssessment(EG)
   rubricAssessment.populateNewRubricSummary(
     $('#rubric_summary_holder .rubric_summary'),
     selectedAssessment,
@@ -1358,12 +1368,6 @@ function handleSelectedRubricAssessmentChanged({validateEnteredData = true} = {}
     showEditButton = !selectedAssessment || assessmentBelongsToCurrentUser(selectedAssessment)
   }
   $('#rubric_assessments_list_and_edit_button_holder .edit').showIf(showEditButton)
-
-  if (enhanced_rubrics_enabled) {
-    useStore.setState({
-      studentAssessment: (selectedAssessment ?? {}) as RubricAssessmentUnderscore,
-    })
-  }
 }
 
 function initRubricStuff() {
@@ -1373,7 +1377,10 @@ function initRubricStuff() {
     .text(I18n.t('edit_view_rubric', 'View Rubric'))
 
   if (enhanced_rubrics_enabled && ENV.rubric) {
-    $('#rubric_summary_holder').hide()
+    // hide the legacy summary and its View Rubric button, but keep the assessment picker:
+    // without it a moderator cannot tell whose rubric they are looking at, let alone switch
+    $('#rubric_summary_container').hide()
+    $('#rubric_assessments_list_and_edit_button_holder .button-container').hide()
   }
 
   $('.toggle_full_rubric, .hide_rubric_link').click(e => {
@@ -2813,6 +2820,12 @@ EG = {
       ) {
         return context.currentStudent.submission.currentSelectedIndex
       }
+      // Jury members have no attempt picker to pin them to the newest attempt, so without this
+      // they would land on the oldest one
+      const history = context.currentStudent?.submission?.submission_history
+      if (ENV.jury_grader && history?.length) {
+        return history.length - 1
+      }
       return 0
     }
 
@@ -3094,7 +3107,9 @@ EG = {
     let selectedIndex: number
 
     if (s && s.submission_history && s.submission_history.length > 0) {
-      submissionHistory = s.submission_history
+      // Jury members always assess the latest attempt, so they get neither the attempt picker
+      // nor the late/missing pills, which would only bias the rating
+      submissionHistory = ENV.jury_grader ? s.submission_history.slice(-1) : s.submission_history
       noSubmittedAt = I18n.t('no_submission_time', 'no submission time')
       selectedIndex = Number.parseInt(
         String($('#submission_to_view').val() || submissionHistory.length - 1),
@@ -3138,16 +3153,19 @@ EG = {
         if (s.grade && (s.grade_matches_current_submission || s.show_grade_in_dropdown)) {
           grade = GradeFormatHelper.formatGrade(s.grade)
         }
+        const hideStatus = Boolean(ENV.jury_grader)
         return {
           value: i,
-          late_policy_status: EG.currentStudent.submission.late_policy_status,
-          custom_grade_status_name: (ENV.custom_grade_statuses as GradeStatusUnderscore[])
-            ?.find(status => status.id === s.custom_grade_status_id)
-            ?.name.toUpperCase(),
-          custom_grade_status_id: s.custom_grade_status_id,
-          late: s.late,
-          missing: s.missing,
-          excused: EG.currentStudent.submission.excused,
+          late_policy_status: hideStatus ? null : EG.currentStudent.submission.late_policy_status,
+          custom_grade_status_name: hideStatus
+            ? null
+            : (ENV.custom_grade_statuses as GradeStatusUnderscore[])
+                ?.find(status => status.id === s.custom_grade_status_id)
+                ?.name.toUpperCase(),
+          custom_grade_status_id: hideStatus ? null : s.custom_grade_status_id,
+          late: hideStatus ? false : s.late,
+          missing: hideStatus ? false : s.missing,
+          excused: hideStatus ? false : EG.currentStudent.submission.excused,
           selected: selectedIndex === i,
           proxy_submitter: s.proxy_submitter,
           proxy_submitter_label_text: s.proxy_submitter ? ` by ${s.proxy_submitter}` : null,
@@ -3677,7 +3695,10 @@ EG = {
       let idToSelect = ''
       if (assessmentsByMe.length > 0) {
         idToSelect = assessmentsByMe[0].id
-      } else {
+      } else if (!isModerator) {
+        // a moderator with no assessment of their own starts on the empty Custom option; falling
+        // through to the first grading assessment would silently present another grader's ratings
+        // as the moderator's own
         const gradingAssessment = EG.currentStudent.rubric_assessments.find(
           assessment => assessment.assessment_type === 'grading',
         )

@@ -137,6 +137,34 @@ export default class JuryResults extends Component {
     const criterionNames = {...(readiness?.criterion_names || {}), ...(run?.criterion_names || {})}
     const missing = coverage?.missing || []
     const issues = readiness?.issues || []
+    const observations = readiness?.observations || []
+    const criterionIds = coverage?.criterion_ids || []
+    const allocations = readiness?.allocations || []
+    const nameOf = id => names[id] || id
+    const byName = (a, b) => String(nameOf(a)).localeCompare(String(nameOf(b)))
+
+    // observations carry what the Jury has actually entered, and arrive on every load, so the
+    // ratings and the coverage grid stay readable long before a calculation is possible
+    const observedBy = new Map()
+    observations.forEach(row => {
+      const key = `${row.juror}-${row.team}`
+      if (!observedBy.has(key)) observedBy.set(key, [])
+      observedBy.get(key).push(row)
+    })
+    const observedRatings = observations.reduce((acc, row) => {
+      const team = String(row.team)
+      acc[team] = acc[team] || []
+      acc[team].push({
+        ...row,
+        normalized_score: row.criterion_points ? (row.score / row.criterion_points) * 5 : undefined,
+      })
+      return acc
+    }, {})
+    const ratingsSource = ratings.length > 0 ? ratings : Object.entries(observedRatings)
+    const matrixJurors = [...new Set(allocations.map(([jurorId]) => jurorId))].sort(byName)
+    const matrixTeams = [...new Set(allocations.map(([, teamId]) => teamId))].sort(byName)
+    const allocated = new Set(allocations.map(([jurorId, teamId]) => `${jurorId}-${teamId}`))
+    const jurorsWithRatings = [...new Set(observations.map(row => row.juror))].sort(byName)
     const rankColumns = [
       teams.length > 1 && ['top_1_probability', I18n.t('Top 1')],
       teams.length > 3 && ['top_3_probability', I18n.t('Top 3')],
@@ -196,12 +224,78 @@ export default class JuryResults extends Component {
             )}
             {missing.length > 0 && <Alert variant="error" margin="medium 0">{I18n.t('Missing Jury ratings are included as missing data; calculate is still available. Review the assignments below before publishing.')}</Alert>}
             {coverage.ungraded_team_ids?.length > 0 && <Alert variant="error" margin="medium 0">{I18n.t('Teams with no Jury rating cannot be published: %{teams}.', {teams: coverage.ungraded_team_ids.map(id => names[id] || id).join(', ')})}</Alert>}
-            {missing.length > 0 && (
-              <table className="ic-Table ic-Table--hover-row">
-                <thead><tr><th>{I18n.t('Jury')}</th><th>{I18n.t('Team')}</th><th>{I18n.t('Missing rubric criteria')}</th></tr></thead>
-                <tbody>{missing.map(({juror, team, criteria: missingCriteria}) => <tr key={`${juror}-${team}`}><td>{names[juror] || juror}</td><td>{names[team] || team}</td><td>{missingCriteria.map(id => criterionNames[id] || id).join(', ')}</td></tr>)}</tbody>
-              </table>
+            {matrixJurors.length > 0 && (
+              <div style={{overflowX: 'auto', marginTop: '1rem'}}>
+                <table className="ic-Table ic-Table--hover-row">
+                  <caption style={{captionSide: 'top', textAlign: 'left', paddingBottom: '0.5rem'}}>
+                    {I18n.t('Rubric criteria entered per Jury member and team, out of %{total}. A dash means the team is not allocated to that Jury member.', {total: criterionIds.length})}
+                  </caption>
+                  <thead>
+                    <tr>
+                      <th>{I18n.t('Jury')}</th>
+                      {matrixTeams.map(teamId => <th key={teamId} style={{writingMode: 'vertical-rl', transform: 'rotate(180deg)', whiteSpace: 'nowrap'}}>{nameOf(teamId)}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {matrixJurors.map(jurorId => (
+                      <tr key={jurorId}>
+                        <td style={{whiteSpace: 'nowrap'}}>{nameOf(jurorId)}</td>
+                        {matrixTeams.map(teamId => {
+                          const key = `${jurorId}-${teamId}`
+                          if (!allocated.has(key)) return <td key={teamId} style={{textAlign: 'center'}}>—</td>
+                          const done = new Set((observedBy.get(key) || []).map(row => row.criterion)).size
+                          return <td key={teamId} style={{textAlign: 'center'}} title={`${nameOf(jurorId)} · ${nameOf(teamId)}`}>{done === criterionIds.length ? '✓' : `${done}/${criterionIds.length}`}</td>
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
+          </>
+        )}
+        {jurorsWithRatings.length > 0 && (
+          <>
+            <Heading level="h2" margin="large 0 small">{I18n.t('Jury ratings entered')}</Heading>
+            {jurorsWithRatings.map(jurorId => {
+              const jurorRows = observations.filter(row => row.juror === jurorId)
+              const teamIds = [...new Set(jurorRows.map(row => row.team))].sort(byName)
+              return (
+                <details key={jurorId} style={{marginTop: '0.5rem'}}>
+                  <summary>{I18n.t('%{juror} — %{teams} teams rated', {juror: nameOf(jurorId), teams: teamIds.length})}</summary>
+                  <div style={{overflowX: 'auto'}}>
+                    <table className="ic-Table ic-Table--hover-row">
+                      <thead><tr><th>{I18n.t('Team')}</th>{criterionIds.map(id => <th key={id}>{criterionNames[id] || id}</th>)}</tr></thead>
+                      <tbody>
+                        {teamIds.map(teamId => {
+                          const teamRows = jurorRows.filter(row => row.team === teamId)
+                          const byCriterion = Object.fromEntries(teamRows.map(row => [String(row.criterion), row]))
+                          const comments = teamRows.filter(row => row.comments)
+                          return (
+                            <React.Fragment key={teamId}>
+                              <tr>
+                                <td style={{whiteSpace: 'nowrap'}}>{nameOf(teamId)}</td>
+                                {criterionIds.map(id => {
+                                  const row = byCriterion[String(id)]
+                                  return <td key={id}>{row ? `${row.score?.toFixed(2)}/${row.criterion_points?.toFixed(2)}` : '—'}</td>
+                                })}
+                              </tr>
+                              {comments.length > 0 && (
+                                <tr>
+                                  <td colSpan={criterionIds.length + 1} style={{whiteSpace: 'pre-wrap', paddingLeft: '2rem'}}>
+                                    {comments.map(row => `${criterionNames[row.criterion] || row.criterion}: ${row.comments}`).join('\n')}
+                                  </td>
+                                </tr>
+                              )}
+                            </React.Fragment>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </details>
+              )
+            })}
           </>
         )}
         <details style={{marginTop: '1rem'}}>
@@ -239,13 +333,13 @@ export default class JuryResults extends Component {
             </table>
           </>
         )}
-        {ratings.length > 0 && (
+        {ratingsSource.length > 0 && (
           <details style={{marginTop: '1.5rem'}}>
             <summary>{I18n.t('Individual Jury ratings')}</summary>
-            <Button margin="small 0 0" onClick={() => this.downloadRatings(ratings, names, criterionNames)}>{I18n.t('Download ratings CSV')}</Button>
+            <Button margin="small 0 0" onClick={() => this.downloadRatings(ratingsSource, names, criterionNames)}>{I18n.t('Download ratings CSV')}</Button>
             <table className="ic-Table ic-Table--hover-row" style={{marginTop: '1rem'}}>
               <thead><tr><th>{I18n.t('Team')}</th><th>{I18n.t('Jury')}</th><th>{I18n.t('Criterion')}</th><th>{I18n.t('Score')}</th><th>{I18n.t('Normalized (/5)')}</th><th>{I18n.t('Comment')}</th></tr></thead>
-              <tbody>{ratings.flatMap(([teamId, teamRatings]) => teamRatings.map((rating, index) => <tr key={`${teamId}-${rating.juror}-${rating.criterion}-${index}`}><td>{names[teamId] || teamId}</td><td>{names[rating.juror] || rating.juror}</td><td>{criterionNames[rating.criterion] || rating.criterion}</td><td>{rating.criterion_points ? `${rating.score?.toFixed(2)}/${rating.criterion_points.toFixed(2)}` : rating.score?.toFixed(2)}</td><td>{rating.normalized_score?.toFixed(2)}</td><td style={{whiteSpace: 'pre-wrap'}}>{rating.comments}</td></tr>))}</tbody>
+              <tbody>{ratingsSource.flatMap(([teamId, teamRatings]) => teamRatings.map((rating, index) => <tr key={`${teamId}-${rating.juror}-${rating.criterion}-${index}`}><td>{names[teamId] || teamId}</td><td>{names[rating.juror] || rating.juror}</td><td>{criterionNames[rating.criterion] || rating.criterion}</td><td>{rating.criterion_points ? `${rating.score?.toFixed(2)}/${rating.criterion_points.toFixed(2)}` : rating.score?.toFixed(2)}</td><td>{rating.normalized_score?.toFixed(2)}</td><td style={{whiteSpace: 'pre-wrap'}}>{rating.comments}</td></tr>))}</tbody>
             </table>
           </details>
         )}

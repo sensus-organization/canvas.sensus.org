@@ -4740,6 +4740,7 @@ class AbstractAssignment < ActiveRecord::Base
 
     self.moderated_grading = true
     self.grader_count = jury_grader_count
+    self.grader_comments_visible_to_graders = false
   end
 
   def jury_calibrated_grading_configuration_ok?

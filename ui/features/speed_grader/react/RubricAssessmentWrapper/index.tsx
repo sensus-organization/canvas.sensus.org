@@ -115,10 +115,11 @@ export default ({
     [currentStudentName, currentStudentAvatarPath],
   )
 
+  const isOwnAssessment =
+    !studentAssessment?.id || String(studentAssessment.assessor_id ?? '') === String(currentUserId)
+
   const ownSavedAssessmentId =
-    studentAssessment?.id && String(studentAssessment.assessor_id ?? '') === String(currentUserId)
-      ? String(studentAssessment.id)
-      : undefined
+    studentAssessment?.id && isOwnAssessment ? String(studentAssessment.id) : undefined
 
   return (
     <View as="div">
@@ -149,7 +150,7 @@ export default ({
         criteria={mappedRubric?.criteria ?? []}
         currentUserId={currentUserId}
         hidePoints={true}
-        isPreviewMode={false}
+        isPreviewMode={!isOwnAssessment}
         isPeerReview={false}
         isFreeFormCriterionComments={mappedRubric?.freeFormCriterionComments ?? false}
         isStandaloneContainer={true}
