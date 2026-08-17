@@ -18,6 +18,7 @@
 
 import React from 'react'
 import {render, screen} from '@testing-library/react'
+import fakeENV from '@canvas/test-utils/fakeENV'
 import RubricAssessmentWrapper from '../index'
 import useStore from '../../../stores'
 import {mergeSavedRubricAssessment} from '../../../jquery/speed_grader.utils'
@@ -61,6 +62,13 @@ const assessment = (points: number, updatedAt: string) => ({
   data: [{id: 'd1', criterion_id: '_7077', points, comments: '', description: ''}],
 })
 
+// what the page payload actually looks like for a grader who cannot see other grader identities:
+// assessor_id is stripped and only the anonymous id identifies the author
+const anonymousAssessment = (anonymousAssessorId: string) => {
+  const {assessor_id: _assessorId, ...rest} = assessment(4.44, '2026-08-06T11:39:18Z')
+  return {...rest, anonymous_assessor_id: anonymousAssessorId}
+}
+
 const renderWrapper = (currentUserId = '121') =>
   render(
     <RubricAssessmentWrapper
@@ -68,6 +76,7 @@ const renderWrapper = (currentUserId = '121') =>
       rubric={rubric}
       onDismiss={() => {}}
       onSave={() => {}}
+      onReset={() => {}}
     />,
   )
 
@@ -77,6 +86,10 @@ const shownPoints = () =>
 describe('RubricAssessmentWrapper', () => {
   beforeEach(() => {
     useStore.setState({rubricSavedComments: {}, selfAssessment: null})
+  })
+
+  afterEach(() => {
+    fakeENV.teardown()
   })
 
   it('shows the saved ratings for the selected assessment', () => {
@@ -98,6 +111,23 @@ describe('RubricAssessmentWrapper', () => {
     renderWrapper()
 
     expect(screen.getByTestId('rubric-slider-input')).toBeEnabled()
+  })
+
+  it('stays editable for your own assessment when only the anonymous id identifies you', () => {
+    fakeENV.setup({current_anonymous_id: 'Z6xwS'})
+    useStore.setState({studentAssessment: anonymousAssessment('Z6xwS') as any})
+    renderWrapper('143')
+
+    expect(screen.getByTestId('rubric-slider-input')).toBeEnabled()
+    expect(screen.getByTestId('reset-rubric-assessment-button')).toBeInTheDocument()
+  })
+
+  it('is read-only for another grader when anonymous ids do not match', () => {
+    fakeENV.setup({current_anonymous_id: 'Z6xwS'})
+    useStore.setState({studentAssessment: anonymousAssessment('qWeR1') as any})
+    renderWrapper('143')
+
+    expect(screen.getByTestId('rubric-slider-input')).toBeDisabled()
   })
 
   it('stays editable when no assessment is selected yet', () => {

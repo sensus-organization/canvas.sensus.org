@@ -115,8 +115,13 @@ export default ({
     [currentStudentName, currentStudentAvatarPath],
   )
 
+  // graders who cannot see each other's identities get anonymous_assessor_id instead of
+  // assessor_id, so matching on assessor_id alone locks a Jury member out of their own assessment
   const isOwnAssessment =
-    !studentAssessment?.id || String(studentAssessment.assessor_id ?? '') === String(currentUserId)
+    !studentAssessment?.id ||
+    String(studentAssessment.assessor_id ?? '') === String(currentUserId) ||
+    (Boolean(studentAssessment.anonymous_assessor_id) &&
+      studentAssessment.anonymous_assessor_id === ENV.current_anonymous_id)
 
   const ownSavedAssessmentId =
     studentAssessment?.id && isOwnAssessment ? String(studentAssessment.id) : undefined
