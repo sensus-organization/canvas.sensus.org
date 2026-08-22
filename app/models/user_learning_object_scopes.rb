@@ -397,7 +397,16 @@ module UserLearningObjectScopes
       as = as.joins("INNER JOIN #{Enrollment.quoted_table_name} ON enrollments.course_id = assignments.context_id")
              .joins("INNER JOIN #{Role.quoted_table_name} ON roles.id = enrollments.role_id")
              .where(enrollments: { user_id: self, workflow_state: "active", type: ["TeacherEnrollment", "TaEnrollment"] })
-             .where("roles.name <> ? OR assignments.jury_calibrated_grading", JuryGrading::WorkspaceService::ROLE_NAME)
+             .where(<<~SQL.squish, JuryGrading::WorkspaceService::ROLE_NAME)
+               roles.name <> ? OR (
+                 assignments.jury_calibrated_grading AND EXISTS (
+                   SELECT 1
+                   FROM #{JuryGradingWorkspace.quoted_table_name}
+                   WHERE jury_grading_workspaces.assignment_id = assignments.id
+                     AND jury_grading_workspaces.juror_id = enrollments.user_id
+                 )
+               )
+             SQL
              .group("assignments.id")
              .order("assignments.due_at")
              .preload(:context)

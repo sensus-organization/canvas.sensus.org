@@ -265,5 +265,23 @@ describe "Jury grading restrictions" do
 
       expect(sql).to include("assignments.jury_calibrated_grading")
     end
+
+    it "only keeps jury assignments allocated to the Jury member" do
+      other_assignment = course.assignments.create!(
+        title: "Other Jury",
+        points_possible: 10,
+        moderated_grading: true,
+        final_grader: teacher,
+        grader_count: 1
+      )
+      other_assignment.update!(jury_calibrated_grading: true)
+      other_assignment.submit_homework(team, body: "done", submission_type: "online_text_entry")
+      JuryGrading::WorkspaceService.new(assignment: jury_assignment).ensure!(juror_ids: [juror.id])
+
+      assignments = juror.assignments_needing_grading(scope_only: true).to_a
+
+      expect(assignments).to include(jury_assignment)
+      expect(assignments).not_to include(other_assignment)
+    end
   end
 end
